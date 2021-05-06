@@ -49,6 +49,8 @@ sizers/sizers \
 space/space \
 sprite/sprite \
 squares/squares \
+progressring/progressring \
+tachometer/tachometer \
 whiteboard/whiteboard \
 widgets/widgets
 
@@ -76,7 +78,9 @@ if HAVE_LIBRSVG
 bin_PROGRAMS += \
 dash/dash \
 gauge/gauge \
-sevensegment/sevensegment
+sevensegment/sevensegment \
+motorcycledash/motorcycledash \
+svgconvertor/svgconvertor
 endif
 
 if HAVE_ALSA
@@ -300,6 +304,22 @@ sevensegment_sevensegmentdir = $(prefix)/share/egt/examples/sevensegment
 sevensegment_sevensegment_DATA = $(wildcard $(top_srcdir)/examples/sevensegment/*.svg)
 sevensegment_sevensegment_LDFLAGS = $(AM_LDFLAGS)
 
+motorcycledash_motorcycledash_SOURCES = motorcycledash/motorcycledash.cpp
+motorcycledash_motorcycledash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/motorcycledash\"
+motorcycledash_motorcycledash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+motorcycledash_motorcycledashdir = $(prefix)/share/egt/examples/motorcycledash
+motorcycledash_motorcycledash_DATA = $(wildcard $(top_srcdir)/examples/motorcycledash/*.svg)
+motorcycledash_motorcycledash_LDFLAGS = $(AM_LDFLAGS)
+
+svgconvertor_svgconvertor_SOURCES = svgconvertor/svgconvertor.cpp svgconvertor/tinyxml2.cpp
+svgconvertor_svgconvertor_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/svgconvertor\"
+svgconvertor_svgconvertor_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+svgconvertor_svgconvertordir = $(prefix)/share/egt/examples/svgconvertor
+svgconvertor_svgconvertor_DATA = $(wildcard $(top_srcdir)/examples/svgconvertor/*.svg)
+svgconvertor_svgconvertor_LDFLAGS = $(AM_LDFLAGS)
+
 sizers_sizers_SOURCES = sizers/sizers.cpp
 sizers_sizers_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
 sizers_sizers_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
@@ -323,10 +343,23 @@ sprite_spritedir = $(prefix)/share/egt/examples/sprite
 dist_sprite_sprite_DATA = $(wildcard $(top_srcdir)/examples/sprite/*.png)
 sprite_sprite_LDFLAGS = $(AM_LDFLAGS)
 
+tachometer_tachometer_SOURCES = tachometer/tachometer.cpp
+tachometer_tachometer_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/tachometer\"
+tachometer_tachometer_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+tachometer_tachometerdir = $(prefix)/share/egt/examples/tachometer
+dist_tachometer_tachometer_DATA = $(wildcard $(top_srcdir)/examples/tachometer/*.png)
+tachometer_tachometer_LDFLAGS = $(AM_LDFLAGS)
+
 squares_squares_SOURCES = squares/squares.cpp
 squares_squares_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
 squares_squares_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 squares_squares_LDFLAGS = $(AM_LDFLAGS)
+
+progressring_progressring_SOURCES = progressring/progressring.cpp
+progressring_progressring_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
+progressring_progressring_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+progressring_progressring_LDFLAGS = $(AM_LDFLAGS)
 
 whiteboard_whiteboard_SOURCES = whiteboard/whiteboard.cpp
 whiteboard_whiteboard_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \

@@ -82,6 +82,10 @@ public:
            int frame_count, const Point& frame_point = {},
            WindowHint hint = WindowHint::automatic);
 
+    Sprite(const Image& image, const Size& frame_size,
+           int frame_count, const Point& frame_point,
+           PixelFormat format_hint, WindowHint hint);
+           
     /**
      * @param[in] props list of widget argument and its properties.
      */
