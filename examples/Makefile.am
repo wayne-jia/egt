@@ -309,7 +309,8 @@ motorcycledash_motorcycledash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
 	-DEXAMPLEDATA=\"$(datadir)/egt/examples/motorcycledash\"
 motorcycledash_motorcycledash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 motorcycledash_motorcycledashdir = $(prefix)/share/egt/examples/motorcycledash
-motorcycledash_motorcycledash_DATA = $(wildcard $(top_srcdir)/examples/motorcycledash/*.svg)
+motorcycledash_motorcycledash_DATA = $(wildcard $(top_srcdir)/examples/motorcycledash/*.svg) \
+  $(wildcard $(top_srcdir)/examples/motorcycledash/*.png)
 motorcycledash_motorcycledash_LDFLAGS = $(AM_LDFLAGS)
 
 svgconvertor_svgconvertor_SOURCES = svgconvertor/svgconvertor.cpp svgconvertor/tinyxml2.cpp
