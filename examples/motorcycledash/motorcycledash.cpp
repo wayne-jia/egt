@@ -724,7 +724,7 @@ void MotorDash::serialize_all()
     std::ostringstream path;
 
     //Serialize scale PNG image
-    SerializePNG("file:moto.png", "eraw/moto_png.eraw");
+    SerializePNG("/usr/share/egt/examples/motorcycledash/moto.png", "eraw/moto_png.eraw");
 
     //Serialize background image
     SerializeSVG("eraw/bkgrd.eraw", m_svg, "#bkgrd");
