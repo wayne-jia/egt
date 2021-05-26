@@ -10,8 +10,10 @@
 #include <iomanip>
 #include <sys/time.h>
 #include <fstream>
+#ifdef HAVE_LIBPLANES
 #include <planes/plane.h>
 #include "egt/detail/screen/kmsoverlay.h"
+#endif
 
 using namespace std;
 using namespace egt;
@@ -29,6 +31,7 @@ bool g_is_plane_hide = false;
 bool g_one_period_over = false;
 //bool g_is_file_write = false;
 
+#ifdef HAVE_LIBPLANES
 void show_rec_overlay(egt::detail::KMSOverlay* s, int steper, int drag_step);
 void flick_animation(egt::detail::KMSOverlay* s);
 void flick_animation(egt::detail::KMSOverlay* s)
@@ -55,6 +58,7 @@ void show_rec_overlay(egt::detail::KMSOverlay* s, int steper, int drag_step)
     plane_set_pan_size(s->s(), g_current_x, FIXED_HEIGHT);
     plane_apply(s->s());
 }
+#endif
 
 int main(int argc, char** argv)
 {
@@ -63,11 +67,12 @@ int main(int argc, char** argv)
     egt::add_search_path(EXAMPLEDATA);
 #endif
     TopWindow win;
+
     int timediff[300] = {0};
     //int i;
     struct timeval time1, time2;
     //ofstream time_sta("time_statistic.txt");
-
+#ifdef HAVE_LIBPLANES
     Sprite sprite2(Image("file:top.png"), Size(800, 480), 1, Point(0, 0));
     Sprite sprite1(Image("file:bottom.png"), Size(800, 480), 1, Point(0, 0));
     win.add(sprite1);
@@ -184,6 +189,7 @@ int main(int argc, char** argv)
     win.on_event(handle_touch);
 #endif
     win.show();
+#endif
     return app.run();
 }
 

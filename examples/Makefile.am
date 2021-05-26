@@ -80,6 +80,7 @@ dash/dash \
 gauge/gauge \
 sevensegment/sevensegment \
 motorcycledash/motorcycledash \
+smarthome/smarthome \
 svgconvertor/svgconvertor
 endif
 
@@ -312,6 +313,15 @@ motorcycledash_motorcycledashdir = $(prefix)/share/egt/examples/motorcycledash
 motorcycledash_motorcycledash_DATA = $(wildcard $(top_srcdir)/examples/motorcycledash/*.svg) \
   $(wildcard $(top_srcdir)/examples/motorcycledash/*.png)
 motorcycledash_motorcycledash_LDFLAGS = $(AM_LDFLAGS)
+
+smarthome_smarthome_SOURCES = smarthome/smarthome.cpp
+smarthome_smarthome_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/smarthome\"
+smarthome_smarthome_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+smarthome_smarthomedir = $(prefix)/share/egt/examples/smarthome
+smarthome_smarthome_DATA = $(wildcard $(top_srcdir)/examples/smarthome/*.svg) \
+  $(wildcard $(top_srcdir)/examples/smarthome/*.png)
+smarthome_smarthome_LDFLAGS = $(AM_LDFLAGS)
 
 svgconvertor_svgconvertor_SOURCES = svgconvertor/svgconvertor.cpp svgconvertor/tinyxml2.cpp
 svgconvertor_svgconvertor_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
