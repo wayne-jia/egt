@@ -81,6 +81,7 @@ gauge/gauge \
 sevensegment/sevensegment \
 motorcycledash/motorcycledash \
 smarthome/smarthome \
+cargodash/cargodash \
 svgconvertor/svgconvertor
 endif
 
@@ -313,6 +314,15 @@ motorcycledash_motorcycledashdir = $(prefix)/share/egt/examples/motorcycledash
 motorcycledash_motorcycledash_DATA = $(wildcard $(top_srcdir)/examples/motorcycledash/*.svg) \
   $(wildcard $(top_srcdir)/examples/motorcycledash/*.png)
 motorcycledash_motorcycledash_LDFLAGS = $(AM_LDFLAGS)
+
+cargodash_cargodash_SOURCES = cargodash/cargodash.cpp
+cargodash_cargodash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/cargodash\"
+cargodash_cargodash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+cargodash_cargodashdir = $(prefix)/share/egt/examples/cargodash
+cargodash_cargodash_DATA = $(wildcard $(top_srcdir)/examples/cargodash/*.svg) \
+  $(wildcard $(top_srcdir)/examples/cargodash/*.png)
+cargodash_cargodash_LDFLAGS = $(AM_LDFLAGS)
 
 smarthome_smarthome_SOURCES = smarthome/smarthome.cpp
 smarthome_smarthome_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \

@@ -21,7 +21,7 @@
 #include "../src/detail/eraw.h"
 
 
-#define SCREEN_480_X_480
+//#define SCREEN_480_X_480
 #define DO_SVG_SERIALIZATION
 
 #define MEDIA_FILE_PATH "/root/"
@@ -149,15 +149,14 @@ void MotorDash::serialize_all()
     //std::ostringstream str;
     //std::ostringstream path;
 
-    egt::SvgImage svg_main("file:main.svg", egt::SizeF(1440, 480));
-    egt::SvgImage svg_cl("file:cl.svg", egt::SizeF(480, 480));
+    egt::SvgImage svg_main("file:cheyi.svg", egt::SizeF(800, 480));
 
     //Serialize background image
     //SerializeSVG("eraw/fullimg.eraw", m_svg);
 
     //Serialize main.svg
     SerializeSVG("eraw/bkgrd.eraw", svg_main, "#bkgrd");
-
+#if 0
     SerializeSVG("eraw/blrect.eraw", svg_main, "#blrect");
 
     SerializeSVG("eraw/slclosedark.eraw", svg_main, "#slclosedark");
@@ -182,7 +181,7 @@ void MotorDash::serialize_all()
     SerializeSVG("eraw/bk.eraw", svg_cl, "#bk");
 
     SerializeSVG("eraw/r1.eraw", svg_cl, "#r1");
-
+#endif
     //Create a finish indicator
     if (-1 == system("touch /root/serialize_done"))
     {
