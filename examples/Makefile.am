@@ -82,6 +82,7 @@ sevensegment/sevensegment \
 motorcycledash/motorcycledash \
 smarthome/smarthome \
 cargodash/cargodash \
+simplelab/simplelab \
 svgconvertor/svgconvertor
 endif
 
@@ -323,6 +324,15 @@ cargodash_cargodashdir = $(prefix)/share/egt/examples/cargodash
 cargodash_cargodash_DATA = $(wildcard $(top_srcdir)/examples/cargodash/*.svg) \
   $(wildcard $(top_srcdir)/examples/cargodash/*.png)
 cargodash_cargodash_LDFLAGS = $(AM_LDFLAGS)
+
+simplelab_simplelab_SOURCES = simplelab/simplelab.cpp
+simplelab_simplelab_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/simplelab\"
+simplelab_simplelab_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+simplelab_simplelabdir = $(prefix)/share/egt/examples/simplelab
+simplelab_simplelab_DATA = $(wildcard $(top_srcdir)/examples/simplelab/*.svg) \
+  $(wildcard $(top_srcdir)/examples/simplelab/*.png)
+simplelab_simplelab_LDFLAGS = $(AM_LDFLAGS)
 
 smarthome_smarthome_SOURCES = smarthome/smarthome.cpp
 smarthome_smarthome_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
