@@ -26,9 +26,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="2.8284271"
-     inkscape:cx="265.08853"
-     inkscape:cy="341.09926"
+     inkscape:zoom="2"
+     inkscape:cx="275.90338"
+     inkscape:cy="286.33945"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -263,11 +263,11 @@
          sodipodi:type="star" />
     </g>
     <rect
-       style="opacity:1;fill:#24221c;fill-opacity:0;stroke:#696969;stroke-width:0;stroke-linejoin:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
-       id="blrect"
-       width="47.42638"
-       height="35.452854"
-       x="10.757463"
-       y="179.97588" />
+       style="opacity:1;fill:#f99f04;fill-opacity:0;stroke:#69fb69;stroke-width:0;stroke-linecap:square;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="ppp"
+       width="40.745319"
+       height="32.411049"
+       x="13.89045"
+       y="183.62584" />
   </g>
 </svg>
