@@ -127,6 +127,12 @@ typedef struct
     int y;
 }st_plane_attri_t;
 
+typedef struct
+{
+    int y;
+    int h;
+}st_fuel_temp_t;
+
 #ifndef EGT_STATISTICS_ENABLE
 #if 0 //temperature digit use text now
 static int g_temp_table[MAX_TEMP_TABLE][MAX_DIGIT_PAIR] =
@@ -183,6 +189,25 @@ st_plane_attri_t g_temp[MAX_TEMP_REC] = {
     { 92, 0, 23, 129, 757, 219},
     {115, 0, 23, 156, 757, 192},
     {138, 0, 23, 181, 757, 167}
+};
+
+st_fuel_temp_t g_fuel_table[7] = {
+    {173, 176},
+    {194, 155},
+    {216, 133},
+    {238, 111},
+    {259, 90},
+    {281, 68},
+    {303, 46}
+};
+
+st_fuel_temp_t g_temp_table[6] = {
+    {324, 25},
+    {298, 51},
+    {271, 78},
+    {245, 104},
+    {220, 129},
+    {194, 167}
 };
 
 
@@ -739,26 +764,6 @@ void MotorDash::serialize_all()
         SerializeSVG(path.str(), m_svg, str.str());
     }
 
-    //Serialize Fuel ID_MIN_FUEL
-    for (i = ID_MIN_FUEL; i <= ID_MAX_FUEL; i += FUEL_STEPPER)
-    {
-        str.str("");
-        path.str("");
-        str << "#rect" << std::to_string(i);
-        path << "eraw/rect" << std::to_string(i) << ".eraw";
-        SerializeSVG(path.str(), m_svg, str.str());
-    }
-
-    //Serialize Temperature ID_MIN_FUEL
-    for (i = ID_MIN_TEMP; i <= ID_MAX_TEMP; i += FUEL_STEPPER)
-    {
-        str.str("");
-        path.str("");
-        str << "#rect" << std::to_string(i);
-        path << "eraw/rect" << std::to_string(i) << ".eraw";
-        SerializeSVG(path.str(), m_svg, str.str());
-    }
-
     //Serialize Needles
     for (i = ID_MIN; i <= ID_MAX; i += STEPPER)
     {
@@ -771,6 +776,14 @@ void MotorDash::serialize_all()
 
     //Serialize eng5
     SerializeSVG("eraw/eng5.eraw", m_svg, "#eng5");
+
+    SerializeSVG("eraw/fuelrect.eraw", m_svg, "#fuelrect");
+
+    SerializeSVG("eraw/temprect.eraw", m_svg, "#temprect");
+
+    SerializeSVG("eraw/fuelr.eraw", m_svg, "#fuelr");
+
+    SerializeSVG("eraw/tempw.eraw", m_svg, "#tempw");
 
     //Serialize tc
     SerializeSVG("eraw/tc.eraw", m_svg, "#tc");
@@ -901,8 +914,10 @@ int main(int argc, char** argv)
     //Widget handler
     std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> NeedleBase;
     std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> GearBase;
-    std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> FuelBase;
-    std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> TempBase;
+    std::shared_ptr<egt::experimental::GaugeLayer> TempPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> FuelPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> TempwPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> FuelrPtr;
     std::shared_ptr<egt::experimental::GaugeLayer> callingPtr;
     std::shared_ptr<egt::experimental::GaugeLayer> mutePtr;
     std::shared_ptr<egt::experimental::GaugeLayer> takeoffPtr;
@@ -972,6 +987,7 @@ int main(int argc, char** argv)
     window.add(motordash);
     motordash.show();
     window.show();
+    motordash.add_text_widget("#textinit", "0", egt::Rect(900, 600, 2, 2), 1);
     std::cout << "EGT show" << std::endl;
 
     //Lambda for de-serializing background and needles
@@ -988,6 +1004,7 @@ int main(int argc, char** argv)
             NeedleBase[j]->hide();
             motordash.add(NeedleBase[j]);
         }
+        motordash.add_text_widget("#speed", "0", egt::Rect(298, 145, 200, 120), 180);
     };
 
 #ifdef DO_SVG_SERIALIZATION
@@ -1010,6 +1027,8 @@ int main(int argc, char** argv)
     }
 #endif
 
+
+
 #ifdef HAVE_LIBPLANES
     std::cout << "Have libplanes" << std::endl;
     //Create scale image to HEO overlay
@@ -1021,6 +1040,8 @@ int main(int argc, char** argv)
     scale_s.show();
 #endif
 
+
+
 #ifdef EGT_STATISTICS_ENABLE
     std::default_random_engine e(time(0));
     std::uniform_int_distribution<unsigned> randi(ID_MIN, ID_MAX);
@@ -1031,8 +1052,6 @@ int main(int argc, char** argv)
     int end = 0;
 #else
     int gear_index = 0;
-    int fuel_index = 0;
-    int temp_index = 0;
 #ifdef CAN_DEBUG
     int last_needle_index = 0;
 #else
@@ -1047,6 +1066,8 @@ int main(int argc, char** argv)
     //int render_times = 0;
     int timer_cnt;
     int lbar = 7;
+    int temp_index = 0;
+    int fuel_index = 0;
 #endif
 
 #ifdef CAN_DEBUG
@@ -1261,19 +1282,19 @@ int main(int argc, char** argv)
             //deserialize speed
             if (!motordash.get_speed_deserial_state())
             {
-                low_pri_q.push([&]()
-                {
+                //low_pri_q.push([&]()
+                //{
                     //gettimeofday(&time1, NULL);
                     //De-serialize main_speed, get the main speed's position, time cost almostly 110ms to de-serialize main speed
                     //auto mainspeed = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("/eraw/mainspeed.eraw", rect)));
                     //motordash.ConvertInkscapeRect2EGT(rect);
                     //motordash.add_text_widget("#speed", "0", *rect, 180);  //Inkscape's rect has gap with reality
-                    motordash.add_text_widget("#speed", "0", egt::Rect(298, 145, 200, 120), 180);
+                    //motordash.add_text_widget("#speed", "0", egt::Rect(298, 145, 200, 120), 180);
                     //gettimeofday(&time2, NULL);
                     //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
                     //std::cout << "Create text mainspeed time: " << timediff << " us" << std::endl;
-                    return "mainspeed_text";
-                });
+                    //return "mainspeed_text";
+                //});
                 low_pri_q.push([&]()
                 {
                     //gettimeofday(&time1, NULL);
@@ -1463,108 +1484,17 @@ int main(int argc, char** argv)
             //deserialize temp
             if (!motordash.get_temp_deserial_state())
             {
-#if 0
                 low_pri_q.push([&]()
                 {
-                    gettimeofday(&time1, NULL);
-                    //De-serialize gear
-                    for (int i = ID_MIN_TEMP, j =0; i <= ID_MAX_TEMP; i += FUEL_STEPPER, j++)
-                    {
-                        path.str("");
-                        path << "/eraw/rect" << std::to_string(i) << ".eraw";
-                        TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize(path.str(), rect))));
-                        TempBase[j]->box(*rect);
-                        TempBase[j]->hide();
-                        motordash.add(TempBase[j]);
-                    }
-                    gettimeofday(&time2, NULL);
-                    timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    std::cout << "Derialize temp time: " << timediff << " us" << std::endl;
-                    return "temp_deserial";
-                });
-#endif
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect971.eraw", rect))));
-                    TempBase[0]->box(*rect);
-                    TempBase[0]->hide();
-                    motordash.add(TempBase[0]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp0 time: " << timediff << " us" << std::endl;
-                    return "temp_deserial0";
-                });
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect973.eraw", rect))));
-                    TempBase[1]->box(*rect);
-                    TempBase[1]->hide();
-                    motordash.add(TempBase[1]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp1 time: " << timediff << " us" << std::endl;
-                    return "temp_deserial1";
-                });
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect975.eraw", rect))));
-                    TempBase[2]->box(*rect);
-                    TempBase[2]->hide();
-                    motordash.add(TempBase[2]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp2 time: " << timediff << " us" << std::endl;
-                    return "temp_deserial2";
-                });
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect977.eraw", rect))));
-                    TempBase[3]->box(*rect);
-                    TempBase[3]->hide();
-                    motordash.add(TempBase[3]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp3 time: " << timediff << " us" << std::endl;
-                    return "temp_deserial3";
-                });
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect979.eraw", rect))));
-                    TempBase[4]->box(*rect);
-                    TempBase[4]->hide();
-                    motordash.add(TempBase[4]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp4 time: " << timediff << " us" << std::endl;
-                    return "temp_deserial4";
-                });
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect981.eraw", rect))));
-                    TempBase[5]->box(*rect);
-                    TempBase[5]->hide();
-                    motordash.add(TempBase[5]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp5 time: " << timediff << " us" << std::endl;
-                    return "temp_deserial5";
-                });
-                low_pri_q.push([&]()
-                {
-                    //gettimeofday(&time1, NULL);
-                    TempBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/rect983.eraw", rect))));
-                    TempBase[6]->box(*rect);
-                    TempBase[6]->hide();
-                    motordash.add(TempBase[6]);
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize temp6 time: " << timediff << " us" << std::endl;
+                    TempwPtr = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/tempw.eraw", rect)));
+                    TempwPtr->box(*rect);
+                    TempwPtr->hide();
+                    motordash.add(TempwPtr);
+
+                    TempPtr = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/temprect.eraw", rect)));
+                    TempPtr->box(*rect);
+                    TempPtr->hide();
+                    motordash.add(TempPtr);
                     return "temp_deserial6";
                 });
                 motordash.set_temp_deserial_state(true);
@@ -1576,9 +1506,55 @@ int main(int argc, char** argv)
                 {
                     low_pri_q.push([&]()
                     {
-                        motordash.hide_temp_rect(TempBase);
-                        temp_index = (7 <= temp_index) ? 0 : temp_index;
-                        TempBase[temp_index++]->show();
+                        if (7 <= temp_index)
+                            temp_index = 0;
+                        switch (temp_index)
+                        {
+                            case 0:
+                                TempPtr->hide();
+                                TempwPtr->show();
+                                TempwPtr->y(g_temp_table[0].y);
+                                TempwPtr->height(g_temp_table[0].h);
+                                break;
+                            case 1:
+                                TempPtr->hide();
+                                TempwPtr->show();
+                                TempwPtr->y(g_temp_table[1].y);
+                                TempwPtr->height(g_temp_table[1].h);
+                                break;
+                            case 2:
+                                TempPtr->hide();
+                                TempwPtr->show();
+                                TempwPtr->y(g_temp_table[2].y);
+                                TempwPtr->height(g_temp_table[2].h);
+                                break;
+                            case 3:
+                                TempPtr->hide();
+                                TempwPtr->show();
+                                TempwPtr->y(g_temp_table[3].y);
+                                TempwPtr->height(g_temp_table[3].h);
+                                break;
+                            case 4:
+                                TempPtr->hide();
+                                TempwPtr->show();
+                                TempwPtr->y(g_temp_table[4].y);
+                                TempwPtr->height(g_temp_table[4].h);
+                                break;
+                            case 5:
+                                TempPtr->hide();
+                                TempwPtr->show();
+                                TempwPtr->y(g_temp_table[5].y);
+                                TempwPtr->height(g_temp_table[5].h);
+                                break;
+                            case 6:
+                                TempwPtr->hide();
+                                TempPtr->show();
+                                break;
+                            default:
+                                std::cout << "temp full!" << std::endl;
+                                break;
+                        }
+                        temp_index++;
                         return "temp";
                     });
                 }
@@ -1589,20 +1565,14 @@ int main(int argc, char** argv)
             {
                 low_pri_q.push([&]()
                 {
-                    //gettimeofday(&time1, NULL);
-                    //De-serialize gear
-                    for (int i = ID_MIN_FUEL, j =0; i <= ID_MAX_FUEL; i += FUEL_STEPPER, j++)
-                    {
-                        path.str("");
-                        path << "eraw/rect" << std::to_string(i) << ".eraw";
-                        FuelBase.push_back(std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize(path.str(), rect))));
-                        FuelBase[j]->box(*rect);
-                        FuelBase[j]->hide();
-                        motordash.add(FuelBase[j]);
-                    }
-                    //gettimeofday(&time2, NULL);
-                    //timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
-                    //std::cout << "Derialize fuel time: " << timediff << " us" << std::endl;
+                    FuelrPtr = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/fuelr.eraw", rect)));
+                    FuelrPtr->box(*rect);
+                    FuelrPtr->hide();
+                    motordash.add(FuelrPtr);
+                    FuelPtr = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/fuelrect.eraw", rect)));
+                    FuelPtr->box(*rect);
+                    FuelPtr->show();
+                    motordash.add(FuelPtr);
                     return "fuel_deserial";
                 });
                 motordash.set_fuel_deserial_state(true);
@@ -1614,9 +1584,61 @@ int main(int argc, char** argv)
                 {
                     low_pri_q.push([&]()
                     {
-                        motordash.hide_fuel_rect(FuelBase);
-                        fuel_index = (8 <= fuel_index) ? 0 : fuel_index;
-                        FuelBase[fuel_index++]->show();
+                        if (8 <= fuel_index)
+                            fuel_index = 0;
+                        switch (fuel_index)
+                        {
+                            case 0:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[0].y);
+                                FuelPtr->height(g_fuel_table[0].h);
+                                break;
+                            case 1:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[1].y);
+                                FuelPtr->height(g_fuel_table[1].h);
+                                break;
+                            case 2:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[2].y);
+                                FuelPtr->height(g_fuel_table[2].h);
+                                break;
+                            case 3:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[3].y);
+                                FuelPtr->height(g_fuel_table[3].h);
+                                break;
+                            case 4:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[4].y);
+                                FuelPtr->height(g_fuel_table[4].h);
+                                break;
+                            case 5:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[5].y);
+                                FuelPtr->height(g_fuel_table[5].h);
+                                break;
+                            case 6:
+                                FuelrPtr->hide();
+                                FuelPtr->show();
+                                FuelPtr->y(g_fuel_table[6].y);
+                                FuelPtr->height(g_fuel_table[6].h);
+                                break;
+                            case 7:
+                                FuelPtr->hide();
+                                FuelrPtr->show();
+                                break;
+                            default:
+                                std::cout << "fuel full!" << std::endl;
+                                break;
+                        }
+                        fuel_index++;
                         return "fuel";
                     });
                 }
@@ -1629,10 +1651,18 @@ int main(int argc, char** argv)
             {
                 low_pri_q.push([&]()
                 {
+                    motordash.add_text_widget("#callname", "EGT", egt::Rect(335, 120, 80, 40), 30);
+                    return "callname_text";
+                });
+                low_pri_q.push([&]()
+                {
+                    motordash.add_text_widget("#phone", "13883052865", egt::Rect(335, 155, 100, 22), 21);
+                    return "phone_text";
+                });
+                low_pri_q.push([&]()
+                {
                     //gettimeofday(&time1, NULL);
                     //De-serialize call
-                    motordash.add_text_widget("#callname", "EGT", egt::Rect(335, 120, 80, 40), 30);
-                    motordash.add_text_widget("#phone", "13883052865", egt::Rect(335, 155, 100, 22), 21);
                     callingPtr = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/calling.eraw", rect)));
                     callingPtr->box(*rect);
                     callingPtr->hide();
@@ -1657,8 +1687,16 @@ int main(int argc, char** argv)
                 {
                     //gettimeofday(&time1, NULL);
                     //De-serialize eng5 & tc
-                    motordash.add_text_widget("#engine5", "5", egt::Rect(82, 1, 20, 2), 40);
-                    motordash.add_text_widget("#tc", "3", egt::Rect(67, 51, 20, 20), 30);
+                    low_pri_q.push([&]()
+                    {
+                        motordash.add_text_widget("#engine5", "5", egt::Rect(82, 1, 20, 2), 40);
+                        return "callname_text";
+                    });
+                    low_pri_q.push([&]()
+                    {
+                        motordash.add_text_widget("#tc", "3", egt::Rect(67, 51, 20, 20), 30);
+                        return "phone_text";
+                    });
                     mutePtr = std::make_shared<egt::experimental::GaugeLayer>(egt::Image(motordash.DeSerialize("eraw/mute.eraw", rect)));
                     mutePtr->box(*rect);
                     motordash.add(mutePtr);
