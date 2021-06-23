@@ -61,6 +61,7 @@
 #include <egt/version.h>
 #include <egt/view.h>
 #include <egt/window.h>
+#include <egt/svgdeserial.h>
 
 @include_audio@
 #ifdef EGT_HAS_AUDIO
