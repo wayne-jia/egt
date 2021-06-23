@@ -112,6 +112,7 @@ sideboard.cpp \
 sizer.cpp \
 slider.cpp \
 sprite.cpp \
+svgdeserial.cpp \
 text.cpp \
 textwidget.cpp \
 theme.cpp \
@@ -222,6 +223,7 @@ $(top_builddir)/include/egt/version.h \
 ../include/egt/slider.h \
 ../include/egt/sprite.h \
 ../include/egt/string.h \
+../include/egt/svgdeserial.h \
 ../include/egt/text.h \
 ../include/egt/textwidget.h \
 ../include/egt/theme.h \
