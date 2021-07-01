@@ -115,16 +115,13 @@ void SVG_CVT::serializeSVG()
 {
 	XMLDocument doc;
 
-    if (-1 == system("rm -rf ./eraw"))
+    if (access("./eraw", F_OK))
     {
-        cerr << "rm -rf ./eraw failed, please check permission!!!" << endl;
-        return;
-    }
-
-    if (0 > mkdir("./eraw", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH))
-    {
-        cerr << "Create serialization dir eraw failed, please check permission!!!" << endl;
-        return;
+        if (0 > mkdir("./eraw", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH))
+        {
+            cerr << "Create serialization dir eraw failed, please check permission!!!" << endl;
+            return;
+        }
     }
 
 	if(doc.LoadFile(m_svgpath.c_str())!=0)

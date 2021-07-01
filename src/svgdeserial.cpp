@@ -45,6 +45,7 @@ SVGDeserial::SVGDeserial(Application& app, TopWindow& parent, int svg_cnt, const
             std::string str;
             for (auto i = 0; i < svg_cnt; i++)
             {
+                str.clear();
                 str += "/usr/bin/egt_svgconvertor " + std::string(svg_files[i]);
                 std::cout << "Serialize[" << i << "]: " << str.c_str() << std::endl;
                 if (-1 == system(str.c_str()))
@@ -134,6 +135,56 @@ std::shared_ptr<AnimationSequence> SVGDeserial::RotateAnimation(std::shared_ptr<
     sequence->add(animationdown);
     sequence->start();
     return sequence;
+}
+
+void SVGDeserial::add_text_widget(const std::string& id, const std::string& txt, const egt::Rect& rect, egt::Font::Size size)
+{
+    auto text = std::make_shared<egt::TextBox>(txt, rect, egt::AlignFlag::center);
+    text->border(0);
+    text->font(egt::Font(size, egt::Font::Weight::normal));
+    text->color(egt::Palette::ColorId::bg, egt::Palette::transparent);
+    text->color(egt::Palette::ColorId::text, egt::Palette::white);
+    add(text);
+    text->name(id);
+}
+
+void SVGDeserial::add_text_widget(const std::string& id, const std::string& txt, const egt::Rect& rect, egt::Font::Size size, egt::Color color)
+{
+    auto text = std::make_shared<egt::TextBox>(txt, rect);
+    text->border(0);
+    text->font(egt::Font(size, egt::Font::Weight::normal));
+    text->color(egt::Palette::ColorId::bg, egt::Palette::transparent);
+    text->color(egt::Palette::ColorId::text, color);
+    add(text);
+    text->name(id);
+}
+
+void SVGDeserial::hide_all()
+{
+    for (auto& child : m_children)
+    {
+        if (child->name().rfind("#path", 0) == 0)
+            child->hide();
+    }
+}
+
+bool SVGDeserial::is_point_in_line(egt::DefaultDim point, egt::DefaultDim start, egt::DefaultDim end)
+{
+    if (point >= start && point <= end)
+        return true;
+    else
+        return false;
+}
+
+bool SVGDeserial::is_point_in_rect(egt::DisplayPoint& point, egt::Rect rect)
+{
+    if (point.x() >= rect.x()
+        && point.x() <= (rect.x() + rect.width())
+        && point.y() >= rect.y()
+        && point.y() <= (rect.y() + rect.height()))
+        return true;
+    else
+        return false;
 }
 
 }
