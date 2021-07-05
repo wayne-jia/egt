@@ -23,7 +23,7 @@ enum class PageType
     subcl,
     subsl,
     subbl,
-    subdd,
+    subrgb,
     subswd,
     subfilm,
     subother
@@ -32,8 +32,8 @@ enum class PageType
 enum class DragType
 {
     invalid = 0,
-    subslmain,
-    subsltemp
+    submain,
+    subtemp
 };
 
 enum class ClickType
@@ -65,6 +65,9 @@ typedef struct
     egt::DefaultDim pppX;
     egt::DefaultDim subswdmenuX;
     egt::DefaultDim subslmenuX;
+    egt::DefaultDim subblmenuX;
+    egt::DefaultDim subrgbmenuX;
+    egt::DefaultDim subfilmmenuX;
 } wgtRelativeX_t;
 
 
@@ -82,7 +85,7 @@ int main(int argc, char** argv)
     std::queue<QueueCallback> low_pri_q;
     ClickType clktype;
     PageType pagetype = PageType::main;
-    DragType dragtype = DragType::subslmain;
+    DragType dragtype = DragType::submain;
 
     //subswd handler
     std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> SubswdBase;
@@ -94,6 +97,15 @@ int main(int argc, char** argv)
     std::shared_ptr<egt::experimental::GaugeLayer> subswddecPtr;
     std::shared_ptr<egt::experimental::GaugeLayer> subswdswcPtr;
     std::shared_ptr<egt::experimental::GaugeLayer> subswdaddPtr;
+
+    //subfilm handler
+    std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> SubfilmBase;
+    std::shared_ptr<egt::experimental::GaugeLayer> subfilmbkgrdPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subfilmvaluePtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subfilmbackPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subfilmdecPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subfilmswcPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subfilmaddPtr;
 
     //subsl handler
     std::shared_ptr<egt::experimental::GaugeLayer> subslgraybgPtr;
@@ -110,8 +122,29 @@ int main(int argc, char** argv)
     std::shared_ptr<egt::experimental::GaugeLayer> subslbtnmvupPtr;
     std::shared_ptr<egt::experimental::GaugeLayer> subslbtnmvdownPtr;
 
+    //subbl handler
+    std::shared_ptr<egt::experimental::GaugeLayer> subblgraybgPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblmvPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblbkgrdPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblupPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblpausePtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subbldownPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subbltxtlPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subbltxtrPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblbtniconPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblbtnmvPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblbackPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblbtnmvupPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subblbtnmvdownPtr;
 
-    wgtRelativeX_t wgtRltvX = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    //subrgb handler
+    std::shared_ptr<egt::experimental::GaugeLayer> subrgbbkgrdPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subrgbcolorbgPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subrgbpowerPtr;
+    std::shared_ptr<egt::experimental::GaugeLayer> subrgbbackPtr;
+    std::vector<std::shared_ptr<egt::experimental::GaugeLayer>> SubrgbBase;
+
+    wgtRelativeX_t wgtRltvX = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     auto rect = std::make_shared<egt::Rect>();
     std::ostringstream str;
     egt::DefaultDim start_drag;
@@ -127,6 +160,14 @@ int main(int argc, char** argv)
     bool is_sl_deserial = false;
     int sl_y = 137;
     int sl_BTN_Y_DIFF = 0;
+    int bl_BTN_Y_DIFF = 0;
+    bool is_bl_deserial = false;
+    int bl_y = 137;
+    bool is_rgb_deserial = false;
+    int rgb_index = 0;
+    bool is_film_deserial = false;
+    bool is_film_open = false;
+    int film_index = 0;
 
     egt::Application app(argc, argv);  //This call will cost ~270ms on 9x60ek board
     egt::TopWindow window;
@@ -140,11 +181,14 @@ int main(int argc, char** argv)
     rightwin.color(egt::Palette::ColorId::bg, egt::Palette::black);
     window.add(leftwin);
     window.add(rightwin);
+
+#endif
+    const char *svg_files_array[7] = {"/root/main.svg", "/root/swd.svg", "/root/cl.svg",
+        "/root/sl.svg", "/root/bl.svg", "/root/rgbwl.svg", "/root/film.svg"};
+    egt::experimental::SVGDeserial smthome(app, window, 7, svg_files_array);;
+
     leftwin.show();
     rightwin.show();
-#endif
-    const char *svg_files_array[4] = {"/root/main.svg", "/root/cl.svg", "/root/swd.svg", "/root/sl.svg"};
-    egt::experimental::SVGDeserial smthome(app, window, 4, svg_files_array);;
 
     auto fullimgPtr = smthome.AddWidgetByID("/root/eraw/bkgrd.eraw", true);
     fullimgPtr->x(fullimgPtr->x() + SCREEN_X_START);
@@ -161,9 +205,21 @@ int main(int argc, char** argv)
     wgtRltvX.subslmenuX = subslmenuPtr->x();
     subslmenuPtr->x(subslmenuPtr->x() + SCREEN_X_START);
 
+    auto subblmenuPtr = smthome.AddWidgetByID("/root/eraw/subblmenu.eraw", true);
+    wgtRltvX.subblmenuX = subblmenuPtr->x();
+    subblmenuPtr->x(subblmenuPtr->x() + SCREEN_X_START);
+
     auto subswdmenuPtr = smthome.AddWidgetByID("/root/eraw/subswdmenu.eraw", true);
     wgtRltvX.subswdmenuX = subswdmenuPtr->x();
     subswdmenuPtr->x(subswdmenuPtr->x() + SCREEN_X_START);
+
+    auto subrgbmenuPtr = smthome.AddWidgetByID("/root/eraw/subrgbmenu.eraw", true);
+    wgtRltvX.subrgbmenuX = subrgbmenuPtr->x();
+    subrgbmenuPtr->x(subrgbmenuPtr->x() + SCREEN_X_START);
+
+    auto subfilmmenuPtr = smthome.AddWidgetByID("/root/eraw/subfilmmenu.eraw", true);
+    wgtRltvX.subfilmmenuX = subfilmmenuPtr->x();
+    subfilmmenuPtr->x(subfilmmenuPtr->x() + SCREEN_X_START);
 
     auto slclosedarkPtr = smthome.AddWidgetByID("/root/eraw/slclosedark.eraw", true);
     wgtRltvX.slclosedarkX = slclosedarkPtr->x();
@@ -278,11 +334,50 @@ int main(int argc, char** argv)
         is_swd_deserial = true;
     };
 
+    auto deserialFilm = [&]()
+    {
+        subfilmbkgrdPtr = smthome.AddWidgetByID("/root/eraw/subfilmbkgrd.eraw", false);
+        subfilmbkgrdPtr->x(subfilmbkgrdPtr->x() + SCREEN_X_START);
+
+        subfilmvaluePtr = smthome.AddWidgetByID("/root/eraw/subfilmvalue.eraw", false);
+        subfilmvaluePtr->x(subfilmvaluePtr->x() + SCREEN_X_START);
+
+        subfilmbackPtr = smthome.AddWidgetByID("/root/eraw/subfilmback.eraw", false);
+        subfilmbackPtr->x(subfilmbackPtr->x() + SCREEN_X_START);
+
+        subfilmdecPtr = smthome.AddWidgetByID("/root/eraw/subfilmdec.eraw", false);
+        subfilmdecPtr->x(subfilmdecPtr->x() + SCREEN_X_START);
+
+        subfilmswcPtr = smthome.AddWidgetByID("/root/eraw/subfilmswc.eraw", false);
+        subfilmswcPtr->x(subfilmswcPtr->x() + SCREEN_X_START);
+
+        subfilmaddPtr = smthome.AddWidgetByID("/root/eraw/subfilmadd.eraw", false);
+        subfilmaddPtr->x(subfilmaddPtr->x() + SCREEN_X_START);
+
+        for (i = 0; i < 25; i++)
+        {
+            str.str("");
+            str << "/root/eraw/subfilm" << std::to_string(i+1) << ".eraw";
+            SubfilmBase.push_back(smthome.AddWidgetByID(str.str(), false));
+            SubfilmBase[i]->x(SubfilmBase[i]->x() + SCREEN_X_START);
+        }
+        smthome.add_text_widget("#subfilmvalue", "50", egt::Rect(subfilmvaluePtr->x(), subfilmvaluePtr->y()-30, subfilmvaluePtr->width(), subfilmvaluePtr->height()), 60);
+        is_film_deserial = true;
+    };
+
     auto hideSwd = [&]()
     {
         for (i = 0; i < 25; i++)
         {
             SubswdBase[i]->hide();
+        }
+    };
+
+    auto hideFilm = [&]()
+    {
+        for (i = 0; i < 25; i++)
+        {
+            SubfilmBase[i]->hide();
         }
     };
 
@@ -333,6 +428,86 @@ int main(int argc, char** argv)
         is_sl_deserial = true;
     };
 
+    auto deserialBl = [&]()
+    {
+        subblgraybgPtr = smthome.AddWidgetByID("/root/eraw/subblgraybg.eraw", false);
+        subblgraybgPtr->x(subblgraybgPtr->x() + SCREEN_X_START);
+
+        subblmvPtr = smthome.AddWidgetByID("/root/eraw/subblmv.eraw", false);
+        subblmvPtr->x(subblmvPtr->x() + SCREEN_X_START);
+
+        subblbkgrdPtr = smthome.AddWidgetByID("/root/eraw/subblbkgrd.eraw", false);
+        subblbkgrdPtr->x(subblbkgrdPtr->x() + SCREEN_X_START);
+
+        subblupPtr = smthome.AddWidgetByID("/root/eraw/subblup.eraw", false);
+        subblupPtr->x(subblupPtr->x() + SCREEN_X_START);
+
+        subblpausePtr = smthome.AddWidgetByID("/root/eraw/subblpause.eraw", false);
+        subblpausePtr->x(subblpausePtr->x() + SCREEN_X_START);
+
+        subbldownPtr = smthome.AddWidgetByID("/root/eraw/subbldown.eraw", false);
+        subbldownPtr->x(subbldownPtr->x() + SCREEN_X_START);
+
+        subbltxtlPtr = smthome.AddWidgetByID("/root/eraw/subbltxtl.eraw", false);
+        subbltxtlPtr->x(subbltxtlPtr->x() + SCREEN_X_START);
+
+        subbltxtrPtr = smthome.AddWidgetByID("/root/eraw/subbltxtr.eraw", false);
+        subbltxtrPtr->x(subbltxtrPtr->x() + SCREEN_X_START);
+
+        subblbtniconPtr = smthome.AddWidgetByID("/root/eraw/subblbtnicon.eraw", false);
+        subblbtniconPtr->x(subblbtniconPtr->x() + SCREEN_X_START);
+        bl_BTN_Y_DIFF = subblbtniconPtr->y() - subblmvPtr->y();
+
+        subblbtnmvPtr = smthome.AddWidgetByID("/root/eraw/subblbtnmv.eraw", false);
+        subblbtnmvPtr->x(subblbtnmvPtr->x() + SCREEN_X_START);
+
+        subblbackPtr = smthome.AddWidgetByID("/root/eraw/subblback.eraw", false);
+        subblbackPtr->x(subblbackPtr->x() + SCREEN_X_START);
+
+        subblbtnmvupPtr = smthome.AddWidgetByID("/root/eraw/subblbtnmvup.eraw", false);
+        subblbtnmvupPtr->x(subblbtnmvupPtr->x() + SCREEN_X_START);
+
+        subblbtnmvdownPtr = smthome.AddWidgetByID("/root/eraw/subblbtnmvdown.eraw", false);
+        subblbtnmvdownPtr->x(subblbtnmvdownPtr->x() + SCREEN_X_START);
+
+        smthome.add_text_widget("#subbltxtl", "100%", egt::Rect(subbltxtlPtr->x()-10, subbltxtlPtr->y()-15, subbltxtlPtr->width(), subbltxtlPtr->height()), 20);
+        smthome.add_text_widget("#subbltxtr", "121°", egt::Rect(subbltxtrPtr->x(), subbltxtrPtr->y()-15, subbltxtrPtr->width(), subbltxtrPtr->height()), 20);
+        is_bl_deserial = true;
+    };
+
+    auto deserialRgb = [&]()
+    {
+        subrgbbkgrdPtr = smthome.AddWidgetByID("/root/eraw/subrgbbkgrd.eraw", false);
+        subrgbbkgrdPtr->x(subrgbbkgrdPtr->x() + SCREEN_X_START);
+
+        subrgbcolorbgPtr = smthome.AddWidgetByID("/root/eraw/subrgbcolorbg.eraw", false);
+        subrgbcolorbgPtr->x(subrgbcolorbgPtr->x() + SCREEN_X_START);
+
+        subrgbpowerPtr = smthome.AddWidgetByID("/root/eraw/subrgbpower.eraw", false);
+        subrgbpowerPtr->x(subrgbpowerPtr->x() + SCREEN_X_START);
+
+        subrgbbackPtr = smthome.AddWidgetByID("/root/eraw/subrgbback.eraw", false);
+        subrgbbackPtr->x(subrgbbackPtr->x() + SCREEN_X_START);
+
+        for (i = 0; i < 8; i++)
+        {
+            str.str("");
+            str << "/root/eraw/r" << std::to_string(i+1) << ".eraw";
+            SubrgbBase.push_back(smthome.AddWidgetByID(str.str(), false));
+            SubrgbBase[i]->x(SubrgbBase[i]->x() + SCREEN_X_START);
+        }
+
+        is_rgb_deserial = true;
+    };
+
+    auto hideRgb = [&]()
+    {
+        for (i = 0; i < 8; i++)
+        {
+            SubrgbBase[i]->hide();
+        }
+    };
+
     egt::Timer click_timer(std::chrono::milliseconds(300));
     egt::PeriodicTimer submv_timer(std::chrono::milliseconds(100));
 
@@ -370,6 +545,9 @@ int main(int argc, char** argv)
         pppPtr->x(wgtRltvX.pppX + fullimgPtr->x());
         subswdmenuPtr->x(wgtRltvX.subswdmenuX + fullimgPtr->x());
         subslmenuPtr->x(wgtRltvX.subslmenuX + fullimgPtr->x());
+        subblmenuPtr->x(wgtRltvX.subblmenuX + fullimgPtr->x());
+        subrgbmenuPtr->x(wgtRltvX.subrgbmenuX + fullimgPtr->x());
+        subfilmmenuPtr->x(wgtRltvX.subfilmmenuX + fullimgPtr->x());
     };
 
     auto clclose_mv = [&]()
@@ -432,6 +610,34 @@ int main(int argc, char** argv)
         smthome.find_text("#subsltxtr")->text(str.str());
     };
 
+    auto bl_mv = [&]()
+    {
+        int percent = std::ceil((bl_y+subblmvPtr->height()-138)/247.0 * 100);
+        if (100 < percent)
+            percent = 100;
+        else if(0 > percent)
+            percent = 0;
+
+        subblmvPtr->y(bl_y);
+        subblbtniconPtr->y(bl_BTN_Y_DIFF + bl_y);
+        str.str("");
+        str << std::to_string(percent) << "%";
+        smthome.find_text("#subbltxtl")->clear();
+        smthome.find_text("#subbltxtl")->text(str.str());
+    };
+
+    auto bltemp_mv = [&](int pos)
+    {
+        if ((296 < pos)
+            || (192 > pos))
+            return;
+        subblbtnmvPtr->y(pos);
+        str.str("");
+        str << std::to_string(330 - pos) << "°";
+        smthome.find_text("#subbltxtr")->clear();
+        smthome.find_text("#subbltxtr")->text(str.str());
+    };
+
     submv_timer.on_timeout([&]()
     {
         switch (pagetype)
@@ -458,6 +664,16 @@ int main(int argc, char** argv)
                 sl_mv();
                 if ((137 < sl_y && !is_sub_open)
                     || (-110 > sl_y && is_sub_open))
+                    submv_timer.stop();
+                break;
+            case PageType::subbl:
+                if (is_sub_open)
+                    bl_y -= 2;
+                else
+                    bl_y += 2;
+                bl_mv();
+                if ((137 < bl_y && !is_sub_open)
+                    || (-110 > bl_y && is_sub_open))
                     submv_timer.stop();
                 break;
             default:
@@ -546,6 +762,38 @@ int main(int argc, char** argv)
         }
     };
 
+    auto subfilm_switch = [&]()
+    {
+        if (is_film_open)
+        {
+            SubfilmBase[film_index]->show();
+        }
+        else
+        {
+            SubfilmBase[film_index]->hide();
+        }
+    };
+
+    auto subfilm_state = [&](bool b_enter)
+    {
+        if (b_enter)
+        {
+            if (!is_film_deserial)
+                deserialFilm();
+            pagetype = PageType::subfilm;
+            subfilmbkgrdPtr->show();
+            smthome.find_text("#subfilmvalue")->show();
+            subfilm_switch();
+        }
+        else
+        {
+            pagetype = PageType::main;
+            subfilmbkgrdPtr->hide();
+            SubfilmBase[film_index]->hide();
+            smthome.find_text("#subfilmvalue")->hide();
+        }
+    };
+
     auto subsl_state = [&](bool b_enter)
     {
         if (b_enter)
@@ -582,6 +830,61 @@ int main(int argc, char** argv)
         }
     };
 
+    auto subbl_state = [&](bool b_enter)
+    {
+
+        if (b_enter)
+        {
+            if (!is_bl_deserial)
+                deserialBl();
+            pagetype = PageType::subbl;
+            subblgraybgPtr->show();
+            subblmvPtr->show();
+            subblbkgrdPtr->show();
+            subblbtniconPtr->show();
+            subblbtnmvPtr->show();
+            subblbackPtr->show();
+            smthome.find_text("#subbltxtl")->show();
+            smthome.find_text("#subbltxtr")->show();
+        }
+        else
+        {
+            pagetype = PageType::main;
+            subblgraybgPtr->hide();
+            subblmvPtr->hide();
+            subblbkgrdPtr->hide();
+            subblupPtr->hide();
+            subblpausePtr->hide();
+            subbldownPtr->hide();
+            subblbtniconPtr->hide();
+            subblbtnmvPtr->hide();
+            subblbackPtr->hide();
+            smthome.find_text("#subbltxtl")->hide();
+            smthome.find_text("#subbltxtr")->hide();
+        }
+    };
+
+    auto subrgb_state = [&](bool b_enter)
+    {
+
+        if (b_enter)
+        {
+            if (!is_rgb_deserial)
+                deserialRgb();
+            pagetype = PageType::subrgb;
+            subrgbbkgrdPtr->show();
+        }
+        else
+        {
+            pagetype = PageType::main;
+            subrgbbkgrdPtr->hide();
+            subrgbcolorbgPtr->hide();
+            subrgbpowerPtr->hide();
+            subrgbbackPtr->hide();
+            hideRgb();
+        }
+    };
+
     auto subswd_move = [&]()
     {
         hideSwd();
@@ -592,7 +895,15 @@ int main(int argc, char** argv)
         smthome.find_text("#subswdvalue")->text(str.str());
     };
 
-
+    auto subfilm_move = [&]()
+    {
+        hideFilm();
+        SubfilmBase[film_index]->show();
+        str.str("");
+        str << std::to_string(film_index*2+50);
+        smthome.find_text("#subfilmvalue")->clear();
+        smthome.find_text("#subfilmvalue")->text(str.str());
+    };
 
     auto handle_touch = [&](egt::Event & event)
     {
@@ -609,6 +920,12 @@ int main(int argc, char** argv)
                             subswd_state(true);
                         else if (smthome.is_point_in_rect(event.pointer().point, subslmenuPtr->box()))
                             subsl_state(true);
+                        else if (smthome.is_point_in_rect(event.pointer().point, subblmenuPtr->box()))
+                            subbl_state(true);
+                        else if (smthome.is_point_in_rect(event.pointer().point, subrgbmenuPtr->box()))
+                            subrgb_state(true);
+                        else if (smthome.is_point_in_rect(event.pointer().point, subfilmmenuPtr->box()))
+                            subfilm_state(true);
                         break;
                     case PageType::subcl:
                         if (smthome.is_point_in_rect(event.pointer().point, subclopenPtr->box()))
@@ -681,8 +998,95 @@ int main(int argc, char** argv)
                             subsl_state(false);
                         break;
                     case PageType::subbl:
+                        if (smthome.is_point_in_rect(event.pointer().point, subblupPtr->box()))
+                        {
+                            subblupPtr->show();
+                            subbldownPtr->hide();
+                            subblpausePtr->hide();
+                            is_sub_open = true;
+                            if (!submv_timer.running())
+                                submv_timer.start();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subbldownPtr->box()))
+                        {
+                            subbldownPtr->show();
+                            subblupPtr->hide();
+                            subblpausePtr->hide();
+                            is_sub_open = false;
+                            if (!submv_timer.running())
+                                submv_timer.start();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subblpausePtr->box()))
+                        {
+                            subblpausePtr->show();
+                            subbldownPtr->hide();
+                            subblupPtr->hide();
+                            if (submv_timer.running())
+                                submv_timer.stop();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subblbtnmvupPtr->box()))
+                        {
+                            is_sub_open = true;
+                            bltemp_mv(subblbtnmvPtr->y() - 2);
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subblbtnmvdownPtr->box()))
+                        {
+                            is_sub_open = false;
+                            bltemp_mv(subblbtnmvPtr->y() + 2);
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subblbackPtr->box()))
+                            subbl_state(false);
                         break;
-                    case PageType::subdd:
+                    case PageType::subrgb:
+                        if (smthome.is_point_in_rect(event.pointer().point, subrgbpowerPtr->box()))
+                        {
+                            subrgbcolorbgPtr->show();
+                            SubrgbBase[rgb_index]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[0]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[0]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[1]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[1]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[2]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[2]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[3]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[3]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[4]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[4]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[5]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[5]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[6]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[6]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, SubrgbBase[7]->box()))
+                        {
+                            hideRgb();
+                            SubrgbBase[7]->show();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subrgbbackPtr->box()))
+                        {
+                            subrgb_state(false);
+                        }
                         break;
                     case PageType::subswd:
                         if (smthome.is_point_in_rect(event.pointer().point, subswdswcPtr->box()))
@@ -710,6 +1114,29 @@ int main(int argc, char** argv)
                         }
                         break;
                     case PageType::subfilm:
+                        if (smthome.is_point_in_rect(event.pointer().point, subfilmswcPtr->box()))
+                        {
+                            is_film_open = is_film_open ? false : true;
+                            subfilm_switch();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subfilmaddPtr->box()))
+                        {
+                            film_index++;
+                            if (24 <= film_index)
+                                film_index = 24;
+                            subfilm_move();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subfilmdecPtr->box()))
+                        {
+                            film_index--;
+                            if (0 >= film_index)
+                                film_index = 0;
+                            subfilm_move();
+                        }
+                        else if (smthome.is_point_in_rect(event.pointer().point, subfilmbackPtr->box()))
+                        {
+                            subfilm_state(false);
+                        }
                         break;
                     case PageType::subother:
                         break;
@@ -736,13 +1163,20 @@ int main(int argc, char** argv)
                         if (submv_timer.running())
                             submv_timer.stop();
                         if (smthome.is_point_in_rect(event.pointer().drag_start, subslbtniconPtr->box()))
-                            dragtype = DragType::subslmain;
+                            dragtype = DragType::submain;
                         else if (smthome.is_point_in_rect(event.pointer().drag_start, subslbtnmvPtr->box()))
-                            dragtype = DragType::subsltemp;
+                            dragtype = DragType::subtemp;
                         break;
                     case PageType::subbl:
+                        is_sub_start_drag = true;
+                        if (submv_timer.running())
+                            submv_timer.stop();
+                        if (smthome.is_point_in_rect(event.pointer().drag_start, subblbtniconPtr->box()))
+                            dragtype = DragType::submain;
+                        else if (smthome.is_point_in_rect(event.pointer().drag_start, subblbtnmvPtr->box()))
+                            dragtype = DragType::subtemp;
                         break;
-                    case PageType::subdd:
+                    case PageType::subrgb:
                         break;
                     case PageType::subswd:
 
@@ -762,11 +1196,10 @@ int main(int argc, char** argv)
                         break;
                     case PageType::subcl:
                     case PageType::subsl:
+                    case PageType::subbl:
                         is_sub_start_drag = false;
                         break;
-                    case PageType::subbl:
-                        break;
-                    case PageType::subdd:
+                    case PageType::subrgb:
                         break;
                     case PageType::subswd:
                         break;
@@ -824,7 +1257,7 @@ int main(int argc, char** argv)
                         {
                             switch (dragtype)
                             {
-                                case DragType::subslmain:
+                                case DragType::submain:
                                     if (385 <= event.pointer().point.y())
                                         sl_y = 385-subslmvPtr->height();
                                     else if (138 >= event.pointer().point.y())
@@ -833,7 +1266,7 @@ int main(int argc, char** argv)
                                         sl_y = event.pointer().point.y()-subslmvPtr->height();
                                     sl_mv();
                                     break;
-                                case DragType::subsltemp:
+                                case DragType::subtemp:
                                     sltemp_mv(event.pointer().point.y());
                                     break;
                                 default:
@@ -842,8 +1275,28 @@ int main(int argc, char** argv)
                         }
                         break;
                     case PageType::subbl:
+                        if (is_sub_start_drag)
+                        {
+                            switch (dragtype)
+                            {
+                                case DragType::submain:
+                                    if (385 <= event.pointer().point.y())
+                                        bl_y = 385-subblmvPtr->height();
+                                    else if (138 >= event.pointer().point.y())
+                                        bl_y = 138-subblmvPtr->height();
+                                    else
+                                        bl_y = event.pointer().point.y()-subblmvPtr->height();
+                                    bl_mv();
+                                    break;
+                                case DragType::subtemp:
+                                    bltemp_mv(event.pointer().point.y());
+                                    break;
+                                default:
+                                    break;
+                            }
+                        }
                         break;
-                    case PageType::subdd:
+                    case PageType::subrgb:
                         break;
                     case PageType::subswd:
                         for (i = 0; i < 25; i++)
@@ -857,6 +1310,15 @@ int main(int argc, char** argv)
                         }
                         break;
                     case PageType::subfilm:
+                        for (i = 0; i < 25; i++)
+                        {
+                            if (smthome.is_point_in_rect(event.pointer().point, SubfilmBase[i]->box()))
+                            {
+                                film_index = i;
+                                subfilm_move();
+                                break;
+                            }
+                        }
                         break;
                     case PageType::subother:
                         break;

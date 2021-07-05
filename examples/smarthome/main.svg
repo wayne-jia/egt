@@ -26,9 +26,9 @@
      borderopacity="1.0"
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
-     inkscape:zoom="1.4142136"
-     inkscape:cx="310.06632"
-     inkscape:cy="186.67619"
+     inkscape:zoom="1"
+     inkscape:cx="767"
+     inkscape:cy="243"
      inkscape:document-units="px"
      inkscape:current-layer="layer1"
      showgrid="false"
@@ -284,5 +284,29 @@
        x="71.828239"
        y="184.67897"
        inkscape:label="#subslmenu" />
+    <rect
+       style="fill:none;fill-opacity:0.28614;stroke:#000000;stroke-width:0.26458;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0"
+       id="subblmenu"
+       width="42.362179"
+       height="33.756214"
+       x="13.055702"
+       y="240.30408"
+       inkscape:label="#subblmenu" />
+    <rect
+       style="fill:none;stroke:#f6bc18;stroke-width:0.26458;stroke-linecap:round;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0"
+       id="subrgbmenu"
+       width="41.855835"
+       height="32.330952"
+       x="71.4105"
+       y="242.20422"
+       inkscape:label="#subrgbmenu" />
+    <rect
+       style="fill:none;stroke-width:0.26458;stroke-linecap:round;stroke-opacity:0;stroke:#000000;stroke-miterlimit:4;stroke-dasharray:none"
+       id="subfilmmenu"
+       width="45.772339"
+       height="33.337078"
+       x="196.31836"
+       y="181.64149"
+       inkscape:label="#subfilmmenu" />
   </g>
 </svg>
