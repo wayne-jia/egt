@@ -83,6 +83,7 @@ motorcycledash/motorcycledash \
 smarthome/smarthome \
 cargodash/cargodash \
 simplelab/simplelab \
+miwigateway/miwigateway \
 svgconvertor/svgconvertor
 endif
 
@@ -333,6 +334,15 @@ simplelab_simplelabdir = $(prefix)/share/egt/examples/simplelab
 simplelab_simplelab_DATA = $(wildcard $(top_srcdir)/examples/simplelab/*.svg) \
   $(wildcard $(top_srcdir)/examples/simplelab/*.png)
 simplelab_simplelab_LDFLAGS = $(AM_LDFLAGS)
+
+miwigateway_miwigateway_SOURCES = miwigateway/miwigateway.cpp miwigateway/serialport.cpp
+miwigateway_miwigateway_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/miwigateway\" -mfloat-abi=hard
+miwigateway_miwigateway_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+miwigateway_miwigatewaydir = $(prefix)/share/egt/examples/miwigateway
+miwigateway_miwigateway_DATA = $(wildcard $(top_srcdir)/examples/miwigateway/*.svg) \
+  $(wildcard $(top_srcdir)/examples/miwigateway/*.png)
+miwigateway_miwigateway_LDFLAGS = $(AM_LDFLAGS) -lpthread -lcjson -lmosquitto -lmosquittopp
 
 smarthome_smarthome_SOURCES = smarthome/smarthome.cpp
 smarthome_smarthome_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
