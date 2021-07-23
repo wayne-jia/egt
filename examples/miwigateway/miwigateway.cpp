@@ -13,6 +13,7 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <random>
 #include <condition_variable>
 #include <sys/stat.h>
 #include <functional>
@@ -22,7 +23,9 @@ extern "C" {
 #include "cjson/cJSON.h"
 }
 
-#define SERIALPORT
+//#define SERIALPORT
+
+#define SCROLLVIEWSIZE 10
 
 #ifdef SERIALPORT
 #include "serialport.h"
@@ -83,7 +86,9 @@ public:
 	int mosq_connected = 0;
 	egt::Application *app_ptr = nullptr;
 	egt::ScrolledView *view_ptr = nullptr;
+#ifdef SERIALPORT
 	SerialPort *tty_ptr = nullptr;
+#endif
 	mutex mtx;
 
 	Lights() {}
@@ -95,13 +100,10 @@ public:
 			disconnect();
 	}
 
-	int config_load();
-	void message(const char *report, Light *light);
-	void update(Light *light, int status, string& temp, string& hum, string& uv);
+	void report_load();
 	void routine();
-	void add_text();
+	void init_scrol_view();
 	void clear_text();
-	void remove_text();
 
 	int mosq_connect(void) {
 		if (connect(mqtt_host.c_str(), mqtt_port, mqtt_alive))
@@ -128,8 +130,31 @@ public:
 	void on_disconnect(int rc);
 
 private:
-	char buf[255];
+	char m_buf[128];
+	std::string m_str;
+	std::string last_line(const std::string& str)
+	{
+		std::stringstream ss(str);
+		std::string line;
+		while (std::getline(ss, line, '\n')) {}
+		return line;
+	}
 };
+
+void Lights::clear_text()
+{
+	for (auto i = 0; i < light_num; i++) {
+		lights[i].texts[0]->hide();
+		lights[i].texts[1]->hide();
+		lights[i].texts[2]->hide();
+		lights[i].texts[3]->hide();
+		lights[i].texts[4]->hide();
+		lights[i].texts[5]->hide();
+		lights[i].button->hide();
+	}
+
+	return;
+}
 
 void Lights::on_connect(int rc)
 {
@@ -149,7 +174,7 @@ void Lights::on_message(const struct mosquitto_message *msg)
 	if (msg->payloadlen) {
 		for (auto i=0; i<light_num; i++)
 			if (strstr(msg->topic, lights[i].mac.c_str()))
-				message((char *)msg->payload, &lights[i]);
+				cout << "on msg: " << msg->payload << endl;
 	}
 
 	mtx.unlock();
@@ -165,376 +190,125 @@ void Lights::on_disconnect(int rc)
 	}
 }
 
-int Lights::config_load()
+
+
+void Lights::report_load()
 {
-	int result = -1;
-	char *buffer;
-	struct stat state;
-	cJSON *json;
-	cJSON *j_lights, *j_light, *j_name, *j_mac, *j_topic_pub, *j_topic_sub;
-	ifstream infile;
+	std::string temp;
+	std::string rssi;
+	std::string custm;
+	clear_text();
+#ifdef SERIALPORT
+	std::string line = last_line(m_buf);
+#else
+	std::string line = m_str;
+#endif
 
-	if (stat(config_file.c_str(), &state)) {
-		cout << "ERROR: stat() " << config_file << endl;
-		perror("stat()");
-		return -1;
-	}
-	config_timestamp = state.st_mtime;
-
-	buffer = new char[state.st_size+1];
-	if (buffer == nullptr) {
-		cout << "ERROR: new " << endl;
-		return -1;
-	}
-
-	infile.open(config_file);
-	if (!infile) {
-		cout << "ERROR: open " << config_file << endl;
-		goto EXIT;
-	}
-
-	infile.read(buffer, state.st_size);
-	if (infile.gcount() != state.st_size) {
-		cout << "ERROR: read " << infile.gcount() << ", total size " << state.st_size << endl;
-		goto EXIT2;
-	}
-
-	json = cJSON_Parse(buffer);
-	if (!json) {
-		cout << "ERROR: cJSON_Parse" << endl;
-		goto EXIT2;
-	}
-
-	j_lights = cJSON_GetObjectItem(json, json_lights.c_str());
-	if (!j_lights) {
-		cout << "ERROR: cJSON_GetObjectItem lights" << endl;
-		goto EXIT3;
-	}
-
-	if (j_lights->type != cJSON_Array) {
-		cout << "ERROR: j_lights->type= " << j_lights->type << endl;
-		goto EXIT3;
-	}
-
-	light_num = cJSON_GetArraySize(j_lights);
-	if (light_num < 0) {
-		cout << "Error light number: " << light_num << endl;
-		goto EXIT3;
-	} else if (light_num == 0) {
-		result = 0;
-		goto EXIT3;
-	}
-
-	if (lights != nullptr)
-		delete [] lights;
-	lights = new Light[light_num];
-	if (lights == nullptr) {
-		cout << "ERROR: new Light[]" << endl;
-		light_num = 0;
-		goto EXIT3;
-	}
-
-	for (auto i=0; i<light_num; i++) {
-		j_light = cJSON_GetArrayItem(j_lights, i);
-		if (!j_light) {
-			cout << "ERROR: cJSON_GetArrayItem " << i << endl;
-			goto EXIT4;
+	if (line.length())
+	{
+		std::size_t substrpos = line.find("cmd");
+		if (substrpos != std::string::npos)
+		{
+			//cout << "substrpos: " << substrpos << endl;
+			std::string substr = line.substr(substrpos);
+			cout << "substr: " << substr << endl;
+			light_num = std::stoi(substr.substr(6, 1));
+			cout << "lightnum: " << light_num << endl;
+			temp = substr.substr(3, 2);
+			cout << "temp: " << temp << endl;
+			rssi = substr.substr(7, 2);
+			cout << "rssi: " << rssi << endl;
+			custm = substr.substr(9, 1);
+			cout << "custm: " << custm << endl;
+			for (auto i = 0; i < light_num; i++) {
+				lights[i].texts[0]->text(std::to_string(i));
+				lights[i].texts[0]->show();
+				lights[i].texts[1]->text("Device" + std::to_string(i));
+				lights[i].texts[1]->show();
+				lights[i].texts[3]->text(temp);
+				lights[i].texts[3]->show();
+				lights[i].texts[4]->text(rssi);
+				lights[i].texts[4]->show();
+				lights[i].texts[5]->text(custm);
+				lights[i].texts[5]->show();
+				lights[i].button->show();
+			}
 		}
-
-		j_name      = cJSON_GetObjectItem(j_light, json_name.c_str());
-		j_mac       = cJSON_GetObjectItem(j_light, json_mac.c_str());
-		j_topic_pub = cJSON_GetObjectItem(j_light, json_topic_pub.c_str());
-		j_topic_sub = cJSON_GetObjectItem(j_light, json_topic_sub.c_str());
-		if ((!j_name || !j_mac || !j_topic_pub || !j_topic_sub) || \
-				(j_name->type != cJSON_String || \
-					j_mac->type != cJSON_String || \
-					j_topic_pub->type != cJSON_String || \
-					j_topic_sub->type != cJSON_String)) {
-			cout << "ERROR: get name and topic" << endl;
-			goto EXIT4;
-		}
-
-		lights[i].name      = j_name->valuestring;
-		lights[i].mac       = j_mac->valuestring;
-		lights[i].topic_pub = j_topic_pub->valuestring;
-		lights[i].topic_sub = j_topic_sub->valuestring;
-		lights[i].tp        = steady_clock::now();
 	}
 
-	result = 0;
-	goto EXIT3;
-EXIT4:
-	delete [] lights;
-	lights = nullptr;
-	light_num = 0;
-EXIT3:
-	cJSON_Delete(json);
-EXIT2:
-	infile.close();
-EXIT:
-	delete buffer;
-	return result;
 }
 
-void Lights::add_text()
-{
-	for (auto i=0; i<light_num; i++) {
-		lights[i].mtx.lock();
-		lights[i].texts[0] = make_shared<egt::TextBox>(to_string(i+1).c_str(), Rect(Point(0, i*40), Size(30, 30)), AlignFlag::center);
-		lights[i].texts[1] = make_shared<egt::TextBox>(lights[i].name.c_str(), Rect(Point(52, i*40), Size(120, 30)), AlignFlag::center);
-		lights[i].texts[2] = make_shared<egt::TextBox>("", Rect(Point(169, i*40), Size(100, 30)), AlignFlag::center);
-		lights[i].texts[3] = make_shared<egt::TextBox>("", Rect(Point(304, i*40), Size(60, 30)), AlignFlag::center);
-		lights[i].texts[4] = make_shared<egt::TextBox>("", Rect(Point(422, i*40), Size(60, 30)), AlignFlag::center);
-		lights[i].texts[5] = make_shared<egt::TextBox>("", Rect(Point(530, i*40), Size(60, 30)), AlignFlag::center);
-		lights[i].button   = make_shared<egt::ToggleBox>(Rect(Point(184, i*40), Size(70, 30)));
 
+void Lights::init_scrol_view()
+{
+	if (lights != nullptr)
+		delete [] lights;
+	lights = new Light[SCROLLVIEWSIZE];
+	if (lights == nullptr) {
+		cout << "ERROR: new Light[]" << endl;
+		return;
+	}
+
+	for (auto i = 0; i < SCROLLVIEWSIZE; i++) {
+		lights[i].texts[0] = make_shared<egt::TextBox>(std::to_string(i), Rect(Point(0, i*40), Size(30, 30)), AlignFlag::center);
+		lights[i].texts[1] = make_shared<egt::TextBox>("Device" + std::to_string(i), Rect(Point(52, i*40), Size(120, 30)), AlignFlag::center);
+		lights[i].texts[2] = make_shared<egt::TextBox>("Offline", Rect(Point(189, i*40), Size(100, 30)), AlignFlag::center);
+		lights[i].texts[3] = make_shared<egt::TextBox>("78", Rect(Point(333, i*40), Size(60, 30)), AlignFlag::center);
+		lights[i].texts[4] = make_shared<egt::TextBox>("90", Rect(Point(448, i*40), Size(60, 30)), AlignFlag::center);
+		lights[i].texts[5] = make_shared<egt::TextBox>("a1", Rect(Point(552, i*40), Size(60, 30)), AlignFlag::center);
+		lights[i].button   = make_shared<egt::ToggleBox>(Rect(Point(184, i*40), Size(70, 30)));
 		lights[i].button->toggle_text("On", "Off");
-		auto t      = this;
-		auto button = lights[i].button.get();
-		auto mac    = lights[i].mac;
-		auto handle = [t, button, mac](Event & event)
-		{
-			if (event.id() == EventId::pointer_click) {
-				if (button->checked())
-					t->mosq_light_on(mac);
-				else
-					t->mosq_light_off(mac);
-			}
-		};
-		lights[i].button->on_event(handle);
+		lights[i].button->zorder_top();
+		lights[i].button->hide();
 		view_ptr->add(lights[i].button); // Hidden with default
 
 		for (auto j=0; j<6; j++) {
-			lights[i].texts[j]->font(Font(20));
+			lights[i].texts[j]->font(Font(25));
 			lights[i].texts[j]->readonly(true);
 			lights[i].texts[j]->border(false);
+			lights[i].texts[j]->hide();
 			view_ptr->add(lights[i].texts[j]);
 		}
-		lights[i].mtx.unlock();
 	}
-
-	return;
 }
 
-void Lights::clear_text()
-{
-	for (auto i=0; i<light_num; i++) {
-		lights[i].texts[2]->zorder_top();
-		lights[i].texts[0]->clear();
-		lights[i].texts[1]->clear();
-		lights[i].texts[2]->clear();
-		lights[i].texts[3]->clear();
-		lights[i].texts[4]->clear();
-		lights[i].texts[5]->clear();
-	}
-
-	return;
-}
-
-void Lights::remove_text()
-{
-	view_ptr->remove_all();
-
-	for (auto i=0; i<light_num; i++) {
-		for (auto j=0; j<6; j++)
-			lights[i].texts[j].reset();
-		lights[i].button.reset();
-	}
-
-	return;
-}
 
 void Lights::routine()
 {
-	struct stat state;
+	bzero(m_buf, sizeof(m_buf));
+	m_str.clear();
 #ifdef SERIALPORT
-	bzero(buf, sizeof(buf));
-	//tty_ptr->write("helloegt", 9);
-	//cout << "tty0 write done" << endl;
-	tty_ptr->read(buf, 10);
-	cout << "tty0 read: " << buf << endl;
+	m_str = "get ver\r";
+	cout << "write: " << m_str << endl;
+	tty_ptr->write(m_str.data(), m_str.length());
+	//tty_ptr->flush();
+	tty_ptr->read(m_buf, 100);
+	cout << "tty read: " << m_buf << endl;
+#else
+	std::default_random_engine generator(time(0));
+	std::uniform_int_distribution<unsigned long> distribution(4523801,9999999);
+	auto dice = std::bind(distribution, generator);
+	m_str = "cmd" + std::to_string(dice());
 #endif
-
-	if (!stat(config_file.c_str(), &state)) {
-		if (config_timestamp != state.st_mtime) {
-			mtx.lock();
-			clear_text();
-			app_ptr->event().step(); // Workaround here
-			remove_text();
-			app_ptr->event().step(); // Workaround here
-			config_load();
-			add_text();
-			mtx.unlock();
-			return;
-		}
-	} else {
-		cout << "ERROR: stat() " << config_file << endl;
-		perror("stat()");
-	}
-
-	auto now = steady_clock::now();
-	for (auto i=0; i<light_num; i++) {
-		if ((lights[i].status != Light::LIGHT_OFFLINE) && (now >= lights[i].tp + seconds(4))) {
-			lights[i].mtx.lock();
-			lights[i].status = Light::LIGHT_OFFLINE;
-			//lights[i].texts[2]->zorder_top();
-			lights[i].texts[2]->zorder_bottom();
-			lights[i].texts[2]->text("Offline");
-			lights[i].texts[3]->clear();
-			lights[i].texts[4]->clear();
-			lights[i].texts[5]->clear();
-			lights[i].mtx.unlock();
-		}
-	}
-
-	return;
+	report_load();
 }
 
-void Lights::message(const char *report, Light *light)
-{
-	int status;
-	string temp, hum, uv;
-	string::size_type resize;
-	cJSON *json_report, *json_params, *json_light, *json_temp, *json_hum, *json_uv;
-
-	status = Light::LIGHT_ERROR;
-
-	json_report = cJSON_Parse(report);
-	if (json_report) {
-		json_params = cJSON_GetObjectItem(json_report, "params");
-		if (json_params) {
-			json_light = cJSON_GetObjectItem(json_params, "light_switch");
-			if (json_light) {
-				if (json_light->valueint == 1)
-					status = Light::LIGHT_ON;
-				else if (json_light->valueint == 0)
-					status = Light::LIGHT_OFF;
-			}
-			json_temp = cJSON_GetObjectItem(json_params, "temp");
-			if (json_temp) {
-				temp = to_string(json_temp->valuedouble);
-				resize = temp.find(".");
-				if (resize != string::npos)
-					temp.resize(resize+3);
-			}
-			json_hum = cJSON_GetObjectItem(json_params, "hum");
-			if (json_hum) {
-				hum = to_string(json_hum->valueint);
-			}
-			json_uv = cJSON_GetObjectItem(json_params, "uv");
-			if (json_uv) {
-				uv = to_string(json_uv->valueint);
-			}
-		}
-		cJSON_Delete(json_report);
-	}
-
-	light->tp = steady_clock::now();
-	update(light, status, temp, hum, uv);
-
-	return;
-}
-
-void Lights::update(Light *light, int status, string& temp, string& hum, string& uv)
-{
-	int text_cleared = 0;
-
-	light->mtx.lock();
-
-	if ((light->status == Light::LIGHT_OFFLINE) || (light->status == Light::LIGHT_ERROR))
-		text_cleared = 1;
-
-	if (light->status != status) {
-		light->status = status;
-		if (light->status == Light::LIGHT_ERROR) {
-
-			#if 0
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::text, light->texts[2], "Error"));
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::zorder_top, light->texts[2]));
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::clear, light->texts[3]));
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::clear, light->texts[4]));
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::clear, light->texts[5]));
-			#endif
-
-			light->mtx.unlock();
-			return;
-		} else {
-			#if 0
-			if (light->status == Light::LIGHT_ON)
-				asio::post(egt::Application::instance().event().io(), std::bind(&egt::ToggleBox::checked, light->button, 1));
-			else if (light->status == Light::LIGHT_OFF)
-				asio::post(egt::Application::instance().event().io(), std::bind(&egt::ToggleBox::checked, light->button, 0));
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::clear, light->texts[2]));
-			asio::post(egt::Application::instance().event().io(), std::bind(&egt::ToggleBox::zorder_top, light->button));
-			#endif
-		}
-	}
-
-#if 0
-	if ((light->temp != temp) || (text_cleared)) {
-		light->temp = temp;
-		asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::text, light->texts[3], light->temp.c_str()));
-	}
-	if ((light->hum != hum) || (text_cleared)) {
-		light->hum = hum;
-		asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::text, light->texts[4], light->hum.c_str()));
-	}
-	if ((light->uv != uv) || (text_cleared)) {
-		light->uv = uv;
-		asio::post(egt::Application::instance().event().io(), std::bind(&egt::TextBox::text, light->texts[5], light->uv.c_str()));
-	}
-#endif
-
-	light->mtx.unlock();
-
-	return;
-}
-
-#include <sys/mman.h>
-#include <execinfo.h>
-#include <signal.h>
-
-void sig_func(int sig)
-{
-	int j, nptrs;
-#define SIZE 100
-	void *buffer[SIZE];
-	char **strings;
-
-	printf("Error: signal %d:\n", sig);
-
-	nptrs = backtrace(buffer, SIZE);
-	printf("backtrace() returned %d addresses\n", nptrs);
-
-	 /* The call backtrace_symbols_fd(buffer, nptrs, STDOUT_FILENO)
-		would produce similar output to the following: */
-
-	strings = backtrace_symbols(buffer, nptrs);
-	if (strings == NULL) {
-		perror("backtrace_symbols");
-		exit(EXIT_FAILURE);
-	}
-
-	for (j = 0; j < nptrs; j++)
-		printf("%s\n", strings[j]);
-
-	free(strings);
-	exit(1);
-}
 
 int main(int argc, const char** argv)
 {
-	signal(SIGSEGV, sig_func);
+	detail::ignoreparam(argc);
+	detail::ignoreparam(argv);
 
 	auto gateway = make_shared<Lights>();
 	auto app = make_shared<egt::Application>(0, nullptr);
 	auto window = make_shared<egt::TopWindow>();
 
 #ifdef SERIALPORT
-	cout << "construct serialport" << endl;
-	auto tty0 = make_shared<SerialPort>("/dev/tty0");
-	cout << "is tty0 open: " << tty0->isOpen() << endl;
-	if ((gateway->tty_ptr = tty0.get()) == nullptr) {
+	//cout << "construct serialport" << endl;
+	//auto tty = make_shared<SerialPort>("/dev/ttyS3", SerialPort::defaultOptions);
+	auto tty = make_shared<SerialPort>("/dev/ttyACM0");
+	cout << "is ttyACM0 open: " << tty->isOpen() << endl;
+	if ((gateway->tty_ptr = tty.get()) == nullptr) {
 		cout << "ERROR get tty_ptr" << endl;
 		exit(EXIT_FAILURE);
 	}
@@ -550,12 +324,12 @@ int main(int argc, const char** argv)
 	header->font(Font(30, Font::Weight::bold));
 	window->add(header);
 
-	auto title = make_shared<egt::Label>("ID           Name               Light        Temperature    RSSI    Customized",
+	auto title = make_shared<egt::Label>("ID             Name               Light          Temperature      RSSI      Customized",
 										Rect(Point(0, 100), Size(window->width(), 30)), AlignFlag::left);
 	title->font(Font(20, Font::Weight::bold));
 	window->add(title);
 
-	auto view = make_shared<egt::ScrolledView>(Rect(0, 130, window->width(), window->height()-100));
+	auto view = make_shared<egt::ScrolledView>(Rect(0, 140, window->width(), window->height()));
 	view->color(Palette::ColorId::bg, Palette::white);
 	view->name("view");
 	window->add(view);
@@ -564,35 +338,22 @@ int main(int argc, const char** argv)
 		cout << "ERROR get app_ptr" << endl;
 		exit(EXIT_FAILURE);
 	}
+
 	if ((gateway->view_ptr = view.get()) == nullptr) {
 		cout << "ERROR get view_ptr" << endl;
 		exit(EXIT_FAILURE);
 	}
-	if (gateway->config_load()) {
-		cout << "ERROR config_load()" << endl;
-		exit(EXIT_FAILURE);
-	}
-	gateway->add_text();
+
+	gateway->init_scrol_view();
 
 	window->show();
 
-	if (gateway->mosq_connect()) {
-		cout << "ERROR mosq_connect()" << endl;
-		exit(EXIT_FAILURE);
-	}
-
-	auto timer = make_shared<egt::PeriodicTimer>(std::chrono::seconds(1));
-	timer->on_timeout([gateway]()
+	PeriodicTimer timer(std::chrono::seconds(3));
+	timer.on_timeout([gateway]()
 	{
 		gateway->routine();
 	});
-	timer->start();
-
-	//app->event().add_idle_callback([gateway]()
-	//{
-	//	gateway->routine();
-	//	cout << "haha idle" << endl;
-	//});
+	timer.start();
 
 	return app->run();
 }

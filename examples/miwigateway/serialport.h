@@ -92,7 +92,7 @@ public:
 
     int write(const void *data, int length);
     int read(void *data, int length);
-
+    void flush();
 
     void close();
 

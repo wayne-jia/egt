@@ -46,6 +46,10 @@ bool SerialPort::open(const std::string &path, const OpenOptions &options) {
     return true;
 }
 
+void SerialPort::flush() {
+    tcflush(_tty_fd, TCIOFLUSH);
+}
+
 void SerialPort::termiosOptions(termios &tios, const OpenOptions &options) {
 
 
