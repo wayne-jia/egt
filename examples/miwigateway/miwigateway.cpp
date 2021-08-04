@@ -17,6 +17,7 @@
 #include <regex>
 #include <condition_variable>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <functional>
 #include <cxxopts.hpp>
 #include <egt/ui>
@@ -30,6 +31,20 @@ extern "C" {
 
 #define SCROLLVIEWSIZE 10
 #define SCROLLVIEWY    140
+#define LEN_CONN_MSG 26
+#define LEN_RECV_MSG 38
+#define TIMEOUT_DEVICE_OFFLINE 11
+#define JSON_LIGHTS    "lights"
+#define JSON_WEBUPDA        "webupda"
+#define JSON_ID        "id"
+#define JSON_NAME		   "name"
+#define JSON_VALID		   "valid"
+#define JSON_LED		   "led"
+#define JSON_TEMPERATURE "temperature"
+#define JSON_RSSI "rssi"
+#define JSON_CLKWISE "clockwise"
+#define JSON_CNTCLKWISE "counterclockwise"
+#define JSON_NAME_LEN	12
 
 #ifdef SERIALPORT
 #include "serialport.h"
@@ -45,12 +60,18 @@ typedef struct {
 	bool led;
 	bool gpio1;
 	bool gpio2;
+	bool active;
+	std::string name;
+	std::string ledstr;
+	std::string clkwise;
+	std::string cntclkwise;
 	std::string addr;
 	std::string light;
 	std::string temp;
 	std::string rssi;
 	std::string casttype;
 }miwi_dev_st;
+
 
 class Light
 {
@@ -64,15 +85,8 @@ public:
 	};
 
 	int status = LIGHT_NONE;
-	string name;
-	string mac;
-	string topic_pub;
-	string topic_sub;
-	string temp;
-	string hum;
-	string uv;
 	miwi_dev_st dev_attr;
-
+	struct timeval timestamp;
 	shared_ptr<egt::v1::TextBox>   texts[5]; // 0:ID 1:Name 2:Light 3:Temp 4:Hum 5:Uv
 	shared_ptr<egt::v1::ToggleBox> button;
 	shared_ptr<egt::v1::ToggleBox> button1;
@@ -81,10 +95,10 @@ public:
 	mutex mtx;
 };
 
-class MiWiGtw : public mosqpp::mosquittopp
+class MiWiGtw
 {
 public:
-	const string config_file     = "/var/www/cgi-bin/lights.json";
+	const string config_file     = "/tmp/lights.json";
 	const string json_lights     = "lights";
 	const string json_name       = "name";
 	const string json_mac        = "mac";
@@ -103,7 +117,7 @@ public:
 	int light_num = 0;
 	Light *lights = nullptr;
 	time_t config_timestamp = 0;
-	int mosq_connected = 0;
+
 	Application *app_ptr = nullptr;
 	ScrolledView *view_ptr = nullptr;
 	PeriodicTimer *timer_ptr = nullptr;
@@ -116,11 +130,15 @@ public:
 	~MiWiGtw() {
 		if (lights != nullptr)
 			delete [] lights;
-
-		if (mosq_connected)
-			disconnect();
 	}
 
+
+	cJSON* OpenJson();
+	void CloseJson(cJSON *json);
+	void SaveJson(cJSON *json);
+	void AddJson(miwi_dev_st dev);
+	void UpdateJson(miwi_dev_st dev);
+	void DeleteJson(cJSON *json_light, int num);
 	void report_load();
 	void routine();
 	bool initconn();
@@ -131,30 +149,9 @@ public:
 	void update_end_node_device(std::string msg);
 	bool is_point_in_list(DisplayPoint& point, int* index);
 	bool is_point_in_rect(DisplayPoint& point, Rect rect);
+	void check_offiline_device();
+	void check_json_upda();
 
-	int mosq_connect(void) {
-		if (connect(mqtt_host.c_str(), mqtt_port, mqtt_alive))
-			return -1;
-		return loop_start();
-	}
-
-	int mosq_publish(const string& topic, const string& msg) {
-		return publish(nullptr, topic.c_str(), msg.length(), msg.c_str(), 1, false);
-	}
-
-	int mosq_light_on(const string& mac) {
-		auto topic = mqtt_topic_root + "/" + mac + mqtt_topic_pub;
-		return mosq_publish(topic, mqtt_cmd_on);
-	}
-
-	int mosq_light_off(const string& mac) {
-		auto topic = mqtt_topic_root + "/" + mac + mqtt_topic_pub;
-		return mosq_publish(topic, mqtt_cmd_off);
-	}
-
-	void on_connect(int rc);
-	void on_message(const struct mosquitto_message *msg);
-	void on_disconnect(int rc);
 
 private:
 	int m_idx;
@@ -188,46 +185,13 @@ private:
 	}
 };
 
+
 inline constexpr std::uint32_t hash_str_to_uint32(const char* data)
 {
 	std::uint32_t h(0);
 	for (int i = 0; data && ('\0' != data[i]); i++)
 		h = (h << 6) ^ (h >> 26) ^ data[i];
 	return h;
-}
-
-void MiWiGtw::on_connect(int rc)
-{
-	if (!rc) {
-		cout << "sub connected " << mqtt_topic_sub << endl;
-		mosq_connected = 1;
-		auto topic = mqtt_topic_root + "/+" + mqtt_topic_sub;
-		subscribe(NULL, topic.c_str(), 0);
-	}
-}
-
-void MiWiGtw::on_message(const struct mosquitto_message *msg)
-{
-	if (!mtx.try_lock())
-		return;
-
-	if (msg->payloadlen) {
-		for (auto i=0; i<light_num; i++)
-			if (strstr(msg->topic, lights[i].mac.c_str()))
-				cout << "on msg: " << msg->payload << endl;
-	}
-
-	mtx.unlock();
-}
-
-void MiWiGtw::on_disconnect(int rc)
-{
-	cout << "sub disconnect " << rc << endl;
-	mosq_connected = 0;
-	if (rc) {
-		reconnect();
-		cout << "sub reconnect " << endl;
-	}
 }
 
 void MiWiGtw::clear_text()
@@ -251,7 +215,7 @@ void MiWiGtw::show_text()
 	for (auto i = 0; i < light_num; i++) {
 		lights[i].texts[0]->text(lights[i].dev_attr.index);
 		lights[i].texts[0]->show();
-		lights[i].texts[1]->text("Device" + lights[i].dev_attr.index);
+		lights[i].texts[1]->text(lights[i].dev_attr.addr.substr(0, 7));
 		lights[i].texts[1]->show();
 		if (!lights[i].dev_attr.valid) {
 			lights[i].texts[2]->show();
@@ -274,18 +238,48 @@ void MiWiGtw::show_text()
 	return;
 }
 
+void MiWiGtw::check_offiline_device()
+{
+	bool is_change = false;
+	struct timeval curtime;
+	gettimeofday(&curtime, NULL);
+	for (auto i = 0; i < light_num; i++) {
+		if (lights[i].dev_attr.valid && lights[i].dev_attr.active) {
+			if (abs(curtime.tv_sec - lights[i].timestamp.tv_sec) > TIMEOUT_DEVICE_OFFLINE) {
+				cout << "device[" << i << "] offline" << endl;
+				lights[i].dev_attr.valid = 0;
+				UpdateJson(lights[i].dev_attr);
+				is_change = true;
+			}
+		}
+	}
+
+	if (is_change) {
+		clear_text();
+		show_text();
+	}
+}
+
 void MiWiGtw::add_rm_end_node_device(std::string msg)
 {
+	bool is_new_node = false;
 	if (!check_if_hex(msg.substr(5, 1)) || !check_if_hex(msg.substr(7, 1)))
 		return;
 	int i = std::stoi(msg.substr(5, 1), nullptr, 16);
-	if (i+1 > light_num)
+	if (i+1 > light_num) {
+		is_new_node = true;
 		light_num = i + 1;
-
-	if (std::stoi(msg.substr(7, 1), nullptr, 16))
+	}
+	lights[i].dev_attr.active = false;
+	if (std::stoi(msg.substr(7, 1), nullptr, 16)) {
 		lights[i].dev_attr.valid = 1;
-	else
+
+	}
+	else {
 		lights[i].dev_attr.valid = 0;
+
+	}
+
 	lights[i].dev_attr.led = true;
 	lights[i].dev_attr.gpio1 = false;
 	lights[i].dev_attr.gpio2 = false;
@@ -295,16 +289,31 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 	lights[i].dev_attr.temp = "0";
 	lights[i].dev_attr.rssi = "0";
 	lights[i].dev_attr.casttype = "0";
+	lights[i].dev_attr.name = lights[i].dev_attr.addr.substr(0, 7);
+	lights[i].dev_attr.ledstr = "1";
+	lights[i].dev_attr.clkwise = "0";
+	lights[i].dev_attr.cntclkwise = "0";
+	if (is_new_node)
+		AddJson(lights[i].dev_attr);
+	if (!lights[i].dev_attr.valid)
+		UpdateJson(lights[i].dev_attr);
 }
 
 void MiWiGtw::update_end_node_device(std::string msg)
 {
+	struct timeval curtime;
+	gettimeofday(&curtime, NULL);
 	for (auto i = 0; i < light_num; i++) {
 		if (lights[i].dev_attr.addr == msg.substr(11, 16)) {
 			if (check_if_hex(msg.substr(8, 2)))
 				lights[i].dev_attr.rssi = convert_2_db(std::stoi(msg.substr(8, 2), nullptr, 16));
-			lights[i].dev_attr.temp = msg.substr(33, 4) + "°C";
+			lights[i].dev_attr.temp = msg.substr(33, 4) + "C";
 			lights[i].dev_attr.casttype = msg.substr(5, 2);
+			lights[i].dev_attr.active = true;
+			lights[i].dev_attr.valid = 1;
+			lights[i].timestamp = curtime;
+			UpdateJson(lights[i].dev_attr);
+			lights[i].dev_attr.temp = msg.substr(33, 4) + "°C";
 		}
 	}
 }
@@ -321,10 +330,14 @@ void MiWiGtw::report_load()
 		timer_ptr->stop();
 		switch (hash_str_to_uint32(msg.substr(0, 4).data())) {
 			case hash_str_to_uint32("conn"):
+				if (LEN_CONN_MSG > msg.length())
+					break;
 				clear_text();
 				add_rm_end_node_device(msg);
 				break;
 			case hash_str_to_uint32("recv"):
+				if (LEN_RECV_MSG > msg.length())
+					break;
 				clear_text();
 				update_end_node_device(msg);
 				break;
@@ -338,6 +351,7 @@ void MiWiGtw::report_load()
 	}
 }
 
+#if 1
 bool MiWiGtw::is_point_in_rect(DisplayPoint& point, Rect rect)
 {
 	if (point.x() >= rect.x()
@@ -348,6 +362,7 @@ bool MiWiGtw::is_point_in_rect(DisplayPoint& point, Rect rect)
 	else
 		return false;
 }
+#endif
 
 bool MiWiGtw::is_point_in_list(DisplayPoint& point, int* index)
 {
@@ -401,7 +416,7 @@ void MiWiGtw::init_scrol_view()
 		lights[i].texts[2]->color(Palette::ColorId::text, Palette::yellow);
 		lights[i].texts[3] = make_shared<TextBox>("0", Rect(Point(312, i*40), Size(80, 30)), AlignFlag::center);
 		lights[i].texts[4] = make_shared<TextBox>("0", Rect(Point(400, i*40), Size(80, 30)), AlignFlag::center);
-		lights[i].button   = make_shared<ToggleBox>(Rect(Point(170, i*40), Size(70, 30)));
+		lights[i].button  = make_shared<ToggleBox>(Rect(Point(170, i*40), Size(70, 30)));
 		lights[i].button->toggle_text("On", "Off");
 		lights[i].button->hide();
 		lights[i].button->on_click([&](egt::Event& event) {
@@ -410,16 +425,21 @@ void MiWiGtw::init_scrol_view()
 				return;
 			}
 			lights[m_idx].dev_attr.led = lights[m_idx].dev_attr.led ? false : true;
-			if (lights[m_idx].dev_attr.led)
+			if (lights[m_idx].dev_attr.led) {
 				m_str_asyn = "send " + std::to_string(m_idx) + " 0 LED1 1" + "\r";
-			else
+				lights[m_idx].dev_attr.ledstr = "1";
+			}	else {
 				m_str_asyn = "send " + std::to_string(m_idx) + " 0 LED1 0" + "\r";
+				lights[m_idx].dev_attr.ledstr = "0";
+			}
 
 			cout << "s-> " << m_str_asyn << endl;
 			tty_ptr->write(m_str_asyn.data(), m_str_asyn.length());
+
+			UpdateJson(lights[m_idx].dev_attr);
 		});
 		lights[i].button1   = make_shared<ToggleBox>(Rect(Point(490, i*40), Size(70, 30)));
-		lights[i].button1->toggle_text("0", "1");
+		lights[i].button1->toggle_text("1", "0");
 		lights[i].button1->hide();
 		lights[i].button1->on_click([&](egt::Event& event) {
 			if (!is_point_in_list(event.pointer().point, &m_idx)) {
@@ -427,16 +447,21 @@ void MiWiGtw::init_scrol_view()
 				return;
 			}
 			lights[m_idx].dev_attr.gpio1 = lights[m_idx].dev_attr.gpio1 ? false : true;
-			if (lights[m_idx].dev_attr.gpio1)
+			if (lights[m_idx].dev_attr.gpio1) {
 				m_str_asyn = "send " + std::to_string(m_idx) + " 0 GPIO1 1" + "\r";
-			else
+				lights[m_idx].dev_attr.clkwise = "1";
+			}	else {
 				m_str_asyn = "send " + std::to_string(m_idx) + " 0 GPIO1 0" + "\r";
+				lights[m_idx].dev_attr.clkwise = "0";
+			}
 
 			cout << "s-> " << m_str_asyn << endl;
 			tty_ptr->write(m_str_asyn.data(), m_str_asyn.length());
+
+			UpdateJson(lights[m_idx].dev_attr);
 		});
 		lights[i].button2   = make_shared<ToggleBox>(Rect(Point(650, i*40), Size(70, 30)));
-		lights[i].button2->toggle_text("0", "1");
+		lights[i].button2->toggle_text("1", "0");
 		lights[i].button2->hide();
 		lights[i].button2->on_click([&](egt::Event& event) {
 			if (!is_point_in_list(event.pointer().point, &m_idx)) {
@@ -444,15 +469,21 @@ void MiWiGtw::init_scrol_view()
 				return;
 			}
 			lights[m_idx].dev_attr.gpio2 = lights[m_idx].dev_attr.gpio2 ? false : true;
-			if (lights[m_idx].dev_attr.gpio2)
+			if (lights[m_idx].dev_attr.gpio2) {
 				m_str_asyn = "send " + std::to_string(m_idx) + " 0 GPIO2 1" + "\r";
-			else
+				lights[m_idx].dev_attr.cntclkwise = "1";
+			}	else {
 				m_str_asyn = "send " + std::to_string(m_idx) + " 0 GPIO2 0" + "\r";
+				lights[m_idx].dev_attr.cntclkwise = "0";
+			}
 
 			cout << "s-> " << m_str_asyn << endl;
 			tty_ptr->write(m_str_asyn.data(), m_str_asyn.length());
+
+			UpdateJson(lights[m_idx].dev_attr);
 		});
 		lights[i].dev_attr.valid = 0;
+		lights[i].dev_attr.active = false;
 		view_ptr->add(lights[i].button); // Hidden with default
 		view_ptr->add(lights[i].button1);
 		view_ptr->add(lights[i].button2);
@@ -544,11 +575,27 @@ bool MiWiGtw::initconn()
 		return false;
 	}
 
+	/*Initialize json file*/
+	cJSON *json = OpenJson();
+	cJSON *json_lights = cJSON_GetObjectItem(json, "lights");
+	if (!json_lights) {
+		cout << "ERROR get json first node" << endl;
+		CloseJson(json);
+		return false;
+	}
+	int jnum = cJSON_GetArraySize(json_lights);
+	for (auto i = 0; i < jnum; i++)
+		DeleteJson(json_lights, 0);
+  SaveJson(json);
+	CloseJson(json);
+
 	return true;
 }
 
 void MiWiGtw::routine()
 {
+	check_json_upda();
+	check_offiline_device();
 #ifdef SERIALPORT
 	bzero(m_buf, sizeof(m_buf));
 	//m_str = "get ver\r";
@@ -587,6 +634,346 @@ void MiWiGtw::routine()
 #endif
 }
 
+void MiWiGtw::check_json_upda()
+{
+	struct stat state;
+	if (!stat(config_file.c_str(), &state)) {
+		//cout << "config_timestamp: " << config_timestamp << endl;
+		//cout << "state.st_mtime: " << state.st_mtime << endl;
+		if (config_timestamp == state.st_mtime)
+			return;
+	} else {
+		cout << "ERROR: stat() " << config_file << endl;
+		return;
+	}
+
+	cout << "json was updated by web" << endl;
+	timer_ptr->stop();
+
+	int array_num = 0;
+	int i = 0;
+	int webupda = 0;
+	cJSON *json, *json_light, *json_array_ori, *json_array, *json_webupda, *json_id, *json_name, *json_valid, *json_led, *json_temp, *json_rssi, *json_clkwise, *json_cntclkwise;
+
+	json = OpenJson();
+	json_light = cJSON_GetObjectItem(json, "lights");
+	if (!json_light) {
+		cerr << "ERROR get json first node" << endl;
+		CloseJson(json);
+		timer_ptr->start();
+		return;
+	}
+
+	if (json_light->type != cJSON_Array) {
+		cerr << "Error json_light->type=" << json_light->type << endl;
+		timer_ptr->start();
+		return;
+	}
+
+	array_num = cJSON_GetArraySize(json_light);
+	if (array_num < 0) {
+		cerr << "Error light number:" << array_num << endl;
+		timer_ptr->start();
+		return;
+	} else if (array_num == 0) {
+		timer_ptr->start();
+		return;
+	}
+
+	for (i = 0; i < array_num; i++) {
+		json_array_ori = cJSON_GetArrayItem(json_light, i);
+		if (!json_array_ori) {
+			cerr << "Error cJSON_GetArrayItem:" << i << endl;
+			timer_ptr->start();
+			return;
+		}
+
+		json_webupda         = cJSON_GetObjectItem(json_array_ori, JSON_WEBUPDA);
+		json_id         = cJSON_GetObjectItem(json_array_ori, JSON_ID);
+		json_name       = cJSON_GetObjectItem(json_array_ori, JSON_NAME);
+		json_valid       = cJSON_GetObjectItem(json_array_ori, JSON_VALID);
+		json_led        = cJSON_GetObjectItem(json_array_ori, JSON_LED);
+		json_temp          = cJSON_GetObjectItem(json_array_ori, JSON_TEMPERATURE);
+		json_rssi             = cJSON_GetObjectItem(json_array_ori, JSON_RSSI);
+		json_clkwise      = cJSON_GetObjectItem(json_array_ori, JSON_CLKWISE);
+		json_cntclkwise = cJSON_GetObjectItem(json_array_ori, JSON_CNTCLKWISE);
+		if ((!json_webupda || !json_id || !json_name || !json_valid || !json_led || !json_temp || !json_rssi || !json_clkwise || !json_cntclkwise) || \
+				(json_webupda->type != cJSON_String || \
+					json_id->type != cJSON_String || \
+					json_name->type != cJSON_String || \
+					json_valid->type != cJSON_String || \
+					json_led->type != cJSON_String || \
+					json_temp->type != cJSON_String || \
+					json_rssi->type != cJSON_String || \
+					json_clkwise->type != cJSON_String || \
+					json_cntclkwise->type != cJSON_String)) {
+			cerr << "Error get json array items" << endl;
+			timer_ptr->start();
+			return;
+		}
+
+		webupda = std::stoi(json_webupda->valuestring);
+		switch (webupda) {
+			case 0:
+				break;
+			case 1:
+				lights[i].dev_attr.led = lights[i].dev_attr.led ? false : true;
+				if (lights[i].dev_attr.led) {
+					m_str_asyn = "send " + std::to_string(i) + " 0 LED1 1" + "\r";
+					lights[i].dev_attr.ledstr = "1";
+					lights[i].button->checked(false);
+				}	else {
+					m_str_asyn = "send " + std::to_string(i) + " 0 LED1 0" + "\r";
+					lights[i].dev_attr.ledstr = "0";
+					lights[i].button->checked(true);
+				}
+				break;
+			case 2:
+				lights[i].dev_attr.gpio1 = lights[i].dev_attr.gpio1 ? false : true;
+				if (lights[i].dev_attr.gpio1) {
+					m_str_asyn = "send " + std::to_string(i) + " 0 GPIO1 1" + "\r";
+					lights[i].dev_attr.clkwise = "1";
+					lights[i].button1->checked(true);
+				}	else {
+					m_str_asyn = "send " + std::to_string(i) + " 0 GPIO1 0" + "\r";
+					lights[i].dev_attr.clkwise = "0";
+					lights[i].button1->checked(false);
+				}
+				break;
+			case 3:
+				lights[i].dev_attr.gpio2 = lights[i].dev_attr.gpio2 ? false : true;
+				if (lights[i].dev_attr.gpio2) {
+					m_str_asyn = "send " + std::to_string(i) + " 0 GPIO2 1" + "\r";
+					lights[i].dev_attr.cntclkwise = "1";
+					lights[i].button2->checked(true);
+				}	else {
+					m_str_asyn = "send " + std::to_string(i) + " 0 GPIO2 0" + "\r";
+					lights[i].dev_attr.cntclkwise = "0";
+					lights[i].button2->checked(false);
+				}
+				break;
+			default:
+				cerr << "Error state of webupda: " << webupda << " i: " << i << endl;
+				break;
+		}
+
+		if (webupda) {
+			cout << "web s-> " << m_str_asyn << endl;
+			tty_ptr->write(m_str_asyn.data(), m_str_asyn.length());
+			break;
+		}
+	}
+
+	if (webupda) {
+		json_array = cJSON_CreateObject();
+		if (!json_array) {
+			cerr << "ERROR create object json" << endl;
+			CloseJson(json);
+			timer_ptr->start();
+			return;
+		}
+
+		if (!cJSON_AddStringToObject(json_array, JSON_WEBUPDA, "0") || \
+			!cJSON_AddStringToObject(json_array, JSON_ID, json_id->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_VALID, json_valid->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_NAME, json_name->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_LED, json_led->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_TEMPERATURE, json_temp->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_RSSI, json_rssi->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_CLKWISE, json_clkwise->valuestring) || \
+			!cJSON_AddStringToObject(json_array, JSON_CNTCLKWISE, json_cntclkwise->valuestring)) {
+			cerr << "ERROR add string to json" << endl;
+			CloseJson(json);
+			timer_ptr->start();
+			return;
+		}
+		cJSON_ReplaceItemInArray(json_light, i, json_array);
+		SaveJson(json);
+		clear_text();
+		show_text();
+
+	}
+	CloseJson(json);
+	timer_ptr->start();
+}
+
+cJSON* MiWiGtw::OpenJson()
+{
+	ifstream infile;
+	int ret;
+	char *text;
+	struct stat state;
+	cJSON *json = NULL;
+
+	ret = stat(config_file.c_str(), &state);
+	if (ret < 0) {
+		if (errno == ENOENT) { // Creat an empty json instance
+			json = cJSON_CreateObject();
+			if (!json)
+				return NULL;
+
+			if (!cJSON_AddArrayToObject(json, JSON_LIGHTS)) {
+				CloseJson(json);
+				return NULL;
+			}
+
+			return json;
+		} else
+			return NULL;
+	}
+
+	text = new char[state.st_size+1];
+	if (!text) {
+		return NULL;
+	}
+
+	infile.open(config_file);
+	if (!infile) {
+		delete text;
+		return NULL;
+	}
+
+	infile.read(text, state.st_size);
+	if (infile.gcount() != state.st_size) {
+		infile.close();
+		delete text;
+		return NULL;
+	}
+	text[state.st_size] = '\0';
+
+	json = cJSON_Parse(text);
+	if (!json) {
+		cout << "error parse json" << endl;
+	}
+
+	infile.close();
+	delete text;
+	return json;
+}
+
+void MiWiGtw::CloseJson(cJSON *json)
+{
+	if (json)
+		 cJSON_Delete(json);
+	return;
+}
+
+void MiWiGtw::AddJson(miwi_dev_st dev)
+{
+	cJSON *json_lights, *json_light;
+	std::string id, valid;
+	cJSON *json = OpenJson();
+
+	json_lights = cJSON_GetObjectItem(json, "lights");
+	if (!json_lights) {
+		cout << "ERROR get json first node" << endl;
+		CloseJson(json);
+		return;
+	}
+
+	json_light = cJSON_CreateObject();
+	if (!json_light) {
+		cout << "ERROR create object json" << endl;
+		CloseJson(json);
+		return;
+	}
+
+	id = std::to_string(light_num + 1);
+	valid = std::to_string(dev.valid);
+
+	if (!cJSON_AddStringToObject(json_light, JSON_WEBUPDA, "0") || \
+		!cJSON_AddStringToObject(json_light, JSON_ID, id.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_VALID, valid.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_NAME, dev.name.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_LED, dev.ledstr.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_TEMPERATURE, dev.temp.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_RSSI, dev.rssi.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_CLKWISE, dev.clkwise.c_str()) || \
+		!cJSON_AddStringToObject(json_light, JSON_CNTCLKWISE, dev.cntclkwise.c_str())) {
+		cout << "ERROR add string to json" << endl;
+		CloseJson(json);
+		return;
+	}
+
+	cJSON_AddItemToArray(json_lights, json_light);
+	SaveJson(json);
+	CloseJson(json);
+}
+
+void MiWiGtw::UpdateJson(miwi_dev_st dev)
+{
+	cJSON *json, *json_light, *json_array;
+	int array_num = 0;
+	std::string valid;
+
+	json = OpenJson();
+	json_light = cJSON_GetObjectItem(json, "lights");
+	if (!json_light) {
+		cout << "ERROR get json first node" << endl;
+		CloseJson(json);
+		return;
+	}
+
+	array_num = std::stoi(dev.index);
+	valid = std::to_string(dev.valid);
+
+	json_array = cJSON_CreateObject();
+	if (!json_array) {
+		cout << "ERROR create object json" << endl;
+		CloseJson(json);
+		return;
+	}
+
+	if (!cJSON_AddStringToObject(json_array, JSON_WEBUPDA, "0") || \
+		!cJSON_AddStringToObject(json_array, JSON_ID, dev.index.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_VALID, valid.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_NAME, dev.name.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_LED, dev.ledstr.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_TEMPERATURE, dev.temp.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_RSSI, dev.rssi.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_CLKWISE, dev.clkwise.c_str()) || \
+		!cJSON_AddStringToObject(json_array, JSON_CNTCLKWISE, dev.cntclkwise.c_str())) {
+		cout << "ERROR add string to json" << endl;
+		CloseJson(json);
+		return;
+	}
+
+	cJSON_ReplaceItemInArray(json_light, array_num, json_array);
+	SaveJson(json);
+	CloseJson(json);
+}
+
+void MiWiGtw::SaveJson(cJSON *json)
+{
+	FILE *fp;
+	int ret;
+	struct stat state;
+	if (0 > stat(config_file.c_str(), &state)) {
+		cerr << "stat json error" << endl;
+		return;
+	}
+
+	fp=fopen(config_file.c_str(), "w");
+	if (!fp) {
+		cerr << "open json fail for saving" << endl;
+		return;
+	}
+
+	ret = fputs(cJSON_Print(json), fp);
+	fclose(fp);
+	if (ret < 0) {
+		cerr << "save json fail" << endl;
+		return;
+	}
+
+	stat(config_file.c_str(), &state);
+	config_timestamp = state.st_mtime;
+}
+
+void MiWiGtw::DeleteJson(cJSON* json_lights, int num)
+{
+	return cJSON_DeleteItemFromArray(json_lights, num);
+}
 
 int main(int argc, char** argv)
 {
@@ -671,7 +1058,7 @@ int main(int argc, char** argv)
 
 	window->show();
 
-	auto timer = make_shared<PeriodicTimer>(std::chrono::milliseconds(300));
+	auto timer = make_shared<PeriodicTimer>(std::chrono::milliseconds(50));
 	if ((gateway->timer_ptr = timer.get()) == nullptr) {
 		cout << "ERROR get timer" << endl;
 		exit(EXIT_FAILURE);
