@@ -576,6 +576,12 @@ bool MiWiGtw::initconn()
 	}
 
 	/*Initialize json file*/
+	if (access("/tmp/lights.json", F_OK))
+	{
+			system("touch /tmp/lights.json");
+			system("chmod 666 /tmp/lights.json");
+	}
+
 	cJSON *json = OpenJson();
 	cJSON *json_lights = cJSON_GetObjectItem(json, "lights");
 	if (!json_lights) {
@@ -807,17 +813,8 @@ cJSON* MiWiGtw::OpenJson()
 
 	ret = stat(config_file.c_str(), &state);
 	if (ret < 0) {
-		if (errno == ENOENT) { // Creat an empty json instance
-			json = cJSON_CreateObject();
-			if (!json)
-				return NULL;
-
-			if (!cJSON_AddArrayToObject(json, JSON_LIGHTS)) {
-				CloseJson(json);
-				return NULL;
-			}
-
-			return json;
+		if (errno == ENOENT) {
+			cerr << "json file not exist!" << endl;
 		} else
 			return NULL;
 	}
@@ -843,7 +840,22 @@ cJSON* MiWiGtw::OpenJson()
 
 	json = cJSON_Parse(text);
 	if (!json) {
-		cout << "error parse json" << endl;
+		cout << "blank json, create new..." << endl;
+		json = cJSON_CreateObject();
+		if (!json) {
+			cerr << "cJSON_CreateObject fail" << endl;
+			infile.close();
+			delete text;
+			return NULL;
+		}
+
+		if (!cJSON_AddArrayToObject(json, JSON_LIGHTS)) {
+			cerr << "cJSON_AddArrayToObject fail" << endl;
+			CloseJson(json);
+			infile.close();
+			delete text;
+			return NULL;
+		}
 	}
 
 	infile.close();
