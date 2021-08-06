@@ -18,6 +18,8 @@
 #include <condition_variable>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <netdb.h>  //gethostbyname
+#include <arpa/inet.h>  //ntohl
 #include <functional>
 #include <cxxopts.hpp>
 #include <egt/ui>
@@ -72,6 +74,8 @@ typedef struct {
 	std::string casttype;
 }miwi_dev_st;
 
+typedef std::vector<std::pair<int, std::string>> addr_idx_t;
+typedef std::vector<std::pair<const std::string, const std::string>> name_table_t;
 
 class Light
 {
@@ -117,6 +121,9 @@ public:
 	int light_num = 0;
 	Light *lights = nullptr;
 	time_t config_timestamp = 0;
+	addr_idx_t addr_idx;
+	name_table_t name_tbl;
+	int index = 0;
 
 	Application *app_ptr = nullptr;
 	ScrolledView *view_ptr = nullptr;
@@ -151,6 +158,7 @@ public:
 	bool is_point_in_rect(DisplayPoint& point, Rect rect);
 	void check_offiline_device();
 	void check_json_upda();
+	std::string get_local_IP();
 
 
 private:
@@ -194,6 +202,38 @@ inline constexpr std::uint32_t hash_str_to_uint32(const char* data)
 	return h;
 }
 
+#if 0
+bool MiWiGtw::GetHostInfo(std::string& hostName, std::string& Ip)
+{
+	char name[256];
+	gethostname(name, sizeof(name));
+	hostName = name;
+
+	struct hostent* host = gethostbyname(name);
+	char ipStr[32];
+	const char* ret = inet_ntop(host->h_addrtype, host->h_addr_list[0], ipStr, sizeof(ipStr));
+	if (NULL==ret) {
+		std::cout << "hostname transform to ip failed";
+		return false;
+	}
+	Ip = ipStr;
+	return true;
+}
+#endif
+
+std::string MiWiGtw::get_local_IP()
+{
+  int inet_sock;
+  struct ifreq ifr;
+	char ip[32]={'0'};
+
+	inet_sock = socket(AF_INET, SOCK_DGRAM, 0);
+	strcpy(ifr.ifr_name, "eth0");
+	ioctl(inet_sock, SIOCGIFADDR, &ifr);
+	strcpy(ip, inet_ntoa(((struct sockaddr_in *)&ifr.ifr_addr)->sin_addr));
+	return string(ip);
+}
+
 void MiWiGtw::clear_text()
 {
 	for (auto i = 0; i < light_num; i++) {
@@ -215,7 +255,7 @@ void MiWiGtw::show_text()
 	for (auto i = 0; i < light_num; i++) {
 		lights[i].texts[0]->text(lights[i].dev_attr.index);
 		lights[i].texts[0]->show();
-		lights[i].texts[1]->text(lights[i].dev_attr.addr.substr(0, 7));
+		lights[i].texts[1]->text(lights[i].dev_attr.name);
 		lights[i].texts[1]->show();
 		if (!lights[i].dev_attr.valid) {
 			lights[i].texts[2]->show();
@@ -262,14 +302,38 @@ void MiWiGtw::check_offiline_device()
 
 void MiWiGtw::add_rm_end_node_device(std::string msg)
 {
-	bool is_new_node = false;
 	if (!check_if_hex(msg.substr(5, 1)) || !check_if_hex(msg.substr(7, 1)))
 		return;
-	int i = std::stoi(msg.substr(5, 1), nullptr, 16);
-	if (i+1 > light_num) {
-		is_new_node = true;
-		light_num = i + 1;
+	bool is_new_node = true;
+	int i = 0;
+	std::string tmpstr;
+	std::string newaddr = msg.substr(9, 16);
+
+	for (auto& idx : addr_idx) {
+		if (idx.second == newaddr) {
+			i = idx.first;
+			is_new_node = false;
+			break;
+		}
 	}
+
+	if (is_new_node) {
+		addr_idx.push_back(std::make_pair(index++, newaddr));
+		i = index - 1;
+		light_num++;
+
+		if ("20d137feff19276a" == newaddr)
+			name_tbl.push_back(std::make_pair("Rapidlink1", newaddr));
+		else if ("1e5f37feff19276a" == newaddr)
+			name_tbl.push_back(std::make_pair("Rapidlink2", newaddr));
+		else if ("ac3d37feff19276a" == newaddr)
+			name_tbl.push_back(std::make_pair("Rapidlink3", newaddr));
+		else {
+			tmpstr = "Rapidlink" + std::to_string(3+index);
+			name_tbl.push_back(std::make_pair(tmpstr, newaddr));
+		}
+	}
+
 	lights[i].dev_attr.active = false;
 	if (std::stoi(msg.substr(7, 1), nullptr, 16)) {
 		lights[i].dev_attr.valid = 1;
@@ -283,20 +347,34 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 	lights[i].dev_attr.led = true;
 	lights[i].dev_attr.gpio1 = false;
 	lights[i].dev_attr.gpio2 = false;
-	lights[i].dev_attr.index = msg.substr(5, 1);
-	lights[i].dev_attr.addr = msg.substr(9, 16);
+	lights[i].dev_attr.index = std::to_string(i);
+	lights[i].dev_attr.addr = newaddr;
 	lights[i].dev_attr.light = "0";
-	lights[i].dev_attr.temp = "0";
-	lights[i].dev_attr.rssi = "0";
+
 	lights[i].dev_attr.casttype = "0";
-	lights[i].dev_attr.name = lights[i].dev_attr.addr.substr(0, 7);
-	lights[i].dev_attr.ledstr = "1";
-	lights[i].dev_attr.clkwise = "0";
-	lights[i].dev_attr.cntclkwise = "0";
-	if (is_new_node)
+	for (auto& ind : name_tbl) {
+		if (ind.second == lights[i].dev_attr.addr)
+			lights[i].dev_attr.name =ind.first;
+	}
+  if ("0" == lights[i].dev_attr.name) {
+		cout << "Device addr: " << lights[i].dev_attr.addr << " not fill in the name table, please add!" << endl;
+		lights[i].dev_attr.name = lights[i].dev_attr.addr.substr(0, 7);
+	}
+
+	if (is_new_node) {
+		lights[i].dev_attr.temp = "0";
+		lights[i].dev_attr.rssi = "0";
+		lights[i].dev_attr.ledstr = "1";
+		lights[i].dev_attr.clkwise = "0";
+		lights[i].dev_attr.cntclkwise = "0";
 		AddJson(lights[i].dev_attr);
+	}
+
 	if (!lights[i].dev_attr.valid)
 		UpdateJson(lights[i].dev_attr);
+
+	//for (auto& ind : addr_idx)
+	//	cout << "addr table: " << ind.first << "-" << ind.second << endl;
 }
 
 void MiWiGtw::update_end_node_device(std::string msg)
@@ -364,7 +442,7 @@ bool MiWiGtw::is_point_in_rect(DisplayPoint& point, Rect rect)
 }
 #endif
 
-bool MiWiGtw::is_point_in_list(DisplayPoint& point, int* index)
+bool MiWiGtw::is_point_in_list(DisplayPoint& point, int* i_list)
 {
 	Rect tmp_rect;
 	Rect tmp_rect1;
@@ -380,12 +458,12 @@ bool MiWiGtw::is_point_in_list(DisplayPoint& point, int* index)
 		if (is_point_in_rect(point, tmp_rect)
 				|| is_point_in_rect(point, tmp_rect1)
 				|| is_point_in_rect(point, tmp_rect2)) {
-			*index = i;
+			*i_list = i;
 			return true;
 		}	else
 			continue;
 	}
-	*index = 0XFF;
+	*i_list = 0XFF;
 	return false;
 }
 
@@ -484,6 +562,7 @@ void MiWiGtw::init_scrol_view()
 		});
 		lights[i].dev_attr.valid = 0;
 		lights[i].dev_attr.active = false;
+		lights[i].dev_attr.name = "0";
 		view_ptr->add(lights[i].button); // Hidden with default
 		view_ptr->add(lights[i].button1);
 		view_ptr->add(lights[i].button2);
@@ -1046,7 +1125,7 @@ int main(int argc, char** argv)
 
 	//auto title = make_shared<egt::Label>(" ID        Name                 LED        Temperature  RSSI          GPIO1                   GPIO2",
 	//									Rect(Point(0, 100), Size(window->width(), 30)), AlignFlag::left);
-	auto title = make_shared<egt::Label>(" ID        Name                 LED        Temperature  RSSI        Clockwise       Counterclockwise",
+	auto title = make_shared<egt::Label>(" ID        Name                 LED        Temperature  RSSI         Forward                 Reverse",
 										Rect(Point(0, 100), Size(window->width(), 30)), AlignFlag::left);
 	title->font(Font(20, Font::Weight::bold));
 	window->add(title);
@@ -1085,6 +1164,12 @@ int main(int argc, char** argv)
 		timer->start();
 	else
 		exit(EXIT_FAILURE);
+
+	std::string addr;
+	auto webaddr = make_shared<TextBox>("http://", Rect(Point(280, 20), Size(260, 30)), AlignFlag::center);
+	addr = "remote control address: http://" + gateway->get_local_IP() + "/cgi-bin/gateway.cgi";
+	webaddr->text(addr);
+	window->add(webaddr);
 
 	return app->run();
 }
