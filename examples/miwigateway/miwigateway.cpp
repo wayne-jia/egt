@@ -30,6 +30,7 @@ extern "C" {
 
 //#define DBGMODE
 #define SERIALPORT
+#define MCHPDEMO
 
 #define SCROLLVIEWSIZE 10
 #define SCROLLVIEWY    140
@@ -322,6 +323,10 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 		i = index - 1;
 		light_num++;
 
+#ifdef MCHPDEMO
+		tmpstr = "Device" + std::to_string(i);
+		name_tbl.push_back(std::make_pair(tmpstr, newaddr));
+#else
 		if ("20d137feff19276a" == newaddr)
 			name_tbl.push_back(std::make_pair("Rapidlink1", newaddr));
 		else if ("1e5f37feff19276a" == newaddr)
@@ -332,6 +337,7 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 			tmpstr = "Rapidlink" + std::to_string(3+index);
 			name_tbl.push_back(std::make_pair(tmpstr, newaddr));
 		}
+#endif
 	}
 
 	lights[i].dev_attr.active = false;
@@ -1112,7 +1118,11 @@ int main(int argc, char** argv)
 	}
 #endif
 
+#ifdef MCHPDEMO
+	auto img = make_shared<egt::ImageLabel>(Image("file:mchplogo.png"));
+#else
 	auto img = make_shared<egt::ImageLabel>(Image("file:logo.png"));
+#endif
 	img->align(AlignFlag::left);
 	img->padding(10);
 	window->add(img);
@@ -1123,10 +1133,14 @@ int main(int argc, char** argv)
 	header->font(Font(30, Font::Weight::bold));
 	window->add(header);
 
-	//auto title = make_shared<egt::Label>(" ID        Name                 LED        Temperature  RSSI          GPIO1                   GPIO2",
-	//									Rect(Point(0, 100), Size(window->width(), 30)), AlignFlag::left);
+#ifdef MCHPDEMO
+	auto title = make_shared<egt::Label>(" ID        Name                 LED        Temperature  RSSI          GPIO1                   GPIO2",
+										Rect(Point(0, 100), Size(window->width(), 30)), AlignFlag::left);
+#else
 	auto title = make_shared<egt::Label>(" ID        Name                 LED        Temperature  RSSI         Forward                 Reverse",
 										Rect(Point(0, 100), Size(window->width(), 30)), AlignFlag::left);
+#endif
+
 	title->font(Font(20, Font::Weight::bold));
 	window->add(title);
 
