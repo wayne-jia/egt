@@ -337,7 +337,7 @@ simplelab_simplelab_LDFLAGS = $(AM_LDFLAGS)
 
 miwigateway_miwigateway_SOURCES = miwigateway/miwigateway.cpp miwigateway/serialport.cpp
 miwigateway_miwigateway_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
-	-DEXAMPLEDATA=\"$(datadir)/egt/examples/miwigateway\" -mfloat-abi=hard
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/miwigateway\"
 miwigateway_miwigateway_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 miwigateway_miwigatewaydir = $(prefix)/share/egt/examples/miwigateway
 miwigateway_miwigateway_DATA = $(wildcard $(top_srcdir)/examples/miwigateway/*.svg) \
