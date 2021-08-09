@@ -23,7 +23,6 @@
 #include <functional>
 #include <cxxopts.hpp>
 #include <egt/ui>
-#include <mosquittopp.h>
 extern "C" {
 #include "cjson/cJSON.h"
 }

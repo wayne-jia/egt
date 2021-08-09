@@ -342,7 +342,7 @@ miwigateway_miwigateway_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 miwigateway_miwigatewaydir = $(prefix)/share/egt/examples/miwigateway
 miwigateway_miwigateway_DATA = $(wildcard $(top_srcdir)/examples/miwigateway/*.svg) \
   $(wildcard $(top_srcdir)/examples/miwigateway/*.png)
-miwigateway_miwigateway_LDFLAGS = $(AM_LDFLAGS) -lpthread -lcjson -lmosquitto -lmosquittopp
+miwigateway_miwigateway_LDFLAGS = $(AM_LDFLAGS) -lpthread -lcjson
 
 smarthome_smarthome_SOURCES = smarthome/smarthome.cpp
 smarthome_smarthome_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
