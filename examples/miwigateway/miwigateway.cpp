@@ -30,6 +30,7 @@ extern "C" {
 //#define DBGMODE
 #define SERIALPORT
 #define MCHPDEMO
+#define OMMITINVALID
 
 #define SCROLLVIEWSIZE 10
 #define SCROLLVIEWY    140
@@ -345,8 +346,11 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 
 	}
 	else {
+#ifndef OMMITINVALID
 		lights[i].dev_attr.valid = 0;
-
+#else
+		lights[i].dev_attr.valid = 1;
+#endif
 	}
 
 	lights[i].dev_attr.led = true;
