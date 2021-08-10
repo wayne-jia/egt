@@ -713,7 +713,11 @@ int main(int argc, char** argv)
             subbackPtr->hide();
             subclbtnPtr->hide();
             subclbtniconPtr->hide();
+            subclcloseiconPtr->hide();
+            subclopeniconPtr->hide();
             smthome.find_text("#subper")->hide();
+            if (submv_timer.running())
+                submv_timer.stop();
         }
     };
 
@@ -827,6 +831,8 @@ int main(int argc, char** argv)
             subslbackPtr->hide();
             smthome.find_text("#subsltxtl")->hide();
             smthome.find_text("#subsltxtr")->hide();
+            if (submv_timer.running())
+                submv_timer.stop();
         }
     };
 
@@ -861,6 +867,8 @@ int main(int argc, char** argv)
             subblbackPtr->hide();
             smthome.find_text("#subbltxtl")->hide();
             smthome.find_text("#subbltxtr")->hide();
+            if (submv_timer.running())
+                submv_timer.stop();
         }
     };
 
