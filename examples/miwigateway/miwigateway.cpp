@@ -305,6 +305,12 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 {
 	if (!check_if_hex(msg.substr(5, 1)) || !check_if_hex(msg.substr(7, 1)))
 		return;
+
+#ifdef OMMITINVALID
+	if (!std::stoi(msg.substr(7, 1), nullptr, 16))
+		return;
+#endif
+
 	bool is_new_node = true;
 	int i = 0;
 	std::string tmpstr;
@@ -341,17 +347,10 @@ void MiWiGtw::add_rm_end_node_device(std::string msg)
 	}
 
 	lights[i].dev_attr.active = false;
-	if (std::stoi(msg.substr(7, 1), nullptr, 16)) {
+	if (std::stoi(msg.substr(7, 1), nullptr, 16))
 		lights[i].dev_attr.valid = 1;
-
-	}
-	else {
-#ifndef OMMITINVALID
+	else
 		lights[i].dev_attr.valid = 0;
-#else
-		lights[i].dev_attr.valid = 1;
-#endif
-	}
 
 	lights[i].dev_attr.led = true;
 	lights[i].dev_attr.gpio1 = false;
