@@ -13,8 +13,22 @@
 #define SCREEN_X_START         160
 #define HIGH_Q_TIME_THRESHHOLD 30000  //30ms
 #define LOW_Q_TIME_THRESHHOLD  20000  //20ms
-#define BAR_RASTER_WIDTH 5
+#define BAR_RASTER_WIDTH       5
+#define ADJ_LCD_INTERVAL_STEP  2
 
+
+enum class AdjLCDInterval
+{
+    level0  = 8 + ADJ_LCD_INTERVAL_STEP,  //10
+    level1  = level0 + ADJ_LCD_INTERVAL_STEP, //12
+    level2  = level1 + ADJ_LCD_INTERVAL_STEP, //14
+    level3  = level2 + ADJ_LCD_INTERVAL_STEP, //16
+    level4  = level3 + ADJ_LCD_INTERVAL_STEP, //18
+    level5  = level4 + ADJ_LCD_INTERVAL_STEP, //20
+    level6  = level5 + ADJ_LCD_INTERVAL_STEP, //22
+    level7  = level6 + ADJ_LCD_INTERVAL_STEP, //24
+    max     = level7 + ADJ_LCD_INTERVAL_STEP
+};
 
 enum class PageType
 {
@@ -78,8 +92,10 @@ int main(int argc, char** argv)
 {
     std::cout << "EGT start" << std::endl;
     //int timediff = 0;
-    //struct timeval time1, time2;
+    struct timeval curtime, clciktime;
     //gettimeofday(&time1, NULL);
+    bool b_lcd_off = false;
+    bool b_lcd_dim = false;
 
     std::queue<QueueCallback> high_pri_q;
     std::queue<QueueCallback> low_pri_q;
@@ -185,7 +201,7 @@ int main(int argc, char** argv)
 #endif
     const char *svg_files_array[7] = {"/root/main.svg", "/root/swd.svg", "/root/cl.svg",
         "/root/sl.svg", "/root/bl.svg", "/root/rgbwl.svg", "/root/film.svg"};
-    egt::experimental::SVGDeserial smthome(app, window, 7, svg_files_array);;
+    egt::experimental::SVGDeserial smthome(app, window, 7, svg_files_array);
 
     leftwin.show();
     rightwin.show();
@@ -508,6 +524,7 @@ int main(int argc, char** argv)
         }
     };
 
+    egt::PeriodicTimer main_timer(std::chrono::milliseconds(500));
     egt::Timer click_timer(std::chrono::milliseconds(300));
     egt::PeriodicTimer submv_timer(std::chrono::milliseconds(100));
 
@@ -915,6 +932,20 @@ int main(int argc, char** argv)
 
     auto handle_touch = [&](egt::Event & event)
     {
+        gettimeofday(&clciktime, NULL);
+        if (b_lcd_dim) {
+            system("echo 7 > /sys/class/backlight/backlight/brightness");
+            std::cout << "light lcd" << std::endl;
+            b_lcd_dim = false;
+        }
+
+        if (b_lcd_off) {
+            system("devmem 0xF8038020 w 0xc");
+            system("echo 7 > /sys/class/backlight/backlight/brightness");
+            std::cout << "open lcd" << std::endl;
+            b_lcd_off = false;
+        }
+
         switch (event.id())
         {
             case egt::EventId::pointer_click:
@@ -1340,6 +1371,7 @@ int main(int argc, char** argv)
         }
     };
     window.on_event(handle_touch);
+    gettimeofday(&clciktime, NULL);
 
     click_timer.on_timeout([&]()
     {
@@ -1376,5 +1408,73 @@ int main(int argc, char** argv)
         click_timer.stop();
     });
 
+    auto timestamp_range = [](int abs_time_diff) {
+        if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level0))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level1)))
+            return AdjLCDInterval::level0;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level1))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level2)))
+            return AdjLCDInterval::level1;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level2))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level3)))
+            return AdjLCDInterval::level2;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level3))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level4)))
+            return AdjLCDInterval::level3;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level4))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level5)))
+            return AdjLCDInterval::level4;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level5))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level6)))
+            return AdjLCDInterval::level5;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level6))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::level7)))
+            return AdjLCDInterval::level6;
+        else if ((abs_time_diff > static_cast<int>(AdjLCDInterval::level7))
+            && (abs_time_diff <= static_cast<int>(AdjLCDInterval::max)))
+            return AdjLCDInterval::level7;
+        else
+            return AdjLCDInterval::max;
+    };
+
+    main_timer.on_timeout([&]() {
+        if (!b_lcd_off) {
+            gettimeofday(&curtime, NULL);
+            b_lcd_dim = true;
+            switch (timestamp_range(abs(curtime.tv_sec - clciktime.tv_sec))) {
+                case AdjLCDInterval::level0:
+                    system("echo 6 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level1:
+                    system("echo 5 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level2:
+                    system("echo 4 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level3:
+                    system("echo 3 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level4:
+                    system("echo 2 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level5:
+                    system("echo 1 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level6:
+                    system("echo 0 > /sys/class/backlight/backlight/brightness");
+                    break;
+                case AdjLCDInterval::level7:
+                    if (!b_lcd_off) {
+                        system("devmem 0xF8038024 w 0xc");
+                        b_lcd_off = true;
+                    }
+                    break;
+                default:
+                    b_lcd_dim = false;
+                    break;
+            }
+        }
+    });
+    main_timer.start();
     return app.run();
 }
