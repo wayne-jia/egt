@@ -606,7 +606,7 @@ bool MiWiGtw::initconn()
 
 	while ("AOK" != last_line(m_buf).substr(0, 3)) {
 		bzero(m_buf, sizeof(m_buf));
-		m_str = "cfg channel 8\r";
+		m_str = "cfg pan 4321\r";
 		cout << "write: " << m_str << endl;
 		tty_ptr->write(m_str.data(), m_str.length());
 		usleep(500000);
@@ -615,14 +615,38 @@ bool MiWiGtw::initconn()
 	}
 
 	bzero(m_buf, sizeof(m_buf));
-	m_str = "cfg pan 4321\r";
+	m_str = "cfg channel 8\r";
 	cout << "write: " << m_str << endl;
 	tty_ptr->write(m_str.data(), m_str.length());
 	usleep(500000);
 	tty_ptr->read(m_buf, 100);
 	cout << "tty read: " << m_buf << " ,len: " << last_line(m_buf).length() << endl;
 	if ("AOK" != last_line(m_buf).substr(0, 3)) {
-		cout << "ERROR cfg pan 4321" << endl;
+		cout << "ERROR cfg channel 8" << endl;
+		return false;
+	}
+
+	bzero(m_buf, sizeof(m_buf));
+	m_str = "cfg txpower c1\r";
+	cout << "write: " << m_str << endl;
+	tty_ptr->write(m_str.data(), m_str.length());
+	usleep(500000);
+	tty_ptr->read(m_buf, 100);
+	cout << "tty read: " << m_buf << " ,len: " << last_line(m_buf).length() << endl;
+	if ("AOK" != last_line(m_buf).substr(0, 3)) {
+		cout << "ERROR cfg txpower c1" << endl;
+		return false;
+	}
+
+	bzero(m_buf, sizeof(m_buf));
+	m_str = "cfg phymod 0c\r";
+	cout << "write: " << m_str << endl;
+	tty_ptr->write(m_str.data(), m_str.length());
+	usleep(500000);
+	tty_ptr->read(m_buf, 100);
+	cout << "tty read: " << m_buf << " ,len: " << last_line(m_buf).length() << endl;
+	if ("AOK" != last_line(m_buf).substr(0, 3)) {
+		cout << "ERROR cfg phymod 0c" << endl;
 		return false;
 	}
 
