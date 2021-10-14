@@ -16,16 +16,17 @@ mresg_v_GEN_0 = @echo "  GEN     " $@;
 
 i18n_SOURCES = i18n.cpp
 i18n_DEPENDENCIES = build-mo.stamp
-i18n_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
+i18n_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/i18n\"
 i18n_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 i18ndir = $(prefix)/share/egt/examples/i18n
 i18n_DATA = $(wildcard $(top_srcdir)/examples/i18n/*.png) \
 	$(top_srcdir)/examples/i18n/i18n.xml
 i18n_LDFLAGS = $(AM_LDFLAGS)
 
-LINGUAS = de es fr zh
+LINGUAS = de es fr zh_CN hi
 
-EXTRA_DIST = de.po es.po fr.po zh.po i18n.xml
+EXTRA_DIST = de.po es.po fr.po zh_CN.po hi.po i18n.xml
 
 localedir = $(datadir)/locale
 
@@ -33,24 +34,24 @@ install-data-local: install-i18n-catalogs
 
 install-i18n-catalogs:
 	$(MRESG_V_GEN)for i in $(LINGUAS) ; do \
-	    $(mkinstalldirs) $(DESTDIR)$(localedir)/$$i.utf8/LC_MESSAGES || exit $$?; \
-	    $(INSTALL_DATA) $$i.utf8/LC_MESSAGES/i18n.mo $(DESTDIR)$(localedir)/$$i.utf8/LC_MESSAGES/i18n.mo || exit $$?; \
+	    $(mkinstalldirs) $(DESTDIR)$(localedir)/$$i/LC_MESSAGES || exit $$?; \
+	    $(INSTALL_DATA) $$i/LC_MESSAGES/i18n.mo $(DESTDIR)$(localedir)/$$i/LC_MESSAGES/i18n.mo || exit $$?; \
 	done
 
 clean-local:
 	$(MRESG_V_GEN)for i in $(LINGUAS) ; do \
-	    rm -rf $$i.utf8 ; \
+	    rm -rf $$i ; \
 	done
 
 uninstall-local:
 	for i in $(LINGUAS) ; do \
-	    rm -f $(DESTDIR)$(localedir)/$$i.utf8/LC_MESSAGES/i18n.mo ; \
+	    rm -f $(DESTDIR)$(localedir)/$$i/LC_MESSAGES/i18n.mo ; \
 	done
 
 XGETTEXT=xgettext
 XGETTEXT_ARGS=-k_ \
-	      --package-name=i18nexample --package-version=1.2 \
-	      --default-domain=i18nexample
+	      --package-name=i18n --package-version=1.2 \
+	      --default-domain=i18n
 MSGINIT=msginit --no-translator
 MSGFMT=msgfmt --no-hash --check
 MKDIR=mkdir --parents
@@ -60,8 +61,8 @@ CLEANFILES = build-mo.stamp i18n.pot
 
 build-mo.stamp:
 	$(MRESG_V_GEN)for i in $(LINGUAS); do \
-	    $(MKDIR) $$i.utf8/LC_MESSAGES || exit $$? ; \
-	    $(MSGFMT) --output-file=$$i.utf8/LC_MESSAGES/i18n.mo $(top_srcdir)/examples/i18n/$$i.po || exit $$? ; \
+	    $(MKDIR) $$i/LC_MESSAGES || exit $$? ; \
+	    $(MSGFMT) --output-file=$$i/LC_MESSAGES/i18n.mo $(top_srcdir)/examples/i18n/$$i.po || exit $$? ; \
 	done
 	@echo Timestamp > $@
 

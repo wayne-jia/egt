@@ -36,10 +36,6 @@
 #include "egt/detail/screen/x11screen.h"
 #endif
 
-#ifdef HAVE_FBDEV
-#include "egt/detail/screen/framebuffer.h"
-#endif
-
 #ifdef HAVE_SDL2
 #include "egt/detail/screen/sdlscreen.h"
 #endif
@@ -138,6 +134,7 @@ void Application::setup_events()
 void Application::setup_info()
 {
     detail::info("EGT Version {}", egt_version());
+    detail::info("EGT Git Version {}", egt_git_version());
 
 #ifdef HAVE_SIMD
     auto info = SimdCpuInfo();
@@ -163,7 +160,7 @@ void Application::setup_locale(const std::string& name)
     if (!name.empty())
     {
         setlocale(LC_ALL, "");
-#ifdef HAVE_LIBINTL_H
+#ifdef HAVE_LIBINTL
         bindtextdomain(name.c_str(), (std::string(DATAPATH) + "/locale/").c_str());
         textdomain(name.c_str());
 #endif
@@ -238,9 +235,6 @@ void Application::setup_backend(bool primary)
 #endif
 #ifdef HAVE_SDL2
         {"sdl2", [this, &size]() { return std::make_unique<detail::SDLScreen>(*this, size); }},
-#endif
-#ifdef HAVE_FBDEV
-        {"fbdev", []() { return std::make_unique<detail::FrameBuffer>("/dev/fb0"); }},
 #endif
         {"memory", [&size]() { return std::make_unique<detail::MemoryScreen>(size); }},
     };
