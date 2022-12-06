@@ -52,10 +52,11 @@ Label::Label(Frame& parent, const std::string& text, const Rect& rect,
     parent.add(*this);
 }
 
-Label::Label(Serializer::Properties& props) noexcept
-    : TextWidget(props)
+Label::Label(Serializer::Properties& props, bool is_derived) noexcept
+    : TextWidget(props, true)
 {
-    name("Label" + std::to_string(m_widgetid));
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void Label::draw(Painter& painter, const Rect& rect)
@@ -97,6 +98,11 @@ Size Label::min_size_hint() const
     return Widget::min_size_hint();
 }
 
+ImageLabel::ImageLabel(ImageLabel&& rhs) noexcept
+    : Label(std::move(static_cast<Label&>(rhs))),
+      ImageHolder(static_cast<TextWidget&>(*this), std::move(rhs))
+{}
+
 ImageLabel::ImageLabel(const std::string& text,
                        const AlignFlags& text_align) noexcept
     : ImageLabel(Image(), text, {}, text_align)
@@ -115,12 +121,15 @@ ImageLabel::ImageLabel(const Image& image,
                        const Rect& rect,
                        const AlignFlags& text_align) noexcept
     : Label(text, rect, text_align),
-      ImageHolder(*static_cast<Widget*>(this))
+      ImageHolder(static_cast<TextWidget&>(*this))
 {
     name("ImageLabel" + std::to_string(m_widgetid));
 
     if (text.empty())
+    {
+        show_label(false);
         image_align(AlignFlag::center | AlignFlag::expand);
+    }
     do_set_image(image);
 }
 
@@ -143,13 +152,14 @@ ImageLabel::ImageLabel(Frame& parent,
     parent.add(*this);
 }
 
-ImageLabel::ImageLabel(Serializer::Properties& props) noexcept
-    : Label(props),
-      ImageHolder(*static_cast<Widget*>(this))
+ImageLabel::ImageLabel(Serializer::Properties& props, bool is_derived) noexcept
+    : Label(props, true),
+      ImageHolder(static_cast<TextWidget&>(*this))
 {
-    name("ImageLabel" + std::to_string(m_widgetid));
-
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void ImageLabel::draw(Painter& painter, const Rect& rect)
@@ -168,11 +178,12 @@ void ImageLabel::default_draw(ImageLabel& widget, Painter& painter, const Rect& 
 
 Size ImageLabel::min_size_hint() const
 {
-    return ImageHolder::min_size_hint();
+    return ImageHolder::min_size_hint(Label::min_size_hint());
 }
 
 void ImageLabel::serialize(Serializer& serializer) const
 {
+    Label::serialize(serializer);
     ImageHolder::serialize(serializer);
 }
 

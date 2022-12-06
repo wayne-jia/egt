@@ -33,7 +33,7 @@ inline namespace v1
 {
 class Painter;
 class Frame;
-template<class T, class U> class ImageHolder;
+class ImageHolder;
 class Screen;
 
 /**
@@ -174,7 +174,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit Widget(Serializer::Properties& props) noexcept;
+    explicit Widget(Serializer::Properties& props) noexcept
+        : Widget(props, false)
+    {
+    }
+
+protected:
+
+    explicit Widget(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     Widget(const Widget&) = delete;
     Widget& operator=(const Widget&) = delete;
@@ -299,8 +308,6 @@ public:
         if (!parent_in_layout() && !in_layout())
             m_user_requested_box.width(w);
 
-        m_in_layout = true;
-        auto reset = detail::on_scope_exit([this]() { m_in_layout = false; });
         resize(Size(w, height()));
     }
 
@@ -314,8 +321,6 @@ public:
         if (!parent_in_layout() && !in_layout())
             m_user_requested_box.height(h);
 
-        m_in_layout = true;
-        auto reset = detail::on_scope_exit([this]() { m_in_layout = false; });
         resize(Size(width(), h));
     }
 
@@ -339,8 +344,6 @@ public:
         if (!parent_in_layout() && !in_layout())
             m_user_requested_box.x(x);
 
-        m_in_layout = true;
-        auto reset = detail::on_scope_exit([this]() { m_in_layout = false; });
         move(Point(x, y()));
     }
 
@@ -353,9 +356,6 @@ public:
     {
         if (!parent_in_layout() && !in_layout())
             m_user_requested_box.y(y);
-
-        m_in_layout = true;
-        auto reset = detail::on_scope_exit([this]() { m_in_layout = false; });
 
         move(Point(x(), y));
     }
@@ -713,12 +713,25 @@ public:
     void palette(const Palette& palette);
 
     /**
+     * Get the widget palette.
+     *
+     * This will return any palette set on the widget instance, or default to the
+     * global palette.
+     */
+    EGT_NODISCARD const Palette& palette() const;
+
+    /**
      * Clear the widget instance palette.
      *
      * This will clear the widget instance's palette.  Meaning, for all colors
      * the widget will now use default_palette().
      */
     void reset_palette();
+
+    /**
+     * Check whether the widget has a custom palette.
+     */
+    EGT_NODISCARD bool has_palette() const { return (bool)m_palette; }
 
     /**
      * Get a Widget color.
@@ -1044,6 +1057,13 @@ public:
     virtual void walk(const WalkCallback& callback, int level = 0);
 
     /**
+     * Set the focus state.
+     *
+     * @param value State of the focus.
+     */
+    void focus(bool value);
+
+    /**
      * Get the current focus state.
      *
      * @return true if in focus.
@@ -1091,42 +1111,11 @@ public:
     /**
      * Get the Widget Theme.
      *
-     * If a custom Theme was set for the instance, it will be returned.
-     * Otherwise, if this widget has a parent it will walk up the tree looking
-     * for a widget that has a Theme set.  If no widget is found with a theme,
-     * the global_theme() will be returned.
-     *
-     * What this means is themes are inherited from widget parents.  For
-     * example, if you set a custom theme on a egt::TopWindow, all of its
-     * children will inherit and use the theme by default.
+     * A global_theme() will be returned.
      *
      * @see @ref colors_themes
      */
     EGT_NODISCARD const Theme& theme() const;
-
-    /**
-     * Set the Widget's theme to a new theme.
-     *
-     * @note It stores a copy of the theme. It means that future updates of the
-     * theme won't impact the widget theme.
-     *
-     * @see @ref colors_themes
-     *
-     * @todo This does not call Theme::apply() which creates an inconsistency
-     * with global_theme().
-     */
-    void theme(const Theme& theme);
-
-    /**
-     * Reset the Widget's Theme to the default Theme.
-     *
-     * This is the inverse of setting a custom theme for this widget instance
-     * with theme().
-     *
-     * @see @ref colors_themes
-     */
-    void reset_theme();
-
 
     /**
      * Move this widgets zorder down relative to other widgets with the same
@@ -1164,6 +1153,15 @@ public:
      * @see @ref draw_zorder
      */
     EGT_NODISCARD virtual size_t zorder() const;
+
+    /**
+     * Set the zorder of the widget.
+     *
+     * @param rank The rank in the zorder.
+     *
+     * @see @ref draw_zorder
+     */
+    virtual void zorder(size_t rank);
 
     /**
      * Detach this widget from its parent.
@@ -1269,13 +1267,7 @@ public:
      * This will return any font set on the widget instance, or default to the
      * widget Theme font.
      */
-    EGT_NODISCARD const Font& font() const
-    {
-        if (m_font)
-            return *m_font;
-
-        return theme().font();
-    }
+    EGT_NODISCARD const Font& font() const;
 
     /**
      * Set the widget Font.
@@ -1293,6 +1285,28 @@ public:
         layout();
         parent_layout();
     }
+
+    /**
+     * Reset the widget's Font.
+     *
+     * This is the inverse of setting a custom font for this widget instance
+     * with font().
+     */
+    void reset_font()
+    {
+        if (m_font)
+        {
+            m_font.reset();
+            damage();
+            layout();
+            parent_layout();
+        }
+    }
+
+    /**
+     * Check whether the widget has a custom Font.
+     */
+    bool has_font() const { return (bool)m_font; }
 
     /**
      * Get the boolean checked state of the a widget.
@@ -1334,9 +1348,34 @@ public:
     }
 
     /**
+     * Called from ComposerScreen::resize().
+     *
+     * @note Widgets can be copied, moved or destroyed. Therefore their
+     * life cycle is more complex than static data (default font size, default
+     * widget sizes). If the ComposerScreen::on_screen_resized signal had been
+     * used to manage widgets when the screen is resized, then we would have to
+     * register a hook from any constructor, forcing us to explicitly define
+     * copy and move constructors instead of using default implementation of
+     * those constructors. We would also have to register that hook from the
+     * copy and move assignment operators and finally unregister it from the
+     * widget destructor.
+     *
+     * This would have required too many changes to accurately handle all widget
+     * life cycles, so instead we call this virtual method on the main window
+     * from ComposerScreen::resize() to recursively scan and progress the whole
+     * widget tree.
+     */
+    virtual void on_screen_resized();
+
+    /**
      * Serialize the widget to the specified serializer.
      */
     virtual void serialize(Serializer& serializer) const;
+
+    /**
+     * Resume deserializing of the widget after its children have been deserialized.
+     */
+    virtual void post_deserialize(Serializer::Properties& props) { detail::ignoreparam(props); }
 
     ~Widget() noexcept override;
 
@@ -1365,15 +1404,6 @@ protected:
      * Set this widget's parent.
      */
     virtual void set_parent(Frame* parent);
-
-    /**
-     * Get a reference to the default palette.
-     *
-     * This returns the palette of the theme assigned to the widget.
-     *
-     * This is the same as calling theme().palette().
-     */
-    EGT_NODISCARD const Palette& default_palette() const;
 
     /**
      * Get the local box which is the same size as box(), but with the
@@ -1425,6 +1455,18 @@ protected:
      * Status for whether this widget is currently performing layout.
      */
     bool m_in_layout{false};
+
+    /**
+     * Deserialize widget properties that require to call overridden methods.
+     *
+     * Should be called at the end of all
+     * T::T(Serializer::Properties& props, bool is_derived) constructors,
+     * if and only if 'is_derived' is 'false'.
+     *
+     * Indeed, we wait for an object to be entirely constructed so the expected
+     * virtual/overridden methods are executed.
+     */
+    void deserialize_leaf(Serializer::Properties& props);
 
 private:
 
@@ -1510,14 +1552,6 @@ private:
     Theme::FillFlags m_fill_flags{};
 
     /**
-     * Instance theme for the widget.
-     *
-     * @note This should not be accessed directly.  Always use the access
-     * functions because this is not set until it is modified.
-     */
-    std::unique_ptr<Theme> m_theme;
-
-    /**
      * Font instance for the widget.
      *
      * @note This should not be accessed directly.  Always use the access
@@ -1528,10 +1562,10 @@ private:
     /**
      * Deserialize widget properties.
      */
-    virtual void deserialize(Serializer::Properties& props);
+    void deserialize(Serializer::Properties& props);
 
     friend class Frame;
-    template<class T, class U> friend class ImageHolder;
+    friend class ImageHolder;
 };
 
 /// Enum string conversion map

@@ -26,11 +26,14 @@ CameraWindow::CameraWindow(const Rect& rect,
       m_camera_impl(std::make_unique<detail::CameraImpl>(*this, rect, device))
 {}
 
-CameraWindow::CameraWindow(Serializer::Properties& props)
-    : Window(props),
+CameraWindow::CameraWindow(Serializer::Properties& props, bool is_derived)
+    : Window(props, true),
       m_camera_impl(std::make_unique<detail::CameraImpl>(*this, box(), ""))
 {
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void CameraWindow::draw(Painter& painter, const Rect& rect)
@@ -84,8 +87,8 @@ void CameraWindow::stop()
 
 void CameraWindow::serialize(Serializer& serializer) const
 {
-    Window::serialize(serializer);
     serializer.add_property("device", device());
+    Window::serialize(serializer);
 }
 
 void CameraWindow::deserialize(Serializer::Properties& props)

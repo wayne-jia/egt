@@ -18,29 +18,25 @@ inline namespace v1
 
 std::vector<DrawerReset::ResetFunction> DrawerReset::m_reset_list;
 
-static std::shared_ptr<Theme> the_global_theme;
+static std::unique_ptr<Theme> the_global_theme;
 
 Theme& global_theme()
 {
     if (!the_global_theme)
     {
-        the_global_theme = std::make_shared<Theme>();
+        the_global_theme = std::make_unique<Theme>();
         the_global_theme->apply();
     }
 
     return *the_global_theme;
 }
 
-void global_theme(std::shared_ptr<Theme> theme)
+void global_theme(std::unique_ptr<Theme>&& theme)
 {
-    assert(theme);
-    if (theme)
-    {
-        the_global_theme = std::move(theme);
+    the_global_theme = std::move(theme);
 
-        if (the_global_theme)
-            the_global_theme->apply();
-    }
+    if (the_global_theme)
+        the_global_theme->apply();
 }
 
 static Pattern pattern(const Color& color)
@@ -55,6 +51,10 @@ static Pattern pattern(const Color& color)
 }
 
 Theme::Theme()
+    : Theme("DefaultTheme")
+{}
+
+Theme::Theme(const std::string& name)
     : m_palette
 {
     {
@@ -74,6 +74,7 @@ Theme::Theme()
         },
         {
             Palette::GroupId::disabled, {
+                {Palette::ColorId::cursor, Palette::red},
                 {Palette::ColorId::bg, Palette::white},
                 {Palette::ColorId::text, Color(0x989a9aff)},
                 {Palette::ColorId::text_highlight, Palette::hotpink},
@@ -87,6 +88,7 @@ Theme::Theme()
         },
         {
             Palette::GroupId::active, {
+                {Palette::ColorId::cursor, Palette::red},
                 {Palette::ColorId::bg, Palette::white},
                 {Palette::ColorId::text, Palette::black},
                 {Palette::ColorId::text_highlight, Palette::hotpink},
@@ -100,6 +102,7 @@ Theme::Theme()
         },
         {
             Palette::GroupId::checked, {
+                {Palette::ColorId::cursor, Palette::red},
                 {Palette::ColorId::bg, Palette::white},
                 {Palette::ColorId::text, Palette::black},
                 {Palette::ColorId::text_highlight, Palette::hotpink},
@@ -112,14 +115,9 @@ Theme::Theme()
             }
         }
     }
-}
+},
+m_name(name)
 {}
-
-Theme::Theme(Serializer::Properties& props) noexcept
-    : Theme()
-{
-    deserialize(props);
-}
 
 void Theme::init_palette()
 {}
@@ -132,32 +130,6 @@ void Theme::init_draw()
 void Theme::init_font()
 {
     m_font = Font();
-}
-
-void Theme::serialize(Serializer& serializer) const
-{
-    m_palette.serialize("color", serializer);
-}
-
-void Theme::deserialize(Serializer::Properties& props)
-{
-    props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
-    {
-        bool ret = true;
-        auto value = std::get<1>(p);
-        switch (detail::hash(std::get<0>(p)))
-        {
-        case detail::hash("color"):
-        {
-            m_palette.deserialize(std::get<0>(p), value, std::get<2>(p));
-            break;
-        }
-        default:
-            ret = false;
-            break;
-        }
-        return ret;
-    }), props.end());
 }
 
 void Theme::rounded_box(Painter& painter, const RectF& box, float border_radius) const
@@ -339,9 +311,6 @@ void Theme::draw_circle(Painter& painter, const Widget& widget,
 {
     const auto& type = widget.fill_flags();
 
-    if (type.empty())
-        return;
-
     Palette::GroupId group = Palette::GroupId::normal;
     if (widget.disabled())
         group = Palette::GroupId::disabled;
@@ -367,7 +336,7 @@ void Theme::draw_circle(Painter& painter,
                         DefaultDim border_width,
                         DefaultDim margin_width) const
 {
-    if (type.empty())
+    if (type.empty() && !border_width)
         return;
 
     auto box = rect;
@@ -386,7 +355,6 @@ void Theme::draw_circle(Painter& painter,
         box -= Size(border_width, border_width);
     }
 
-    assert(!box.empty());
     if (box.empty())
         return;
 

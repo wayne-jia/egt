@@ -5,6 +5,7 @@
  */
 #include "detail/egtlog.h"
 #include "detail/dump.h"
+#include "egt/app.h"
 #include "egt/detail/layout.h"
 #include "egt/detail/math.h"
 #include "egt/frame.h"
@@ -26,13 +27,15 @@ Frame::Frame(const Rect& rect, const Widget::Flags& flags) noexcept
     m_damage.reserve(10);
 }
 
-Frame::Frame(Serializer::Properties& props) noexcept
-    : Widget(props)
+Frame::Frame(Serializer::Properties& props, bool is_derived) noexcept
+    : Widget(props, true)
 {
     flags().set(Widget::Flag::frame);
 
-    name("Frame" + std::to_string(m_widgetid));
     m_damage.reserve(10);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 Frame::Frame(Frame& parent, const Rect& rect, const Widget::Flags& flags) noexcept
@@ -344,6 +347,30 @@ size_t Frame::zorder(const Widget* widget) const
     return 0;
 }
 
+void Frame::zorder(const Widget* widget, size_t rank)
+{
+    auto i = std::find_if(m_children.begin(), m_children.end(),
+                          [widget](const auto & ptr)
+    {
+        return ptr.get() == widget;
+    });
+    if (i != m_children.end())
+    {
+        size_t old_rank = std::distance(m_children.begin(), i);
+        rank = std::min(rank, m_children.size() - 1);
+        if (rank != old_rank)
+        {
+            auto j = std::next(m_children.begin(), rank);
+
+            if (old_rank < rank)
+                std::rotate(i, i + 1, j + 1);
+            else
+                std::rotate(j, i, i + 1);
+            layout();
+        }
+    }
+}
+
 static inline bool time_child_draw_enabled()
 {
     static int value = 0;
@@ -417,6 +444,21 @@ void Frame::draw(Painter& painter, const Rect& rect)
                          margin(),
                          border_radius(),
                          border_flags());
+    }
+    else if (Application::instance().is_composer())
+    {
+        constexpr static Color composer_border = Palette::black;
+        constexpr static Color composer_bg = Color(0x00000020);
+
+        theme().draw_box(painter,
+        {Theme::FillFlag::blend},
+        to_child(box()),
+        composer_border,
+        composer_bg,
+        1,
+        0,
+        0,
+        {});
     }
 
     if (m_children.empty())
@@ -578,6 +620,14 @@ void Frame::serialize(Serializer& serializer) const
 Frame::~Frame() noexcept
 {
     remove_all_basic();
+}
+
+void Frame::on_screen_resized()
+{
+    Widget::on_screen_resized();
+
+    for (auto& child : m_children)
+        child->on_screen_resized();
 }
 
 }

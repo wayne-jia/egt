@@ -49,8 +49,8 @@ SideBoard::SideBoard(PositionFlag position,
     initialize();
 }
 
-SideBoard::SideBoard(Serializer::Properties& props) noexcept
-    : Window(props)
+SideBoard::SideBoard(Serializer::Properties& props, bool is_derived) noexcept
+    : Window(props, true)
 {
     m_oanim.duration(std::chrono::milliseconds(1000));
     m_canim.duration(std::chrono::milliseconds(1000));
@@ -60,6 +60,9 @@ SideBoard::SideBoard(Serializer::Properties& props) noexcept
     initialize();
 
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void SideBoard::initialize()
@@ -212,9 +215,9 @@ const std::pair<SideBoard::PositionFlag, char const*> detail::EnumStrings<SideBo
 
 void SideBoard::serialize(Serializer& serializer) const
 {
-    Window::serialize(serializer);
-
     serializer.add_property("position", detail::enum_to_string(position()));
+
+    Window::serialize(serializer);
 }
 
 void SideBoard::deserialize(Serializer::Properties& props)

@@ -106,7 +106,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit Button(Serializer::Properties& props) noexcept;
+    explicit Button(Serializer::Properties& props) noexcept
+        : Button(props, false)
+    {
+    }
+
+protected:
+
+    explicit Button(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     Button(const Button&) = delete;
     Button& operator=(const Button&) = delete;
@@ -161,6 +170,9 @@ protected:
 private:
 
     static Size default_button_size_value;
+    static Signal<>::RegisterHandle default_button_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 
     static AlignFlags default_text_align_value;
 
@@ -192,9 +204,12 @@ private:
  *
  * @ingroup controls
  */
-class EGT_API ImageButton : public Button, public ImageHolder<ImageButton, Button>
+class EGT_API ImageButton : public Button, public ImageHolder
 {
 public:
+
+    ImageButton(ImageButton&&) noexcept;
+    ImageButton& operator=(ImageButton&&) noexcept = default;
 
     /**
      * @param[in] text The text to display.
@@ -250,7 +265,16 @@ public:
     /**
      * @param[in] props list of arguments and its properties.
      */
-    explicit ImageButton(Serializer::Properties& props) noexcept;
+    explicit ImageButton(Serializer::Properties& props) noexcept
+        : ImageButton(props, false)
+    {
+    }
+
+protected:
+
+    explicit ImageButton(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -265,7 +289,7 @@ public:
 
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**

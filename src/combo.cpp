@@ -6,6 +6,7 @@
 #include "egt/app.h"
 #include "egt/combo.h"
 #include "egt/detail/imagecache.h"
+#include "egt/detail/screen/composerscreen.h"
 #include "egt/frame.h"
 #include "egt/image.h"
 #include "egt/painter.h"
@@ -19,6 +20,7 @@ inline namespace v1
 {
 
 Size ComboBox::default_combobox_size_value;
+Signal<>::RegisterHandle ComboBox::default_combobox_size_handle = Signal<>::INVALID_HANDLE;
 
 namespace detail
 {
@@ -153,24 +155,29 @@ ComboBox::ComboBox(Frame& parent, const ItemArray& items, const Rect& rect) noex
     parent.add(*this);
 }
 
-ComboBox::ComboBox(Serializer::Properties& props) noexcept
-    : Widget(props),
+ComboBox::ComboBox(Serializer::Properties& props, bool is_derived) noexcept
+    : Widget(props, true),
       m_popup(std::make_shared<detail::ComboBoxPopup>(*this))
 {
-    name("ComboBox" + std::to_string(m_widgetid));
-    initialize();
+    initialize(false);
 
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
-void ComboBox::initialize()
+void ComboBox::initialize(bool init_inherited_properties)
 {
-    fill_flags(Theme::FillFlag::blend);
-    border_radius(4.0);
-    padding(5);
-    border(theme().default_border());
+    if (init_inherited_properties)
+    {
+        fill_flags(Theme::FillFlag::blend);
+        border_radius(4.0);
+        padding(5);
+        border(theme().default_border());
 
-    grab_mouse(true);
+        grab_mouse(true);
+    }
 
     m_popup->add(m_list);
 
@@ -218,9 +225,12 @@ void ComboBox::set_parent(Frame* parent)
     if (!Application::instance().main_window())
         throw std::runtime_error("no main window");
 
-    Application::instance().main_window()->add(m_popup);
+    if (!m_popup->parent())
+    {
+        Application::instance().main_window()->add(m_popup);
 
-    m_popup->special_child_draw_callback(parent->special_child_draw_callback());
+        m_popup->special_child_draw_callback(parent->special_child_draw_callback());
+    }
 }
 
 void ComboBox::handle(Event& event)
@@ -265,10 +275,28 @@ void ComboBox::move(const Point& point)
         m_popup->smart_pos();
 }
 
+void ComboBox::register_handler()
+{
+    if (default_combobox_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        default_combobox_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            default_combobox_size_value.clear();
+        });
+    }
+}
+
+void ComboBox::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(default_combobox_size_handle);
+    default_combobox_size_handle = Signal<>::INVALID_HANDLE;
+}
+
 Size ComboBox::default_size()
 {
     if (default_combobox_size_value.empty())
     {
+        register_handler();
         auto ss = egt::Application::instance().screen()->size();
         default_combobox_size_value = Size(ss.width() * 0.25, ss.height() * 0.05);
     }
@@ -278,6 +306,9 @@ Size ComboBox::default_size()
 
 void ComboBox::default_size(const Size& size)
 {
+    if (!size.empty())
+        unregister_handler();
+
     default_combobox_size_value = size;
 }
 
@@ -376,6 +407,7 @@ void ComboBox::deserialize(Serializer::Properties& props)
             Image image;
             AlignFlags text_align;
             auto attrs = std::get<2>(p);
+            bool is_selected = false;
             for (const auto& i : attrs)
             {
                 if (i.first == "image")
@@ -385,10 +417,12 @@ void ComboBox::deserialize(Serializer::Properties& props)
                     text_align = AlignFlags(i.second);
 
                 if (i.first == "selected" && detail::from_string(i.second))
-                    selected(item_count() - 1);
+                    is_selected = true;
             }
 
             add_item(std::make_shared<StringItem>(std::get<1>(p), image, Rect(), text_align));
+            if (is_selected)
+                selected(item_count() - 1);
             return true;
         }
         return false;

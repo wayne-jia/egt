@@ -3,7 +3,91 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [Unreleased]
+## [1.6] - 2022-12-02
+### Added
+- Widget/Frame: new zorder setter to be able to set a specific rank instead of
+using top, bottom, up and down.
+### Changed
+- Move from C++14 to C++17.
+- AlignFlag: transform the AlignFlag enum into a main AlignFlag class plus
+  few subclasses and define opertor| for all valid combination of those classes
+  in order to discard invalid AlignFlag combinations at compilation time.
+- WindowHint, Justification, Orientation: change enums values from flags to
+  regular enum values.
+- ImageHolder: de-templatize the ImageHolder class.
+- Horizontal/Vertical/FlexBoxSizer: dedicated name instead of BoxSizer.
+
+### Fixed
+- Pattern: add Pattern::operator== and Pattern::operator!= to fix a crash in
+  'void Widget::Color(Paletter::ColorId, const Pattern&, Palette::GroupId)' when
+  changing a Pattern that already exists in the widget's palette.
+- Label: add missing move constructor annd move assignment operator.
+- ImageHolder: fix the copy and move constructors.
+- ImageButton, ImageLabel: fix their move constructor and add their default move
+  assignement operator.
+- ComboBox, Dialog, ImageButton, LevelMeter, NotebookTab, ProgressBar,
+  ScrollWheel, Slider, SpinProgress, TextBox: fix deserialization issues of
+  inherited properties.
+
+## [1.5] - 2022-11-09
+### Added
+- Support for Windows build.
+- Documentation for the Microchip Graphics Composer.
+### Changed
+- TextBox: handle_key method is now virtual.
+- ImageButton/Label: the text method has no longer side effects on the visible
+property.
+### Fixed
+- BoxSizer: layout is now recomputed when a BoxSizer is resized.
+- Image: fix alignment issue when align flags are empty.
+- Serialization: several fixes.
+
+## [1.4] - 2022-07-12
+### Added
+- Application: allow non-zero exit values.
+- ComposerScreen: introduce a new backend for the Microchip Graphics Composer.
+- Global Palette/Font:  setters and getters added, reset function added as well.
+- ProgressBar: can display a percentage of the progression instead of the basic
+value.
+- SliderType: introduce the inverted flag to change slider direction of
+progression.
+
+### Changed
+- To get detailed API changes, check the 'API Changes' page in the documentation.
+- ImageButton/Label: show_label is automatically set to false if text string is
+empty, otherwise it is set to true.
+- Serialization/de-serialization: improvements for the composer
+- Widget: removal of local theme support. There is only a global theme.
+
+### Fixed
+- CircleWidget: radius now updated on resize.
+- Git commit id with a newer version of git was set to n/a.
+  fix clear()
+- Sound: the same file can be played several times when using ifstream instead of
+  libsndfile.
+
+## [1.3.2] - 2022-05-10
+### Changed
+- Gstcameraimpl: default device node is /dev/video0.
+
+## [1.3.1] - 2022-05-03
+### Fixed
+- TextBox: text display issue when moved/resized non left-aligned texts rendering,
+
+## [1.3] - 2021-12-10
+### Added
+- TextBox: performance optimization for text rendering.
+- i18n example uses gettext and provides a new window with runtime translation.
+- AnimationSequence: addition of removeLast and removeAt methods. Now,
+  AnimationSequence allows to use several times the same sub animation.
+
+### Changed
+- Default widget and font size based on the screen size instead of an arbitrary
+  value.
+
+### Fixed
+- Git commit id was incorrect when EGT was built from Buildroot.
+
 
 ## [1.2] - 2020-06-28
 ### Added

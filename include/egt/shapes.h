@@ -50,7 +50,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit CircleWidget(Serializer::Properties& props);
+    explicit CircleWidget(Serializer::Properties& props)
+        : CircleWidget(props, false)
+    {
+    }
+
+protected:
+
+    explicit CircleWidget(Serializer::Properties& props, bool is_derived);
+
+public:
 
     /**
      * Get the radius of the widget.
@@ -67,6 +76,8 @@ public:
      */
     void serialize(Serializer& serializer) const override;
 
+    void resize(const Size& size) override;
+
 protected:
 
     /// @private
@@ -76,7 +87,7 @@ private:
     /**
      * Deserialize widget properties.
      */
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -111,7 +122,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit LineWidget(Serializer::Properties& props);
+    explicit LineWidget(Serializer::Properties& props)
+        : LineWidget(props, false)
+    {
+    }
+
+protected:
+
+    explicit LineWidget(Serializer::Properties& props, bool is_derived);
+
+public:
 
     void draw(Painter& painter, const Rect&) override;
 
@@ -142,7 +162,7 @@ private:
     /**
      * Deserialize widget properties.
      */
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -178,11 +198,20 @@ public:
      * @param[in] props list of widget argument and its properties.
      */
     explicit RectangleWidget(Serializer::Properties& props)
-        : Widget(props)
+        : RectangleWidget(props, false)
     {
-        name("RectangleWidget" + std::to_string(m_widgetid));
-        fill_flags(Theme::FillFlag::blend);
     }
+
+protected:
+
+    explicit RectangleWidget(Serializer::Properties& props, bool is_derived)
+        : Widget(props, true)
+    {
+        if (!is_derived)
+            deserialize_leaf(props);
+    }
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override;
 };

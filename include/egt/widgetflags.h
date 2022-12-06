@@ -13,9 +13,9 @@
 
 #include <cassert>
 #include <cstdint>
+#include <egt/bitfields.h>
 #include <egt/detail/enum.h>
 #include <egt/detail/meta.h>
-#include <egt/flags.h>
 #include <iosfwd>
 #include <memory>
 
@@ -26,57 +26,385 @@ inline namespace v1
 
 /**
  * Alignment flags.
- *
- * @note Center alignment is a weak alignment both horizontal and
- * vertical. To break one of those dimensions to another
- * alignment, specify it in addition to center.  If both
- * are broken, center has no effect.
  */
-enum class AlignFlag : uint32_t
+class HorizontalBitField;
+class VerticalBitField;
+class ExpandBitField;
+class HVBitField;
+class HExpandBitField;
+class VExpandBitField;
+class AlignFlag;
+class AlginFlags;
+
+class HorizontalBitField : private BitField
 {
-    /**
-     * Center alignment is a weak alignment both horizontal and
-     * vertical. To break one of those dimensions to another
-     * alignment, specify it in addition to center.  If both
-     * are broken, center has no effect.
-     */
-    /** Center horizontal alignment. */
-    center_horizontal = detail::bit(0),
-    /** Center vertical alignment. */
-    center_vertical = detail::bit(1),
-    /** Center horizontal and vertical alignment. */
-    center = center_horizontal | center_vertical,
-    /** Horizontal alignment. */
-    left = detail::bit(2),
-    /** Horizontal alignment. */
-    right = detail::bit(3),
-    /** Vertical alignment. */
-    top = detail::bit(4),
-    /** Vertical alignment. */
-    bottom = detail::bit(5),
-    /** Expand only horizontally. */
-    expand_horizontal = detail::bit(6),
-    /** Expand only vertically. */
-    expand_vertical = detail::bit(7),
-    /** Expand horizontally and vertically. */
-    expand = expand_horizontal | expand_vertical,
+public:
+    constexpr HorizontalBitField(uint32_t halign)
+        : BitField(halign_mask, halign << halign_offset)
+    {}
+
+    constexpr bool operator==(const HorizontalBitField& rhs) const
+    {
+        return static_cast<const BitField*>(this)->operator==(rhs);
+    }
+
+private:
+    constexpr static const uint32_t halign_offset = 0;
+    constexpr static const uint32_t halign_mask = (0x3u << halign_offset);
+
+    constexpr HorizontalBitField(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr HVBitField operator|(const HorizontalBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr HVBitField operator|(const VerticalBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr HExpandBitField operator|(const HorizontalBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr AlignFlag operator|(const HorizontalBitField& lhs, const VExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const VExpandBitField& lhs, const HorizontalBitField& rhs);
+    friend class HVBitField;        /* HVBitField::HVBitField(uint32_t, uint32_t); */
+    friend class AlignFlag;         /* AlignFlag::AlignFlag(const HorizontalBitField&) */
+    friend class AlignFlags;        /* AlignFlags::AlignFlags(const HorizontalBitFields&) */
 };
 
+class VerticalBitField : private BitField
+{
+public:
+    constexpr VerticalBitField(uint32_t valgin)
+        : BitField(valign_mask, valgin << valign_offset)
+    {}
+
+    constexpr bool operator==(const VerticalBitField& rhs) const
+    {
+        return static_cast<const BitField*>(this)->operator==(rhs);
+    }
+
+private:
+    constexpr static const uint32_t valign_offset = 2;
+    constexpr static const uint32_t valign_mask = (0x3u << valign_offset);
+
+    constexpr VerticalBitField(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr HVBitField operator|(const HorizontalBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr HVBitField operator|(const VerticalBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr VExpandBitField operator|(const VerticalBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr AlignFlag operator|(const VerticalBitField& lhs, const HExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const HExpandBitField& lhs, const VerticalBitField& rhs);
+    friend class HVBitField;        /* HVBitField::HVBitField(uint32_t, uint32_t) */
+    friend class AlignFlag;         /* AlignFlag::AlignFlag(const VerticalBitField&) */
+    friend class AlignFlags;        /* AlignFlags::AlignFlags(const VerticalBitFields&) */
+};
+
+class ExpandBitField : private BitField
+{
+public:
+    constexpr ExpandBitField(uint32_t expand)
+        : BitField(expand << expand_offset)
+    {}
+
+    constexpr bool operator==(const ExpandBitField& rhs) const
+    {
+        return static_cast<const BitField*>(this)->operator==(rhs);
+    }
+
+private:
+    constexpr static const uint32_t expand_offset = 4;
+
+    constexpr ExpandBitField(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr ExpandBitField operator|(const ExpandBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr HExpandBitField operator|(const HorizontalBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HExpandBitField& rhs);
+    friend constexpr HExpandBitField operator|(const HExpandBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr VExpandBitField operator|(const VerticalBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VExpandBitField& rhs);
+    friend constexpr VExpandBitField operator|(const VExpandBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const ExpandBitField& lhs, const HVBitField& rhs);
+    friend constexpr AlignFlag operator|(const HVBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const ExpandBitField& lhs, const AlignFlag& rhs);
+    friend constexpr AlignFlag operator|(const AlignFlag& lhs, const ExpandBitField& rhs);
+    friend class AlignFlag;         /* AlignFlag::AlignFlag(const ExpandBitField&) */
+    friend class AlignFlags;        /* AlignFlags::AlignFlags(const ExpandBitFields&) */
+};
+
+class HVBitField : private BitField
+{
+public:
+    constexpr HVBitField(uint32_t halign, uint32_t valign)
+        : BitField(HorizontalBitField::halign_mask | VerticalBitField::valign_mask,
+                   (halign << HorizontalBitField::halign_offset) | (valign << VerticalBitField::valign_offset))
+    {}
+
+    constexpr bool operator==(const HVBitField& rhs) const
+    {
+        return static_cast<const BitField*>(this)->operator==(rhs);
+    }
+
+private:
+    constexpr HVBitField(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr HVBitField operator|(const HorizontalBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr HVBitField operator|(const VerticalBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr AlignFlag operator|(const ExpandBitField& lhs, const HVBitField& rhs);
+    friend constexpr AlignFlag operator|(const HVBitField& lhs, const ExpandBitField& rhs);
+    friend class AlignFlag;         /* AlignFlag::AlignFlag(const HVBitField&) */
+    friend class AlignFlags;        /* AlignFlags::AlignFlags(const HVBitFields&) */
+};
+
+class HExpandBitField: private BitField
+{
+private:
+    constexpr HExpandBitField(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr HExpandBitField operator|(const HorizontalBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HExpandBitField& rhs);
+    friend constexpr HExpandBitField operator|(const HExpandBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const VerticalBitField& lhs, const HExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const HExpandBitField& lhs, const VerticalBitField& rhs);
+    friend class AlignFlag;         /* AlignFlag::AlignFlag(const HExpandBitField&) */
+    friend class AlignFlags;        /* AlignFlags::AlignFlags(const HExpandBitFields&) */
+};
+
+class VExpandBitField : private BitField
+{
+private:
+    constexpr VExpandBitField(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr VExpandBitField operator|(const VerticalBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VExpandBitField& rhs);
+    friend constexpr VExpandBitField operator|(const VExpandBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const HorizontalBitField& lhs, const VExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const VExpandBitField& lhs, const HorizontalBitField& rhs);
+    friend class AlignFlag;         /* AlignFlag::AlignFlag(const VExpandBitField&) */
+    friend class AlignFlags;        /* AlignFlags::AlignFlags(const VExpandBitFields&) */
+};
+
+constexpr ExpandBitField operator|(const ExpandBitField& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr HVBitField operator|(const HorizontalBitField& lhs, const VerticalBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr HVBitField operator|(const VerticalBitField& lhs, const HorizontalBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr HExpandBitField operator|(const HorizontalBitField& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HorizontalBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr HExpandBitField operator|(const ExpandBitField& lhs, const HExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr HExpandBitField operator|(const HExpandBitField& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr VExpandBitField operator|(const VerticalBitField& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VerticalBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr VExpandBitField operator|(const ExpandBitField& lhs, const VExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr VExpandBitField operator|(const VExpandBitField& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+class AlignFlag : private BitField
+{
+public:
+    constexpr AlignFlag(const HorizontalBitField& field)
+        : BitField(field)
+    {}
+
+    constexpr AlignFlag(const VerticalBitField& field)
+        : BitField(field)
+    {}
+
+    constexpr AlignFlag(const ExpandBitField& field)
+        : BitField(field)
+    {}
+
+    constexpr AlignFlag(const HVBitField& field)
+        : BitField(field)
+    {}
+
+    constexpr AlignFlag(const HExpandBitField& field)
+        : BitField(field)
+    {}
+
+    constexpr AlignFlag(const VExpandBitField& field)
+        : BitField(field)
+    {}
+
+    constexpr bool operator==(const AlignFlag& rhs) const
+    {
+        return static_cast<const BitField*>(this)->operator==(rhs);
+    }
+
+    static constexpr HorizontalBitField center_horizontal = HorizontalBitField(1);
+    static constexpr HorizontalBitField left = HorizontalBitField(2);
+    static constexpr HorizontalBitField right = HorizontalBitField(3);
+
+    static constexpr VerticalBitField center_vertical = VerticalBitField(1);
+    static constexpr VerticalBitField top = VerticalBitField(2);
+    static constexpr VerticalBitField bottom = VerticalBitField(3);
+
+    static constexpr HVBitField center = center_horizontal | center_vertical;
+
+    static constexpr ExpandBitField expand_horizontal = ExpandBitField(detail::bit(0));
+    static constexpr ExpandBitField expand_vertical = ExpandBitField(detail::bit(1));
+    static constexpr ExpandBitField expand = expand_horizontal | expand_vertical;
+
+private:
+    constexpr AlignFlag(const BitField& field)
+        : BitField(field)
+    {}
+
+    friend constexpr AlignFlag operator|(const HorizontalBitField& lhs, const VExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const VExpandBitField& lhs, const HorizontalBitField& rhs);
+    friend constexpr AlignFlag operator|(const VerticalBitField& lhs, const HExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const HExpandBitField& lhs, const VerticalBitField& rhs);
+    friend constexpr AlignFlag operator|(const ExpandBitField& lhs, const HVBitField& rhs);
+    friend constexpr AlignFlag operator|(const HVBitField& lhs, const ExpandBitField& rhs);
+    friend constexpr AlignFlag operator|(const ExpandBitField& lhs, const AlignFlag& rhs);
+    friend constexpr AlignFlag operator|(const AlignFlag& lhs, const ExpandBitField& rhs);
+    friend class BitFields<AlignFlag>;
+};
+
+constexpr AlignFlag operator|(const HorizontalBitField& lhs, const VExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const VExpandBitField& lhs, const HorizontalBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const VerticalBitField& lhs, const HExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const HExpandBitField& lhs, const VerticalBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const ExpandBitField& lhs, const HVBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const HVBitField& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const ExpandBitField& lhs, const AlignFlag& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+constexpr AlignFlag operator|(const AlignFlag& lhs, const ExpandBitField& rhs)
+{
+    return static_cast<const BitField&>(lhs).operator | (rhs);
+}
+
+std::list<AlignFlag> get(const BitFields<AlignFlag>& fields);
+
 /// Enum string conversion map
+template<>
+EGT_API const std::pair<HorizontalBitField, char const*> detail::EnumStrings<HorizontalBitField>::data[3];
+
+template<>
+EGT_API const std::pair<VerticalBitField, char const*> detail::EnumStrings<VerticalBitField>::data[3];
+
+template<>
+EGT_API const std::pair<ExpandBitField, char const*> detail::EnumStrings<ExpandBitField>::data[3];
+
+template<>
+EGT_API const std::pair<HVBitField, char const*> detail::EnumStrings<HVBitField>::data[1];
+
 template<>
 EGT_API const std::pair<AlignFlag, char const*> detail::EnumStrings<AlignFlag>::data[10];
 
 /// Alignment flags.
-using AlignFlags = Flags<AlignFlag>;
-
-/// AlignFlags operator
-inline AlignFlags operator|(AlignFlag lhs, AlignFlag rhs)
+class AlignFlags : public BitFields<AlignFlag>
 {
-    return {lhs, rhs};
-}
+public:
+    using BitFields<AlignFlag>::BitFields;
 
-/// Overloaded std::ostream insertion operator
-EGT_API std::ostream& operator<<(std::ostream& os, const AlignFlags& align);
+    constexpr AlignFlags(const HorizontalBitField& field)
+        : BitFields(static_cast<const AlignFlag&>(field))
+    {}
+
+    constexpr AlignFlags(const VerticalBitField& field)
+        : BitFields(static_cast<const AlignFlag&>(field))
+    {}
+
+    constexpr AlignFlags(const ExpandBitField& field)
+        : BitFields(static_cast<const AlignFlag&>(field))
+    {}
+
+    constexpr AlignFlags(const HVBitField& field)
+        : BitFields(static_cast<const AlignFlag&>(field))
+    {}
+
+    constexpr AlignFlags(const HExpandBitField& field)
+        : BitFields(static_cast<const AlignFlag&>(field))
+    {}
+
+    constexpr AlignFlags(const VExpandBitField& field)
+        : BitFields(static_cast<const AlignFlag&>(field))
+    {}
+
+    constexpr AlignFlags(const BitFields<AlignFlag>& base)
+        : BitFields(base)
+    {}
+
+    using BitFields<AlignFlag>::operator|;
+};
 
 /** Helper to set alignment of a widget. */
 template<class T>
@@ -288,7 +616,7 @@ std::shared_ptr<T>& expand(std::shared_ptr<T>& widget)
 
 /** Helper to set alignment of a widget. */
 template<class T>
-T& align(T& widget, AlignFlags a)
+T& align(T& widget, const AlignFlags& a)
 {
     widget.align(a);
     return widget;
@@ -296,7 +624,7 @@ T& align(T& widget, AlignFlags a)
 
 /** Helper to set alignment of a widget. */
 template<class T>
-const std::shared_ptr<T>& align(const std::shared_ptr<T>& widget, AlignFlags a)
+const std::shared_ptr<T>& align(const std::shared_ptr<T>& widget, const AlignFlags& a)
 {
     assert(widget);
     widget->align(a);
@@ -305,7 +633,7 @@ const std::shared_ptr<T>& align(const std::shared_ptr<T>& widget, AlignFlags a)
 
 /** Helper to set alignment of a widget. */
 template<class T>
-std::shared_ptr<T>& align(std::shared_ptr<T>& widget, AlignFlags a)
+std::shared_ptr<T>& align(std::shared_ptr<T>& widget, const AlignFlags& a)
 {
     assert(widget);
     widget->align(a);
@@ -317,10 +645,10 @@ std::shared_ptr<T>& align(std::shared_ptr<T>& widget, AlignFlags a)
  */
 enum class Orientation : uint32_t
 {
-    horizontal = detail::bit(0),
-    vertical = detail::bit(1),
-    flex = detail::bit(2),
-    none = detail::bit(3),
+    horizontal,
+    vertical,
+    flex,
+    none,
 };
 
 /// Enum string conversion map
@@ -332,11 +660,11 @@ EGT_API const std::pair<Orientation, char const*> detail::EnumStrings<Orientatio
  */
 enum class Justification : uint32_t
 {
-    start = detail::bit(0),
-    middle = detail::bit(1),
-    ending = detail::bit(2),
-    justify = detail::bit(3),
-    none = detail::bit(4),
+    start,
+    middle,
+    ending,
+    justify,
+    none,
 };
 
 /// Enum string conversion map
@@ -351,27 +679,27 @@ enum class WindowHint : uint32_t
     /**
      * Allow automatic detection of the window type to create.
      */
-    automatic = detail::bit(0),
+    automatic,
 
     /**
      * Request a software only implementation.
      */
-    software = detail::bit(1),
+    software,
 
     /**
      * Request an overlay plane.
      */
-    overlay = detail::bit(2),
+    overlay,
 
     /**
      * Request specifically an HEO overlay plane.
      */
-    heo_overlay = detail::bit(3),
+    heo_overlay,
 
     /**
      * Request a cursor overlay plane.
      */
-    cursor_overlay = detail::bit(4),
+    cursor_overlay,
 };
 
 /// Enum string conversion map

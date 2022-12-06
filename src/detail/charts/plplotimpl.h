@@ -38,19 +38,13 @@ public:
 
     virtual void draw(Painter& painter, const Rect& rect) = 0;
 
-    void data(const ChartBase::DataArray& data);
+    void data(const ChartItemArray& data);
 
-    ChartBase::DataArray data() const;
+    void add_data(const ChartItemArray& data);
+
+    ChartItemArray data() const;
 
     size_t data_size() const;
-
-    void add_data(const ChartBase::DataArray& data);
-
-    void data(const ChartBase::StringDataArray& data);
-
-    ChartBase::StringDataArray sdata() const;
-
-    void add_data(const ChartBase::StringDataArray& data);
 
     void remove_data(uint32_t count);
 
@@ -110,6 +104,11 @@ public:
 
     void bank(float bank);
 
+    float bank() const
+    {
+        return m_bank;
+    }
+
     virtual void invoke_damage() = 0;
 
     virtual ~PlPlotImpl();
@@ -165,7 +164,7 @@ protected:
 class PlPlotLineChart: public PlPlotImpl
 {
 public:
-    explicit PlPlotLineChart(LineChart& interface);
+    explicit PlPlotLineChart(LineChart& iface);
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -181,7 +180,7 @@ protected:
 class PlPlotPointChart: public PlPlotImpl
 {
 public:
-    explicit PlPlotPointChart(PointChart& interface);
+    explicit PlPlotPointChart(PointChart& iface);
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -197,7 +196,7 @@ protected:
 class PlPlotBarChart: public PlPlotImpl
 {
 public:
-    explicit PlPlotBarChart(BarChart& interface);
+    explicit PlPlotBarChart(BarChart& iface);
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -216,7 +215,7 @@ protected:
 class PlPlotHBarChart: public PlPlotImpl
 {
 public:
-    explicit PlPlotHBarChart(HorizontalBarChart& interface);
+    explicit PlPlotHBarChart(HorizontalBarChart& iface);
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -236,7 +235,7 @@ class PlPlotPieChart: public PlPlotImpl
 {
 public:
 
-    explicit PlPlotPieChart(PieChart& interface);
+    explicit PlPlotPieChart(PieChart& iface);
 
     void draw(Painter& painter, const Rect& rect) override;
 

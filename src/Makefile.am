@@ -67,6 +67,7 @@ detail/input/inputkeyboard.h \
 detail/layout.cpp \
 detail/mousegesture.cpp \
 detail/priorityqueue.h \
+detail/screen/composerscreen.cpp \
 detail/screen/flipthread.h \
 detail/screen/memoryscreen.cpp \
 detail/spriteimpl.h \
@@ -161,6 +162,7 @@ $(top_builddir)/include/egt/ui \
 $(top_builddir)/include/egt/version.h \
 ../include/egt/animation.h \
 ../include/egt/app.h \
+../include/egt/bitfields.h \
 ../include/egt/button.h \
 ../include/egt/buttongroup.h \
 ../include/egt/canvas.h \
@@ -179,6 +181,7 @@ $(top_builddir)/include/egt/version.h \
 ../include/egt/detail/math.h \
 ../include/egt/detail/meta.h \
 ../include/egt/detail/mousegesture.h \
+../include/egt/detail/screen/composerscreen.h \
 ../include/egt/detail/screen/memoryscreen.h \
 ../include/egt/detail/string.h \
 ../include/egt/detail/stringhash.h \
@@ -400,7 +403,7 @@ if OS_WIN32
 libegt_la_LIBADD += -lws2_32 -lintl
 endif
 
-libegt_la_LDFLAGS = $(AM_LDFLAGS) @LIBEGT_EXTRA_LDFLAGS@ -version-info 3:0:0 -no-undefined
+libegt_la_LDFLAGS = $(AM_LDFLAGS) @LIBEGT_EXTRA_LDFLAGS@ -version-info 6:0:0 -no-undefined
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = $(top_builddir)/libegt.pc
@@ -423,8 +426,21 @@ checkheaders:
 		$(AM_CPPFLAGS) $(CPPFLAGS) $(CXXFLAGS) $(libegt_la_CXXFLAGS)
 
 $(top_builddir)/include/egt/git.version: .FORCE
-	@$(top_srcdir)/scripts/git_version.sh $(top_srcdir)> $(top_builddir)/include/egt/git.version
-	@$(shell touch $(top_srcdir)/src/utils.cpp)
+	@switch_user="eval"; \
+	if test -d "$(top_srcdir)/.git"; then \
+		if test $$(id -u) -eq 0; then \
+			if test $$(id -u) -ne $$(stat -c %u $(top_srcdir)/.git); then \
+				git_tree_user=$$(stat -c %U $(top_srcdir)/.git); \
+				if test $$? -eq 0 -a "$$git_tree_user" != "UNKNOWN"; then \
+					switch_user="su $$git_tree_user -c"; \
+				else \
+					switch_user="true"; \
+				fi \
+			fi \
+		fi \
+	fi; \
+	$$switch_user '$(top_srcdir)/scripts/git_version.sh $(top_srcdir) > $(top_builddir)/include/egt/git.version'; \
+	$$switch_user 'touch $(top_srcdir)/src/utils.cpp';
 
 .PHONY: .FORCE
 .FORCE:

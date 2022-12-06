@@ -102,14 +102,17 @@ VideoWindow::VideoWindow(const Rect& rect, const std::string& uri,
     }
 }
 
-VideoWindow::VideoWindow(Serializer::Properties& props)
-    : Window(props)
+VideoWindow::VideoWindow(Serializer::Properties& props, bool is_derived)
+    : Window(props, true)
 {
     fill_flags().clear();
 
     create_impl(box().size());
 
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void VideoWindow::create_impl(const Size& size)
@@ -236,10 +239,10 @@ bool VideoWindow::has_audio() const
 
 void VideoWindow::serialize(Serializer& serializer) const
 {
-    Window::serialize(serializer);
     serializer.add_property("uri", m_uri);
     serializer.add_property("loopback", loopback());
     serializer.add_property("volume", volume());
+    Window::serialize(serializer);
 }
 
 void VideoWindow::deserialize(Serializer::Properties& props)

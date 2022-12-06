@@ -23,8 +23,8 @@ ScrolledView::ScrolledView(const Rect& rect,
                            Policy horizontal_policy,
                            Policy vertical_policy) noexcept
     : Frame(rect),
-      m_hslider(100, 0, 0, Orientation::horizontal),
-      m_vslider(100, 0, 0, Orientation::vertical),
+      m_hslider(0, 100, 0, Orientation::horizontal),
+      m_vslider(0, 100, 0, Orientation::vertical),
       m_horizontal_policy(horizontal_policy),
       m_vertical_policy(vertical_policy)
 {
@@ -34,6 +34,7 @@ ScrolledView::ScrolledView(const Rect& rect,
                                   Slider::SliderFlag::consistent_line});
 
     m_vslider.slider_flags().set({Slider::SliderFlag::rectangle_handle,
+                                  Slider::SliderFlag::inverted,
                                   Slider::SliderFlag::consistent_line});
 
     resize_slider();
@@ -55,20 +56,70 @@ ScrolledView::ScrolledView(Frame& parent,
     parent.add(*this);
 }
 
-ScrolledView::ScrolledView(Serializer::Properties& props) noexcept
-    : Frame(props),
-      m_hslider(100, 0, 0, Orientation::horizontal),
-      m_vslider(100, 0, 0, Orientation::vertical)
+ScrolledView::ScrolledView(Serializer::Properties& props, bool is_derived) noexcept
+    : Frame(props, true),
+      m_hslider(0, 100, 0, Orientation::horizontal),
+      m_vslider(0, 100, 0, Orientation::vertical)
 {
-    name("ScrolledView" + std::to_string(m_widgetid));
-
     m_hslider.slider_flags().set({Slider::SliderFlag::rectangle_handle,
                                   Slider::SliderFlag::consistent_line});
 
     m_vslider.slider_flags().set({Slider::SliderFlag::rectangle_handle,
+                                  Slider::SliderFlag::inverted,
                                   Slider::SliderFlag::consistent_line});
 
     resize_slider();
+
+    deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
+}
+
+void ScrolledView::serialize(Serializer& serializer) const
+{
+    if (hpolicy() != Policy::as_needed)
+        serializer.add_property("horizontal_policy", policy2str(hpolicy()));
+    if (vpolicy() != Policy::as_needed)
+        serializer.add_property("vertical_policy", policy2str(vpolicy()));
+    if (hoffset())
+        serializer.add_property("horizontal_offset", hoffset());
+    if (voffset())
+        serializer.add_property("vertical_offset", voffset());
+
+    Frame::serialize(serializer);
+}
+
+void ScrolledView::deserialize(Serializer::Properties& props)
+{
+    props.erase(std::remove_if(props.begin(), props.end(), [&](const auto & p)
+    {
+        const auto& name = std::get<0>(p);
+        const auto& value = std::get<1>(p);
+        if (name == "horizontal_policy")
+            hpolicy(str2policy(value));
+        else if (name == "vertical_policy")
+            vpolicy(str2policy(value));
+        else
+            return false;
+        return true;
+    }), props.end());
+}
+
+void ScrolledView::post_deserialize(Serializer::Properties& props)
+{
+    props.erase(std::remove_if(props.begin(), props.end(), [&](const auto & p)
+    {
+        const auto& name = std::get<0>(p);
+        const auto& value = std::get<1>(p);
+        if (name == "horizontal_offset")
+            hoffset(std::stoi(value));
+        else if (name == "vertical_offset")
+            voffset(std::stoi(value));
+        else
+            return false;
+        return true;
+    }), props.end());
 }
 
 void ScrolledView::draw(Painter& painter, const Rect& rect)
@@ -276,24 +327,21 @@ Point ScrolledView::offset_max() const
 
 void ScrolledView::offset(Point offset)
 {
-    if (hscrollable() || vscrollable())
+    auto offmax = offset_max();
+    if (offset.x() > 0)
+        offset.x(0);
+    else if (offset.x() < offmax.x())
+        offset.x(offmax.x());
+
+    if (offset.y() > 0)
+        offset.y(0);
+    else if (offset.y() < offmax.y())
+        offset.y(offmax.y());
+
+    if (detail::change_if_diff<>(m_offset, offset))
     {
-        auto offmax = offset_max();
-        if (offset.x() > 0)
-            offset.x(0);
-        else if (offset.x() < offmax.x())
-            offset.x(offmax.x());
-
-        if (offset.y() > 0)
-            offset.y(0);
-        else if (offset.y() < offmax.y())
-            offset.y(offmax.y());
-
-        if (detail::change_if_diff<>(m_offset, offset))
-        {
-            update_sliders();
-            damage();
-        }
+        update_sliders();
+        damage();
     }
 }
 
@@ -383,6 +431,31 @@ void ScrolledView::handle(Event& event)
     default:
         break;
     }
+}
+
+std::string ScrolledView::policy2str(Policy policy)
+{
+    switch (policy)
+    {
+    default:
+    case Policy::as_needed:
+        return "as_needed";
+    case Policy::never:
+        return "never";
+    case Policy::always:
+        return "always";
+    }
+
+    return "as_needed";
+}
+
+ScrolledView::Policy ScrolledView::str2policy(const std::string& str)
+{
+    if (str == "never")
+        return Policy::never;
+    if (str == "always")
+        return Policy::always;
+    return Policy::as_needed;
 }
 
 }

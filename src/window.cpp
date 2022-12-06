@@ -51,15 +51,10 @@ Window::Window(const Rect& rect,
     Application::instance().m_windows.push_back(this);
 }
 
-Window::Window(Serializer::Properties& props)
-    : Frame(props)
+Window::Window(Serializer::Properties& props, bool is_derived)
+    : Frame(props, true)
 {
     flags().set({Widget::Flag::window, Widget::Flag::invisible});
-
-    name("Window" + std::to_string(m_widgetid));
-
-    // windows are not transparent by default
-    fill_flags(Theme::FillFlag::solid);
 
     PixelFormat format = DEFAULT_FORMAT;
     WindowHint hint = WindowHint::automatic;
@@ -85,7 +80,8 @@ Window::Window(Serializer::Properties& props)
     // save off the new window to the window list
     Application::instance().m_windows.push_back(this);
 
-    deserialize(props);
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 Window::Window(Frame& parent,
@@ -203,7 +199,8 @@ void Window::do_draw()
 void Window::resize(const Size& size)
 {
     // cannot resize if we are screen
-    if (egt_unlikely(Application::instance().m_main_window == this))
+    if (egt_unlikely(Application::instance().m_main_window == this &&
+                     !Application::instance().screen()->is_composer()))
         return;
 
     if (m_impl)
@@ -228,8 +225,14 @@ void Window::create_impl(const Rect& rect,
                          PixelFormat format_hint,
                          WindowHint hint)
 {
-    detail::ignoreparam(format_hint);
-    detail::ignoreparam(hint);
+    m_format_hint = format_hint;
+    m_hint = hint;
+    if (Application::instance().is_composer())
+    {
+        // Force pixel format and window hint
+        format_hint = DEFAULT_FORMAT;
+        hint = WindowHint::software;
+    }
 
     if (!Application::instance().m_main_window)
     {
@@ -342,25 +345,9 @@ void Window::background(const Image& image)
 
 void Window::serialize(Serializer& serializer) const
 {
+    serializer.add_property("pixelformat", detail::enum_to_string<PixelFormat>(m_format_hint));
+    serializer.add_property("windowhint", detail::enum_to_string<WindowHint>(m_hint));
     Frame::serialize(serializer);
-    serializer.add_property("show", visible());
-}
-
-void Window::deserialize(Serializer::Properties& props)
-{
-    props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
-    {
-        if (std::get<0>(p) == "show")
-        {
-            auto enable =  detail::from_string(std::get<1>(p));
-            if (enable)
-                show();
-            else
-                hide();
-            return true;
-        }
-        return false;
-    }), props.end());
 }
 
 Window::Window(Window&&) noexcept = default;

@@ -10,6 +10,7 @@
 #include "detail/egtlog.h"
 #include "egt/app.h"
 #include "egt/detail/filesystem.h"
+#include "egt/detail/screen/composerscreen.h"
 #include "egt/detail/screen/kmsscreen.h"
 #include "egt/detail/screen/memoryscreen.h"
 #include "egt/detail/string.h"
@@ -25,7 +26,7 @@
 #include <clocale>
 #include <csignal>
 #include <iostream>
-#ifdef HAVE_LIBINTL_H
+#ifdef HAVE_LIBINTL
 #include <libintl.h>
 #endif
 #include <regex>
@@ -177,8 +178,11 @@ void Application::setup_logging()
     }
 }
 
-void Application::setup_search_paths()
+void Application::setup_search_paths(const std::vector<std::string>& extra_paths)
 {
+    // clear the current search paths
+    clear_search_paths();
+
     // any added search paths take priority
     auto path = getenv("EGT_SEARCH_PATH");
     if (path && strlen(path))
@@ -189,6 +193,10 @@ void Application::setup_search_paths()
         for (auto& token : tokens)
             add_search_path(token);
     }
+
+    // add extra search paths
+    for (auto& path : extra_paths)
+        add_search_path(path);
 
     // search cwd
     add_search_path(detail::cwd());
@@ -237,6 +245,7 @@ void Application::setup_backend(bool primary)
         {"sdl2", [this, &size]() { return std::make_unique<detail::SDLScreen>(*this, size); }},
 #endif
         {"memory", [&size]() { return std::make_unique<detail::MemoryScreen>(size); }},
+        {"composer", [&size]() { return std::make_unique<detail::ComposerScreen>(size); }},
     };
 
     if (backend != "none")
@@ -364,14 +373,19 @@ void Application::signal_handler(const asio::error_code& error, int signum)
                                    std::placeholders::_1, std::placeholders::_2));
 }
 
+bool Application::is_composer() const
+{
+    return m_screen->is_composer();
+}
+
 int Application::run()
 {
     return m_event.run();
 }
 
-void Application::quit()
+void Application::quit(int exit_value)
 {
-    m_event.quit();
+    m_event.quit(exit_value);
 }
 
 void Application::paint_to_file(const std::string& filename)

@@ -9,6 +9,7 @@
 #include "egt/detail/alignment.h"
 #include "egt/detail/imagecache.h"
 #include "egt/detail/meta.h"
+#include "egt/detail/screen/composerscreen.h"
 #include "egt/frame.h"
 #include "egt/painter.h"
 #include "egt/serialize.h"
@@ -21,18 +22,42 @@ inline namespace v1
 {
 
 Size Button::default_button_size_value;
+Signal<>::RegisterHandle Button::default_button_size_handle = Signal<>::INVALID_HANDLE;
 AlignFlags Button::default_text_align_value = AlignFlag::center;
+
+void Button::register_handler()
+{
+    if (default_button_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        default_button_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            default_button_size_value.clear();
+        });
+    }
+}
+
+void Button::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(default_button_size_handle);
+    default_button_size_handle = Signal<>::INVALID_HANDLE;
+}
 
 Size Button::default_size()
 {
     if (default_button_size_value.empty())
+    {
+        register_handler();
         default_button_size_value =  egt::Application::instance().screen()->size() * 0.12;
+    }
 
     return default_button_size_value;
 }
 
 void Button::default_size(const Size& size)
 {
+    if (!size.empty())
+        unregister_handler();
+
     default_button_size_value = size;
 }
 
@@ -80,15 +105,11 @@ Button::Button(Frame& parent,
     parent.add(*this);
 }
 
-Button::Button(Serializer::Properties& props) noexcept
-    : TextWidget(props)
+Button::Button(Serializer::Properties& props, bool is_derived) noexcept
+    : TextWidget(props, true)
 {
-    name("Button" + std::to_string(m_widgetid));
-
-    fill_flags(Theme::FillFlag::blend);
-    border_radius(4.0);
-
-    grab_mouse(true);
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void Button::handle(Event& event)
@@ -191,6 +212,11 @@ Button::~Button() noexcept
         m_group->remove(this);
 }
 
+ImageButton::ImageButton(ImageButton&& rhs) noexcept
+    : Button(std::move(static_cast<Button&>(rhs))),
+      ImageHolder(static_cast<TextWidget&>(*this), std::move(rhs))
+{}
+
 ImageButton::ImageButton(const std::string& text,
                          const AlignFlags& text_align) noexcept
     : ImageButton(Image(), text, text_align)
@@ -207,12 +233,15 @@ ImageButton::ImageButton(const Image& image,
                          const Rect& rect,
                          const AlignFlags& text_align) noexcept
     : Button(text, rect, text_align),
-      ImageHolder(*static_cast<Widget*>(this))
+      ImageHolder(static_cast<TextWidget&>(*this))
 {
     name("ImageButton" + std::to_string(m_widgetid));
 
     if (text.empty())
+    {
+        show_label(false);
         image_align(AlignFlag::center | AlignFlag::expand);
+    }
     do_set_image(image);
 }
 
@@ -235,21 +264,19 @@ ImageButton::ImageButton(Frame& parent,
     parent.add(*this);
 }
 
-ImageButton::ImageButton(Serializer::Properties& props) noexcept
-    : Button(props),
-      ImageHolder(*static_cast<Widget*>(this))
+ImageButton::ImageButton(Serializer::Properties& props, bool is_derived) noexcept
+    : Button(props, true),
+      ImageHolder(static_cast<TextWidget&>(*this))
 {
-    name("ImageButton" + std::to_string(m_widgetid));
-
-    if (m_text.empty())
-        image_align(AlignFlag::center);
-
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 Size ImageButton::min_size_hint() const
 {
-    return ImageHolder::min_size_hint();
+    return ImageHolder::min_size_hint(Button::min_size_hint());
 }
 
 void ImageButton::draw(Painter& painter, const Rect& rect)
@@ -268,6 +295,7 @@ void ImageButton::default_draw(ImageButton& widget, Painter& painter, const Rect
 
 void ImageButton::serialize(Serializer& serializer) const
 {
+    Button::serialize(serializer);
     ImageHolder::serialize(serializer);
 }
 

@@ -78,7 +78,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit SideBoard(Serializer::Properties& props) noexcept;
+    explicit SideBoard(Serializer::Properties& props) noexcept
+        : SideBoard(props, false)
+    {
+    }
+
+protected:
+
+    explicit SideBoard(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     void handle(Event& event) override;
 
@@ -120,7 +129,7 @@ protected:
 private:
     void initialize();
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /// Overloaded std::ostream insertion operator

@@ -78,7 +78,7 @@ Widget::Widget(const Rect& rect, const Widget::Flags& flags) noexcept
     });
 }
 
-Widget::Widget(Serializer::Properties& props) noexcept
+Widget::Widget(Serializer::Properties& props, bool is_derived) noexcept
     : m_widgetid(global_widget_id++)
 {
     deserialize(props);
@@ -99,6 +99,9 @@ Widget::Widget(Serializer::Properties& props) noexcept
     {
         m_focus = false;
     });
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 Widget::Widget(Frame& parent, const Rect& rect, const Widget::Flags& flags) noexcept
@@ -296,9 +299,14 @@ void Widget::autoresize(bool value)
     if (flags().is_set(Widget::Flag::no_autoresize) == value)
     {
         if (value)
+        {
             flags().clear(Widget::Flag::no_autoresize);
+            layout();
+        }
         else
+        {
             flags().set(Widget::Flag::no_autoresize);
+        }
     }
 }
 
@@ -408,7 +416,13 @@ const Pattern& Widget::color(Palette::ColorId id, Palette::GroupId group) const
             return *color;
     }
 
-    return default_palette().color(id, group);
+    if (parent())
+        return parent()->color(id, group);
+
+    if (global_palette())
+        return global_palette()->color(id, group);
+
+    return global_theme().palette().color(id, group);
 }
 
 void Widget::color(Palette::ColorId id,
@@ -430,9 +444,18 @@ void Widget::color(Palette::ColorId id,
     }
 }
 
-const Palette& Widget::default_palette() const
+const Palette& Widget::palette() const
 {
-    return theme().palette();
+    if (m_palette)
+        return *m_palette;
+
+    if (parent())
+        return parent()->palette();
+
+    if (global_palette())
+        return *global_palette();
+
+    return global_theme().palette();
 }
 
 Frame* Widget::parent()
@@ -527,21 +550,6 @@ void Widget::walk(const WalkCallback& callback, int level)
     callback(this, level);
 }
 
-void Widget::theme(const Theme& theme)
-{
-    m_theme = std::make_unique<Theme>(theme);
-    damage();
-}
-
-void Widget::reset_theme()
-{
-    if (m_theme)
-    {
-        m_theme.reset();
-        damage();
-    }
-}
-
 void Widget::draw_box(Painter& painter, Palette::ColorId bg,
                       Palette::ColorId border) const
 {
@@ -556,12 +564,6 @@ void Widget::draw_circle(Painter& painter, Palette::ColorId bg,
 
 const Theme& Widget::theme() const
 {
-    if (m_theme)
-        return *m_theme;
-
-    if (parent())
-        return parent()->theme();
-
     return global_theme();
 }
 
@@ -595,6 +597,12 @@ size_t Widget::zorder() const
         return m_parent->zorder(this);
 
     return 0;
+}
+
+void Widget::zorder(size_t rank)
+{
+    if (m_parent)
+        m_parent->zorder(this, rank);
 }
 
 void Widget::detach()
@@ -651,6 +659,17 @@ void Widget::checked(bool value)
     }
 }
 
+void Widget::focus(bool value)
+{
+    if (focus() != value)
+    {
+        if (value)
+            detail::keyboard_focus(this);
+        else
+            detail::keyboard_focus(nullptr);
+    }
+}
+
 std::string Widget::type() const
 {
     auto t = detail::demangle(typeid(*this).name());
@@ -660,6 +679,7 @@ std::string Widget::type() const
 
 void Widget::serialize(Serializer& serializer) const
 {
+    serializer.add_property("show", visible());
     if (x())
         serializer.add_property("x", x());
     if (y())
@@ -688,6 +708,8 @@ void Widget::serialize(Serializer& serializer) const
         serializer.add_property("margin", margin());
     if (border())
         serializer.add_property("border", border());
+    if (!detail::float_equal(border_radius(), 0))
+        serializer.add_property("border_radius", border_radius());
     if (xratio())
         serializer.add_property("ratio:x", xratio());
     if (yratio())
@@ -709,22 +731,23 @@ void Widget::serialize(Serializer& serializer) const
     {
         m_palette->serialize("color", serializer);
     }
-    if (m_theme)
+}
+
+void Widget::deserialize_leaf(Serializer::Properties& props)
+{
+    props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
     {
-        // add new node theme
-        serializer.add_node("theme");
-        m_theme->serialize(serializer);
-
-        // return back widget node to add other widget properties.
-        serializer.previous_node();
-
-        /*
-         * widget font can be set either through theme or through m_font
-         * if m_font is set ignore theme font.
-         */
-        if (!m_font)
-            m_theme->font().serialize("font", serializer);
-    }
+        if (std::get<0>(p) == "show")
+        {
+            auto enable =  detail::from_string(std::get<1>(p));
+            if (enable)
+                show();
+            else
+                hide();
+            return true;
+        }
+        return false;
+    }), props.end());
 }
 
 void Widget::deserialize(Serializer::Properties& props)
@@ -779,6 +802,9 @@ void Widget::deserialize(Serializer::Properties& props)
             break;
         case detail::hash("border"):
             border(std::stoi(value));
+            break;
+        case detail::hash("border_radius"):
+            border_radius(std::stof(value));
             break;
         case detail::hash("fillflags"):
             m_fill_flags.from_string(value);
@@ -893,6 +919,31 @@ Point Widget::display_to_local(const DisplayPoint& p)
     }
 
     return p2 - point();
+}
+
+const Font& Widget::font() const
+{
+    if (m_font)
+        return *m_font;
+
+    if (parent())
+        return parent()->font();
+
+    if (global_font())
+        return *global_font();
+
+    return global_theme().font();
+}
+
+void Widget::on_screen_resized()
+{
+    if (m_font)
+    {
+        m_font->on_screen_resized();
+        damage();
+        layout();
+        parent_layout();
+    }
 }
 
 }

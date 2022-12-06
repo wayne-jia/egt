@@ -23,6 +23,7 @@ namespace egt
 inline namespace v1
 {
 
+class Notebook;
 /**
  * A single layer of a Notebook.
  */
@@ -39,13 +40,38 @@ public:
     }
 
     explicit NotebookTab(Serializer::Properties& props) noexcept
-        : Frame(props)
+        : NotebookTab(props, false)
     {
-        name("NotebookTab" + std::to_string(m_widgetid));
-
-        // tabs are not transparent by default
-        fill_flags(Theme::FillFlag::solid);
     }
+
+    using Frame::add;
+    void add(const std::shared_ptr<Widget>& widget) override
+    {
+        if (!widget)
+            return;
+
+        if (widget.get() == this)
+            throw std::runtime_error("cannot add a widget to itself");
+
+        assert(!widget->parent() && "widget already has parent!");
+
+        auto cell = std::dynamic_pointer_cast<NotebookTab>(widget);
+        if (cell)
+            throw std::invalid_argument("cannot have nested NotebookTab");
+
+        Frame::add(widget);
+    }
+
+protected:
+
+    explicit NotebookTab(Serializer::Properties& props, bool is_derived) noexcept
+        : Frame(props, true)
+    {
+        if (!is_derived)
+            deserialize_leaf(props);
+    }
+
+public:
 
     /**
      * @return true if allowed to leave, false otherwise.
@@ -101,7 +127,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit Notebook(Serializer::Properties& props) noexcept;
+    explicit Notebook(Serializer::Properties& props) noexcept
+        : Notebook(props, false)
+    {
+    }
+
+protected:
+
+    explicit Notebook(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     using Frame::add;
 
@@ -130,6 +165,13 @@ public:
      * @param index The index of the widget.
      */
     EGT_NODISCARD NotebookTab* get(size_t index) const;
+
+    void serialize(Serializer& serializer) const override;
+
+    /**
+     * Resume deserializing of the widget after its children have been deserialized.
+     */
+    void post_deserialize(Serializer::Properties& props) override;
 
 protected:
 

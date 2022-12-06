@@ -21,29 +21,34 @@ Dialog::Dialog(const Rect& rect) noexcept
     initialize();
 }
 
-Dialog::Dialog(Serializer::Properties& props) noexcept
-    : Popup(props),
+Dialog::Dialog(Serializer::Properties& props, bool is_derived) noexcept
+    : Popup(props, true),
       m_grid(std::make_shared<egt::StaticGrid>(Size(0, (box().height() * 0.15)), StaticGrid::GridSize(2, 1))),
       m_button1("OK"),
       m_button2("Cancel")
 {
-    name("Dialog" + std::to_string(m_widgetid));
-    initialize();
+    initialize(false);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
-void Dialog::initialize()
+void Dialog::initialize(bool init_inherited_properties)
 {
     m_grid->margin(5);
     m_grid->horizontal_space(5);
     m_grid->vertical_space(5);
 
-    border(theme().default_border());
-    padding(5);
+    if (init_inherited_properties)
+    {
+        border(theme().default_border());
+        padding(5);
+    }
 
     m_layout.align(AlignFlag::expand);
     add(m_layout);
 
-    m_title.text_align(AlignFlag::left | AlignFlag::center);
+    m_title.text_align(AlignFlag::left | AlignFlag::center_vertical);
     m_layout.add(expand_horizontal(m_title));
 
     m_layout.add(expand(m_content));

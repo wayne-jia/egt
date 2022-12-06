@@ -24,6 +24,8 @@ namespace egt
 inline namespace v1
 {
 
+class SvgImage;
+
 /**
  * Raster image resource used for drawing or displaying.
  *
@@ -74,8 +76,9 @@ public:
      * @param uri Resource path. @see @ref resources
      * @param hscale Horizontal scale of the image, with 1.0 being 100%.
      * @param vscale Vertical scale of the image, with 1.0 being 100%.
+     * @param approx Approximate the scale to increase image cache hit efficiency.
      */
-    void load(const std::string& uri, float hscale = 1.0, float vscale = 1.0);
+    void load(const std::string& uri, float hscale = 1.0, float vscale = 1.0, bool approx = false);
 
     /**
      * @param surface A pre-existing surface.
@@ -136,7 +139,6 @@ public:
             float hs = static_cast<float>(size.width()) / static_cast<float>(m_orig_size.width());
             float vs = static_cast<float>(size.height()) / static_cast<float>(m_orig_size.height());
             scale(hs, vs);
-            m_pattern.reset();
         }
     }
 
@@ -246,6 +248,10 @@ public:
         return m_uri;
     }
 
+    void uri(const std::string& uri) { load(uri, m_hscale, m_vscale); }
+
+    void reset_uri() { uri({}); }
+
     Image crop(const RectF& rect);
 
     Image crop(const Rect& rect)
@@ -265,6 +271,7 @@ public:
                      const Serializer::Attributes& attrs);
 
 protected:
+    void handle_surface_changed();
 
     /// If a URI was used, the URI.
     std::string m_uri;
@@ -289,6 +296,22 @@ protected:
 
     /// Internal pattern representation.
     mutable shared_cairo_pattern_t m_pattern;
+
+private:
+    /**
+     * Private constructor to internally convert a SvgImage instance
+     * into an Image instance.
+     *
+     * @param surface The surface created by the SvgImage instance.
+     * @param uri The original URI copied from the SvgImage instance.
+     */
+    Image(shared_cairo_surface_t surface, const std::string& uri)
+        : Image(surface)
+    {
+        m_uri = uri;
+    }
+
+    friend class SvgImage;
 };
 
 static_assert(detail::rule_of_5<Image>(), "must fulfill rule of 5");

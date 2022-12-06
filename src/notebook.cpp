@@ -34,10 +34,11 @@ Notebook::Notebook(Frame& parent, const Rect& rect) noexcept
     parent.add(*this);
 }
 
-Notebook::Notebook(Serializer::Properties& props) noexcept
-    : Frame(props)
+Notebook::Notebook(Serializer::Properties& props, bool is_derived) noexcept
+    : Frame(props, true)
 {
-    name("Notebook" + std::to_string(m_widgetid));
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void Notebook::add(const std::shared_ptr<Widget>& widget)
@@ -147,6 +148,25 @@ void Notebook::selected(Widget* widget)
     auto i = std::find_if(m_cells.begin(), m_cells.end(), predicate);
     if (i != m_cells.end())
         selected(std::distance(m_cells.begin(), i));
+}
+
+void Notebook::serialize(Serializer& serializer) const
+{
+    serializer.add_property("selected", static_cast<int>(selected()));
+    Frame::serialize(serializer);
+}
+
+void Notebook::post_deserialize(Serializer::Properties& props)
+{
+    props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
+    {
+        if (std::get<0>(p) == "selected")
+        {
+            selected(std::stoi(std::get<1>(p)));
+            return true;
+        }
+        return false;
+    }), props.end());
 }
 
 NotebookTab* Notebook::get(size_t index) const

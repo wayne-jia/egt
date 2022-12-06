@@ -86,7 +86,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit ComboBox(Serializer::Properties& props) noexcept;
+    explicit ComboBox(Serializer::Properties& props) noexcept
+        : ComboBox(props, false)
+    {
+    }
+
+protected:
+
+    explicit ComboBox(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     void handle(Event& event) override;
 
@@ -125,6 +134,24 @@ public:
      * Append a new item to the ComboBox.
      */
     void add_item(const std::shared_ptr<StringItem>& item);
+
+    /**
+     * Append a new item to the ComboBox.
+     *
+     * @param item The item.
+     *
+     * @warning This does not manage the lifetime of StringItem. It is up to
+     * the caller to make sure this StringItem is available for as long as the
+     * instance of this class is around.
+     */
+    void add_item(StringItem& item)
+    {
+        // Nasty, but it gets the job done.  If a widget is passed in as a
+        // reference, we don't own it, so create a "pointless" shared_ptr that
+        // will not delete it.
+        auto i = std::shared_ptr<StringItem>(&item, [](StringItem*) {});
+        add_item(i);
+    }
 
     /**
      * Remove an item from a ComboBox.
@@ -179,10 +206,13 @@ protected:
 private:
 
     static Size default_combobox_size_value;
+    static Signal<>::RegisterHandle default_combobox_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 
-    void initialize();
+    void initialize(bool init_inherited_properties = true);
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 }

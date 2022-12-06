@@ -55,7 +55,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit TextWidget(Serializer::Properties& props) noexcept;
+    explicit TextWidget(Serializer::Properties& props) noexcept
+        : TextWidget(props, false)
+    {
+    }
+
+protected:
+
+    explicit TextWidget(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     /**
      * Set the text.
@@ -116,7 +125,7 @@ protected:
 
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 }

@@ -16,6 +16,7 @@
 #include <egt/detail/enum.h>
 #include <egt/detail/math.h>
 #include <egt/detail/meta.h>
+#include <egt/detail/screen/composerscreen.h>
 #include <egt/flags.h>
 #include <egt/frame.h>
 #include <egt/painter.h>
@@ -51,6 +52,12 @@ struct SliderBase
 
         /// Show value label.
         show_label = detail::bit(4),
+
+        /**
+         * Horizontal slider origin (value start()), is to the left. Vertical is at
+         * the botton. Setting this flag will flip this origin.
+         */
+        inverted = detail::bit(5),
 
         /// Solid color line.
         consistent_line = detail::bit(6),
@@ -134,7 +141,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit SliderType(Serializer::Properties& props) noexcept;
+    explicit SliderType(Serializer::Properties& props) noexcept
+        : SliderType(props, false)
+    {
+    }
+
+protected:
+
+    explicit SliderType(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     void handle(Event& event) override
     {
@@ -156,12 +172,18 @@ public:
             if (m_orient == Orientation::horizontal)
             {
                 const auto diff = event.pointer().point - event.pointer().drag_start;
-                update_value(to_value(m_start_offset + diff.x()));
+                if (slider_flags().is_set(SliderFlag::inverted))
+                    update_value(to_value(m_start_offset - diff.x()));
+                else
+                    update_value(to_value(m_start_offset + diff.x()));
             }
             else
             {
                 const auto diff = event.pointer().point - event.pointer().drag_start;
-                update_value(to_value(m_start_offset - diff.y()));
+                if (slider_flags().is_set(SliderFlag::inverted))
+                    update_value(to_value(m_start_offset + diff.y()));
+                else
+                    update_value(to_value(m_start_offset - diff.y()));
             }
             break;
         default:
@@ -200,6 +222,11 @@ public:
     {
         m_live_update = enable;
     }
+
+    /**
+     *  get live update value.
+     */
+    EGT_NODISCARD bool live_update() const { return m_live_update; }
 
     /**
      * Get the Orientation.
@@ -351,8 +378,11 @@ protected:
 private:
     /// Default size.
     static Size m_default_size;
+    static Signal<>::RegisterHandle m_default_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -391,10 +421,33 @@ template <class T>
 Size SliderType<T>::m_default_size;
 
 template <class T>
+Signal<>::RegisterHandle SliderType<T>::m_default_size_handle = Signal<>::INVALID_HANDLE;
+
+template <class T>
+void SliderType<T>::register_handler()
+{
+    if (m_default_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        m_default_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            m_default_size.clear();
+        });
+    }
+}
+
+template <class T>
+void SliderType<T>::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(m_default_size_handle);
+    m_default_size_handle = Signal<>::INVALID_HANDLE;
+}
+
+template <class T>
 Size SliderType<T>::default_size()
 {
     if (SliderType<T>::m_default_size.empty())
     {
+        register_handler();
         auto ss = egt::Application::instance().screen()->size();
         SliderType<T>::m_default_size = Size(ss.width() * 0.20, ss.height() * 0.10);
     }
@@ -405,6 +458,9 @@ Size SliderType<T>::default_size()
 template <class T>
 void SliderType<T>::default_size(const Size& size)
 {
+    if (!size.empty())
+        unregister_handler();
+
     SliderType<T>::m_default_size = size;
 }
 
@@ -422,17 +478,13 @@ SliderType<T>::SliderType(const Rect& rect, T start, T end, T value,
 }
 
 template <class T>
-SliderType<T>::SliderType(Serializer::Properties& props) noexcept
-    : ValueRangeWidget<T>(props)
+SliderType<T>::SliderType(Serializer::Properties& props, bool is_derived) noexcept
+    : ValueRangeWidget<T>(props, true)
 {
-
-    this->name("Slider" + std::to_string(this->m_widgetid));
-    this->fill_flags(Theme::FillFlag::blend);
-    this->grab_mouse(true);
-    this->slider_flags().set(SliderFlag::rectangle_handle);
-    this->border_radius(4.0);
-
     deserialize(props);
+
+    if (!is_derived)
+        this->deserialize_leaf(props);
 }
 
 
@@ -566,6 +618,8 @@ Rect SliderType<T>::handle_box(T value) const
     if (m_orient == Orientation::horizontal)
     {
         auto xv = b.x() + to_offset(value);
+        if (slider_flags().is_set(SliderFlag::inverted))
+            xv = b.x() + b.width() - to_offset(value) - dimw;
 
         if (slider_flags().is_set(SliderFlag::show_labels) ||
             slider_flags().is_set(SliderFlag::show_label))
@@ -586,6 +640,8 @@ Rect SliderType<T>::handle_box(T value) const
     else
     {
         auto yv = b.y() + b.height() - to_offset(value) - dimh;
+        if (slider_flags().is_set(SliderFlag::inverted))
+            yv = b.y() + to_offset(value);
 
         if (slider_flags().is_set(SliderFlag::show_labels) ||
             slider_flags().is_set(SliderFlag::show_label))
@@ -661,6 +717,9 @@ void SliderType<T>::draw_line(Painter& painter, float xp, float yp)
 
         painter.line_width(handle_rect.width() / 5.0);
     }
+
+    if (slider_flags().is_set(SliderFlag::inverted))
+        std::swap(a1, b2);
 
     if (slider_flags().is_set(SliderFlag::consistent_line))
     {

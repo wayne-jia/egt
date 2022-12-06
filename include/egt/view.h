@@ -84,7 +84,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit ScrolledView(Serializer::Properties& props) noexcept;
+    explicit ScrolledView(Serializer::Properties& props) noexcept
+        : ScrolledView(props, false)
+    {
+    }
+
+protected:
+
+    explicit ScrolledView(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     void handle(Event& event) override;
 
@@ -128,6 +137,11 @@ public:
     EGT_NODISCARD Point offset_max() const;
 
     /**
+     * Get the horizontal offset.
+     */
+    int hoffset() const { return m_offset.x(); }
+
+    /**
      * Set the horizontal offset.
      *
      * @note The offset moves in the negative direction from zero.
@@ -138,6 +152,11 @@ public:
     }
 
     /**
+     * Get the vertical offset.
+     */
+    int voffset() const { return m_offset.y(); }
+
+    /**
      * Set the vertical offset.
      *
      * @note The offset moves in the negative direction from zero.
@@ -145,6 +164,34 @@ public:
     void voffset(int offset)
     {
         this->offset(Point(m_offset.x(), offset));
+    }
+
+    /**
+     * Get the horizontal policy.
+     */
+    EGT_NODISCARD Policy hpolicy() const { return m_horizontal_policy; }
+
+    /**
+     * Set the horizontal policy.
+     */
+    void hpolicy(Policy policy)
+    {
+        if (detail::change_if_diff<>(m_horizontal_policy, policy))
+            layout();
+    }
+
+    /**
+     * Get the vertical policy.
+     */
+    EGT_NODISCARD Policy vpolicy() const { return m_vertical_policy; }
+
+    /**
+     * Set the vertical policy.
+     */
+    void vpolicy(Policy policy)
+    {
+        if (detail::change_if_diff<>(m_vertical_policy, policy))
+            layout();
     }
 
     /**
@@ -160,6 +207,19 @@ public:
         if (detail::change_if_diff<>(m_slider_dim, dim))
             damage();
     }
+
+    /**
+     * Serialize the widget to the specified serializer.
+     */
+    void serialize(Serializer& serializer) const override;
+
+    /**
+     * Resume deserializing of the widget after its children have been deserialized.
+     */
+    void post_deserialize(Serializer::Properties& props) override;
+
+    static std::string policy2str(Policy policy);
+    static Policy str2policy(const std::string& str);
 
 protected:
 
@@ -200,6 +260,9 @@ protected:
 
     /// Resize the slider whenever the size of this changes.
     void resize_slider();
+
+    /// Deserialize ScrolledView properties.
+    void deserialize(Serializer::Properties& props);
 
     /// Horizontal scrollable
     bool m_hscrollable{false};

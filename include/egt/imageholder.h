@@ -18,6 +18,7 @@
 #include <egt/painter.h>
 #include "egt/serialize.h"
 #include <egt/text.h>
+#include <egt/textwidget.h>
 #include <egt/widget.h>
 
 namespace egt
@@ -25,23 +26,25 @@ namespace egt
 inline namespace v1
 {
 
-template<class T, class U>
 class ImageHolder
 {
-public:
-    ImageHolder(const ImageHolder& rhs)
-        : m_widget(*static_cast<T*>(this)),
+protected:
+    ImageHolder(TextWidget& widget, const ImageHolder& rhs) noexcept
+        : m_widget(widget),
           m_image(rhs.m_image),
           m_show_label(rhs.m_show_label),
           m_image_align(rhs.m_image_align)
     {}
 
-    ImageHolder(ImageHolder&& rhs)
-        : m_widget(*static_cast<T*>(this)),
+    ImageHolder(TextWidget& widget, ImageHolder&& rhs) noexcept
+        : m_widget(widget),
           m_image(std::move(rhs.m_image)),
           m_show_label(rhs.m_show_label),
           m_image_align(std::move(rhs.m_image_align))
     {}
+
+    ImageHolder(const ImageHolder&) = delete;
+    ImageHolder(ImageHolder&&) = delete;
 
     ImageHolder& operator=(const ImageHolder& rhs)
     {
@@ -67,7 +70,87 @@ public:
         return *this;
     }
 
+public:
     virtual ~ImageHolder() = default;
+
+    /**
+     * Get the URI of the current image.
+     */
+    EGT_NODISCARD std::string uri() const
+    {
+        return m_image.uri();
+    }
+
+    /**
+     * Load a new Image from an uri.
+     *
+     * @param[in] uri The URI of the image to load.
+     */
+    void uri(const std::string& uri)
+    {
+        m_image.uri(uri);
+        refresh();
+    }
+
+    /**
+     * Reset the URI, therefore clear the current image, if any.
+     */
+    void reset_uri()
+    {
+        m_image.reset_uri();
+        refresh();
+    }
+
+    /**
+     * Get the horizontal scale value.
+     */
+    EGT_NODISCARD float hscale() const { return m_image.hscale(); }
+
+    /**
+     * Set the horizontal scale value.
+     */
+    void hscale(float hscale)
+    {
+        m_image.scale(hscale, m_image.vscale());
+        refresh();
+    }
+
+    /**
+     * Get the vertical scale value.
+     */
+    EGT_NODISCARD float vscale() const { return m_image.vscale(); }
+
+    /**
+     * Set the vertical scale value.
+     */
+    void vscale(float vscale)
+    {
+        m_image.scale(m_image.hscale(), vscale);
+        refresh();
+    }
+
+    /**
+     * Scale the image in both direction with the same ratio.
+     */
+    void scale(float scale)
+    {
+        m_image.scale(scale);
+        refresh();
+    }
+
+    /**
+     * Scale the image in both direction.
+     */
+    void scale(const SizeF& scale)
+    {
+        m_image.scale(scale.width(), scale.height());
+        refresh();
+    }
+
+    /**
+     * Get both scale values.
+     */
+    EGT_NODISCARD SizeF scale() const { return SizeF(hscale(), vscale()); }
 
     /**
      * Set a new Image.
@@ -129,6 +212,7 @@ public:
             m_image_align.set(AlignFlag::expand);
         else
             m_image_align.clear(AlignFlag::expand);
+        refresh();
     }
 
     /**
@@ -148,6 +232,7 @@ public:
     void keep_image_ratio(bool enable)
     {
         image().keep_image_ratio(enable);
+        refresh();
     }
 
     /**
@@ -192,7 +277,7 @@ public:
     void show_label(bool value)
     {
         if (detail::change_if_diff<>(m_show_label, value))
-            m_widget.damage();
+            refresh();
     }
 
     /**
@@ -206,17 +291,15 @@ public:
                       Palette::ColorId id_border,
                       Palette::ColorId id_text)
     {
-        T& widget = static_cast<T&>(m_widget);
+        auto& widget = m_widget;
 
         detail::ignoreparam(rect);
 
         widget.draw_box(painter, id_bg, id_border);
 
-        if (!widget.text().empty())
+        if (show_label())
         {
-            std::string text;
-            if (show_label())
-                text = widget.text();
+            const std::string& text = widget.text();
 
             if (!image().empty())
             {
@@ -252,9 +335,15 @@ public:
     }
 
 protected:
-    explicit ImageHolder(Widget& widget) noexcept
+    explicit ImageHolder(TextWidget& widget) noexcept
         : m_widget(widget)
     {}
+
+    void refresh()
+    {
+        m_widget.damage();
+        m_widget.layout();
+    }
 
     /// @private
     void do_set_image(const Image& image)
@@ -266,13 +355,21 @@ protected:
         m_widget.damage();
     }
 
-    Size min_size_hint() const
+    Size min_size_hint(const Size& default_min_size_hint) const
     {
         if (!m_widget.m_min_size.empty())
             return m_widget.m_min_size;
 
-        Rect size = static_cast<U&>(m_widget).U::min_size_hint() -
-                    Size(m_widget.moat() * 2, m_widget.moat() * 2);
+        Size min_size_constraint;
+        if (show_label() && !m_widget.text().empty())
+            min_size_constraint = default_min_size_hint;
+        else
+            min_size_constraint = m_widget.Widget::min_size_hint();
+
+        if (!show_label() && auto_scale_image())
+            return min_size_constraint;
+
+        Rect size = min_size_constraint - Size(m_widget.moat() * 2, m_widget.moat() * 2);
 
         if (!m_image.size().empty())
         {
@@ -296,8 +393,6 @@ protected:
 
     void serialize(Serializer& serializer) const
     {
-        static_cast<U&>(m_widget).U::serialize(serializer);
-
         serializer.add_property("showlabel", show_label());
         if (!m_image.empty())
             m_image.serialize("image", serializer);
@@ -308,6 +403,7 @@ protected:
     void deserialize(Serializer::Properties& props)
     {
         // TODO proper loading of all image properties
+        m_image_align.clear();
         props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
         {
             switch (detail::hash(std::get<0>(p)))
@@ -329,7 +425,7 @@ protected:
     }
 
     ///
-    Widget& m_widget;
+    TextWidget& m_widget;
 
     /// The image. Allowed to be empty.
     Image m_image;

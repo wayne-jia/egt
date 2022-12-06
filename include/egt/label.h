@@ -85,7 +85,21 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit Label(Serializer::Properties& props) noexcept;
+    explicit Label(Serializer::Properties& props) noexcept
+        : Label(props, false)
+    {
+    }
+
+protected:
+
+    explicit Label(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
+
+    Label(const Label&) = delete;
+    Label& operator=(const Label&) = delete;
+    Label(Label&&) noexcept = default;
+    Label& operator=(Label&&) noexcept = default;
 
     using TextWidget::text;
 
@@ -127,9 +141,12 @@ protected:
  *
  * @ingroup controls
  */
-class EGT_API ImageLabel : public Label, public ImageHolder<ImageLabel, Label>
+class EGT_API ImageLabel : public Label, public ImageHolder
 {
 public:
+
+    ImageLabel(ImageLabel&&) noexcept;
+    ImageLabel& operator=(ImageLabel&&) noexcept = default;
 
     /**
     * @param[in] text The text to display.
@@ -185,7 +202,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit ImageLabel(Serializer::Properties& props) noexcept;
+    explicit ImageLabel(Serializer::Properties& props) noexcept
+        : ImageLabel(props, false)
+    {
+    }
+
+protected:
+
+    explicit ImageLabel(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -200,7 +226,7 @@ public:
 
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 }

@@ -27,10 +27,10 @@ inline namespace v1
 namespace detail
 {
 
-CameraImpl::CameraImpl(CameraWindow& interface, const Rect& rect,
+CameraImpl::CameraImpl(CameraWindow& iface, const Rect& rect,
                        // NOLINTNEXTLINE(modernize-pass-by-value)
                        const std::string& device)
-    : m_interface(interface),
+    : m_interface(iface),
       m_devnode(device),
       m_rect(rect)
 {
@@ -132,7 +132,8 @@ gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer dat
         {
             asio::post(Application::instance().event().io(), [impl, devnode]()
             {
-                impl->m_interface.on_connect.invoke(devnode);
+                if (!devnode.empty() && devnode != impl->m_devnode)
+                    impl->m_interface.on_connect.invoke(devnode);
             });
         }
 
@@ -280,7 +281,8 @@ void CameraImpl::get_camera_device_caps()
     std::tuple<std::string, std::string, std::string,
         std::vector<std::tuple<int, int>>> caps = detail::get_camera_device_caps(m_devnode, &bus_callback, this);
 
-    m_devnode = std::get<0>(caps);
+    std::string dev = std::get<0>(caps);
+    m_devnode = dev.empty() ? "/dev/video0" : dev;
     m_caps_name = std::get<1>(caps);
     m_caps_format = std::get<2>(caps);
     m_resolutions = std::get<3>(caps);

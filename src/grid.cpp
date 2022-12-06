@@ -24,14 +24,15 @@ StaticGrid::StaticGrid(const Rect& rect, const GridSize& size)
     reallocate(size);
 }
 
-StaticGrid::StaticGrid(Serializer::Properties& props)
-    : Frame(props)
+StaticGrid::StaticGrid(Serializer::Properties& props, bool is_derived)
+    : Frame(props, true)
 {
-    name("StaticGrid" + std::to_string(m_widgetid));
-
     reallocate(GridSize(1, 1));
 
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void StaticGrid::reallocate(const GridSize& size)
@@ -151,6 +152,9 @@ void StaticGrid::add(const std::shared_ptr<Widget>& widget)
 
     assert(!widget->parent() && "widget already has parent!");
 
+    if (widget->align().empty())
+        widget->align(egt::AlignFlag::center);
+
     if (m_column_priority)
     {
         int c = 0;
@@ -209,6 +213,9 @@ void StaticGrid::add(const std::shared_ptr<Widget>& widget)
 
 void StaticGrid::add(const std::shared_ptr<Widget>& widget, size_t column, size_t row)
 {
+    if (widget->align().empty())
+        widget->align(egt::AlignFlag::center);
+
     Frame::add(widget);
 
     if (column >= m_cells.size())
@@ -371,10 +378,36 @@ void StaticGrid::deserialize(Serializer::Properties& props)
 
 }
 
-SelectableGrid::SelectableGrid(Serializer::Properties& props)
-    : StaticGrid(props)
+SelectableGrid::SelectableGrid(const Rect& rect, const GridSize& size)
+    : StaticGrid(rect, size)
+{
+    name("SelectableGrid" + std::to_string(widgetid()));
+}
+
+SelectableGrid::SelectableGrid(const GridSize& size)
+    : SelectableGrid(Rect(), size)
+{
+}
+
+SelectableGrid::SelectableGrid(Frame& parent, const Rect& rect, const GridSize& size)
+    : SelectableGrid(rect, size)
+{
+    parent.add(*this);
+}
+
+SelectableGrid::SelectableGrid(Frame& parent, const GridSize& size)
+    : SelectableGrid(size)
+{
+    parent.add(*this);
+}
+
+SelectableGrid::SelectableGrid(Serializer::Properties& props, bool is_derived)
+    : StaticGrid(props, true)
 {
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void SelectableGrid::handle(Event& event)
@@ -461,11 +494,11 @@ void SelectableGrid::selected(size_t column, size_t row)
 
 void SelectableGrid::serialize(Serializer& serializer) const
 {
-    StaticGrid::serialize(serializer);
-
     serializer.add_property("selected_column", static_cast<int>(m_selected_column));
     serializer.add_property("selected_row", static_cast<int>(m_selected_row));
     serializer.add_property("selection_highlight", selection_highlight());
+
+    StaticGrid::serialize(serializer);
 }
 
 void SelectableGrid::deserialize(Serializer::Properties& props)

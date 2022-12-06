@@ -157,14 +157,14 @@ Scrollwheel::Scrollwheel(const Rect& rect, int min, int max, int step) noexcept
     });
 }
 
-Scrollwheel::Scrollwheel(Serializer::Properties& props) noexcept
-    : StaticGrid(props),
+Scrollwheel::Scrollwheel(Serializer::Properties& props, bool is_derived) noexcept
+    : StaticGrid(props, true),
       m_button_up(Image("res:internal_arrow_up")),
       m_button_down(Image("res:internal_arrow_down"))
 {
     reallocate(StaticGrid::GridSize(1, 3));
 
-    init();
+    init(true);
 
     m_button_up.on_click([this](Event&)
     {
@@ -217,6 +217,9 @@ Scrollwheel::Scrollwheel(Serializer::Properties& props) noexcept
     });
 
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 void Scrollwheel::orient(Orientation orient)
@@ -235,18 +238,21 @@ void Scrollwheel::orient(Orientation orient)
     }
 }
 
-void Scrollwheel::init()
+void Scrollwheel::init(bool in_deserialize)
 {
-    name("Scrollwheel" + std::to_string(m_widgetid));
+    if (!in_deserialize)
+    {
+        name("Scrollwheel" + std::to_string(m_widgetid));
 
-    horizontal_space(1);
-    vertical_space(1);
+        horizontal_space(1);
+        vertical_space(1);
+
+        fill_flags().clear();
+    }
 
     m_button_up.fill_flags().clear();
     m_button_down.fill_flags().clear();
     m_label.fill_flags().clear();
-
-    fill_flags().clear();
 
     m_label.text_align(AlignFlag::center);
     if (!m_items.empty())

@@ -54,6 +54,8 @@ SDLScreen::SDLScreen(Application& app, const Size& size)
     : m_priv(std::make_unique<detail::SDLData>()),
       m_app(app)
 {
+    detail::info("SDL Screen");
+
     init(size);
 
     m_buffers.emplace_back(nullptr);
@@ -71,7 +73,7 @@ SDLScreen::SDLScreen(Application& app, const Size& size)
                                               SDL_WINDOWPOS_UNDEFINED,
                                               size.width(),
                                               size.height(),
-                                              SDL_WINDOW_SHOWN));
+                                              0));
 
         if (!m_priv->window)
             throw std::runtime_error(std::string("unable to create window: ") + SDL_GetError());
@@ -100,8 +102,10 @@ SDLScreen::SDLScreen(Application& app, const Size& size)
                 switch (event.type)
                 {
                 case SDL_QUIT:
-                    asio::post(m_app.event().io(), std::bind(&EventLoop::quit,
-                               std::ref(Application::instance().event())));
+                    asio::post(m_app.event().io(), []()
+                    {
+                        Application::instance().event().quit(0);
+                    });
                     m_quit = true;
                     tn.reset();
                     break;

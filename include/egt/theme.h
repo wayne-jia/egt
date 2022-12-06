@@ -173,6 +173,8 @@ public:
      *
      * If no flags are specified, the default assumption is that all flags are
      * drawn.
+     * The drop_shadow flag prevails over other flags. If it is set, top, right,
+     * bottom, and left flags are ignored.
      */
     enum class BorderFlag : uint32_t
     {
@@ -188,12 +190,23 @@ public:
 
     Theme();
 
-    explicit Theme(Serializer::Properties& props) noexcept;
-
     Theme(const Theme&) = default;
     Theme& operator=(const Theme&) = default;
     Theme(Theme&&) noexcept = default;
     Theme& operator=(Theme&&) noexcept = default;
+
+    /// Get the name of the Object.
+    EGT_NODISCARD const std::string& name() const { return m_name; }
+
+    /**
+     * Set the name of the Object.
+     *
+     * Assigns a human readable name to an Object that can then be used to
+     * find timers by name or debug.
+     *
+     * @param[in] name Name to set for the Object.
+     */
+    void name(const std::string& name) { m_name = name; }
 
     /**
      * Get a reference to the theme Palette.
@@ -307,19 +320,11 @@ public:
         init_draw();
     }
 
-    /**
-     * Serialize theme to a specified serializer.
-     */
-    virtual void serialize(Serializer& serializer) const;
-
-    /**
-     * Deserialize theme properties.
-     */
-    virtual void deserialize(Serializer::Properties& props);
-
     virtual ~Theme() noexcept = default;
 
 protected:
+
+    explicit Theme(const std::string& name);
 
     inline void rounded_box(Painter& painter, const Rect& box, float border_radius) const
     {
@@ -330,6 +335,9 @@ protected:
 
     /// Palette instance used by the theme.
     Palette m_palette;
+
+    /// A user defined name for the Object.
+    std::string m_name;
 
     /// Default font instance used by the theme.
     Font m_font;
@@ -355,6 +363,12 @@ protected:
      */
     virtual void init_draw();
 };
+
+/// BorderFlags operator
+inline Theme::BorderFlags operator|(Theme::BorderFlag lhs, Theme::BorderFlag rhs)
+{
+    return {lhs, rhs};
+}
 
 /// Enum string conversion map
 template<>
@@ -383,7 +397,7 @@ EGT_API Theme& global_theme();
  *
  * @note This will destroy any pre-existing theme instance.
  */
-EGT_API void global_theme(std::shared_ptr<Theme> theme);
+EGT_API void global_theme(std::unique_ptr<Theme>&& theme);
 
 }
 }

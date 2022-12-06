@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([libegt],[1.2])
+AC_INIT([libegt],[1.6])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_SRCDIR([Makefile.am])
@@ -27,7 +27,7 @@ LT_INIT([win32-dll])
 AC_LANG(C++)
 AC_DISABLE_STATIC
 AC_PROG_CXX
-AX_CXX_COMPILE_STDCXX(14, noext)
+AX_CXX_COMPILE_STDCXX(17, noext)
 AX_CODE_COVERAGE
 AC_PROG_AWK
 AC_PROG_CC
@@ -293,6 +293,9 @@ AM_CONDITIONAL([HAVE_SDL2], [test "x${have_sdl2}" = xyes])
 if test "x${have_sdl2}" = xyes; then
    AC_DEFINE(HAVE_SDL2, 1, [Have sdl2 support])
    LIBEGT_EXTRA_CXXFLAGS="${SDL2_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
+if test "x$egt_os_win32" = "xyes"; then
+   SDL2_LIBS=`echo "$SDL2_LIBS" | sed -e 's/-lSDL2main//g'`
+fi
    LIBEGT_EXTRA_LDFLAGS="${SDL2_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
 fi
 

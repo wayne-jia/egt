@@ -21,13 +21,96 @@ inline namespace v1
 
 namespace detail
 {
-class PlPlotBarChart;
-class PlPlotHBarChart;
 class PlPlotImpl;
-class PlPlotLineChart;
 class PlPlotPieChart;
-class PlPlotPointChart;
 }
+
+class ChartItemArray
+{
+public:
+    ChartItemArray()
+    {}
+
+    using DataArray = std::deque<std::pair<double, double>>;
+
+    using StringDataArray = std::deque<std::pair<double, std::string>>;
+
+    bool add(const double& data, const double& data1)
+    {
+        /**
+         * both m_sdata and m_data cannot exist together
+         */
+        if (m_sdata.empty())
+        {
+            m_data.emplace_back(std::make_pair(data, data1));
+            return true;
+        }
+        return false;
+    }
+
+    bool add(const double& data, const std::string& data1)
+    {
+        /**
+         * both m_sdata and m_data cannot exist together
+         */
+        if (m_data.empty())
+        {
+            m_sdata.emplace_back(std::make_pair(data, data1));
+            return true;
+        }
+        return false;
+    }
+
+    void data(DataArray& data)
+    {
+        m_data = data;
+    }
+
+    void data(StringDataArray& data)
+    {
+        m_sdata = data;
+    }
+
+    DataArray get_data()
+    {
+        return m_data;
+    }
+
+    StringDataArray get_sdata()
+    {
+        return m_sdata;
+    }
+
+    DataArray get_data() const
+    {
+        return m_data;
+    }
+
+    StringDataArray get_sdata() const
+    {
+        return m_sdata;
+    }
+
+    EGT_NODISCARD bool IsStringArray() const
+    {
+        if (!m_sdata.empty())
+            return true;
+
+        return false;
+    }
+
+    void clear()
+    {
+        m_data.clear();
+        m_sdata.clear();
+    }
+
+    ~ChartItemArray() = default;
+
+private:
+    DataArray m_data;
+    StringDataArray m_sdata;
+};
 
 /**
  * Abstract base chart class.
@@ -57,21 +140,137 @@ public:
         box_minor_ticks_coord = 3,
     };
 
+    void draw(Painter& painter, const Rect& rect) override;
+
+    virtual void create_impl() = 0;
+
     /**
-     * Set chart grid style.
+     * Set a new set of data to Chart.
+     *
+     * @param[in] data is a data items for Chart.
      */
-    virtual void grid_style(GridFlag flag) = 0;
+    void data(const ChartItemArray& data);
+
+    /**
+     * Add data items to an existing array.
+     *
+     * @param[in] data is a data items for Chart.
+     */
+    void add_data(const ChartItemArray& data);
+
+    /**
+     * Get the data points set for Chart.
+     *
+     * @return DataArray set for Chart.
+     */
+    ChartItemArray data() const;
+
+    /**
+    * Get the number of data points.
+    */
+    size_t data_size() const;
+
+    /**
+     * Remove data items from top in an array.
+     *
+     * @param[in] count is the number of items to remove.
+     */
+    void remove_data(uint32_t count);
+
+    /**
+     * Remove all data items.
+     */
+    void clear();
+
+    /**
+     * Set the grid style.
+     */
+    void grid_style(GridFlag flag);
 
     /**
      * Get chart grid style.
+     *
+     * @return GridFlag
      */
-    virtual GridFlag grid_style() const = 0;
+    GridFlag grid_style() const;
 
-    /// A data pair array.
-    using DataArray = std::deque<std::pair<double, double>>;
+    /**
+     * Set grid width
+     *
+     * @param[in] val size of a grid width.
+     */
+    void grid_width(const int val);
 
-    /// A data pair array for strings.
-    using StringDataArray = std::deque<std::pair<double, std::string>>;
+    /**
+     * Get chart grid width.
+     *
+     * @return grid width
+     */
+    int grid_width() const;
+
+    /**
+     * Set chart labels.
+     *
+     * @param[in] xlabel is x-axis label.
+     * @param[in] ylabel is y-axis label.
+     * @param[in] title is Chart title.
+     */
+    void label(const std::string& xlabel, const std::string& ylabel, const std::string& title);
+
+    /**
+     * Get chart x-axis label.
+     */
+    std::string xlabel() const;
+    /**
+     * Get chart y-axis label.
+     */
+    std::string ylabel() const;
+
+    /**
+     * Get chart title.
+     */
+    std::string title() const;
+
+    /**
+     * Set chart x-axis label.
+     */
+    void xlabel(const std::string& xlabel);
+    /**
+     * Set chart y-axis label.
+     */
+    void ylabel(const std::string& ylabel);
+
+    /**
+     * Set chart title.
+     */
+    void title(const std::string& title);
+
+    /**
+     * Resize the Chart.
+     *
+     * Change width and height of the Chart.
+     *
+     * @param[in] size The new size of the Chart.
+     */
+    void resize(const Size& size) override;
+
+    /**
+     * Add a percent bank beyond the min and maximum values.
+     */
+    void bank(float bank);
+
+    /**
+     * Get bank percent set beyond min and maximum values.
+     */
+    float bank() const;
+
+    void serialize(Serializer& serializer) const;
+
+    void deserialize(Serializer::Properties& props);
+
+protected:
+    /// @private
+    std::unique_ptr<detail::PlPlotImpl> m_impl;
 };
 
 /**
@@ -104,85 +303,24 @@ public:
      *
      * @param[in] props list of widget argument and its properties.
      */
-    LineChart(Serializer::Properties& props);
+    LineChart(Serializer::Properties& props)
+        : LineChart(props, false)
+    {
+    }
 
     LineChart(const LineChart&) = delete;
     LineChart& operator=(const LineChart&) = delete;
-    LineChart(LineChart&&) noexcept;
-    LineChart& operator=(LineChart&&) noexcept;
+    LineChart(LineChart&&) noexcept = default;
+    LineChart& operator=(LineChart&&) noexcept = default;
 
-    void draw(Painter& painter, const Rect& rect) override;
-
-    /**
-     * Set a new set of data to LineChart.
-     *
-     * @param[in] data is a data items for LineChart.
-     */
-    void data(const DataArray& data);
-
-    /**
-     * Get the data points set for LineChart.
-     *
-     * @return DataArray set for LineChart.
-     */
-    ChartBase::DataArray data() const;
-
-    /**
-     * Get the number of data points.
-     */
-    EGT_NODISCARD size_t data_size() const;
-
-    /**
-     * Add data items to an existing array.
-     *
-     * @param[in] data is a data items for LineChart.
-     */
-    void add_data(const DataArray& data);
-
-    /**
-     * Remove data items from top in an array.
-     *
-     * @param[in] count is the number of items to remove.
-     */
-    void remove_data(uint32_t count);
-
-    /**
-     * Remove all data items.
-     */
-    void clear();
-
-    /**
-     * Set the grid style.
-     */
-    void grid_style(GridFlag flag) override;
-
-    /**
-     * Get chart grid style.
-     *
-     * @return GridFlag
-     */
-    GridFlag grid_style() const override;
-
-    /**
-     * Set grid width
-     *
-     * @param[in] val size of a grid width.
-     */
-    void grid_width(int val);
-
-    /**
-     * Get chart grid width.
-     *
-     * @return grid width
-     */
-    int grid_width() const;
+    void create_impl() override;
 
     /**
      * Set line width
      *
      * @param[in] val size of a line width.     *
      */
-    void line_width(int val);
+    void line_width(const int val);
 
     /**
      * Get chart line width.
@@ -205,58 +343,17 @@ public:
      */
     LinePattern line_style() const;
 
-    /**
-     * Set chart labels.
-     *
-     * @param[in] xlabel is x-axis label.
-     * @param[in] ylabel is y-axis label.
-     * @param[in] title is Chart title.
-     */
-    void label(const std::string& xlabel,
-               const std::string& ylabel,
-               const std::string& title);
-
-    /**
-     * Get chart x-axis label.
-     */
-    EGT_NODISCARD std::string xlabel() const;
-
-    /**
-     * Get chart y-axis label.
-     */
-    EGT_NODISCARD std::string ylabel() const;
-
-    /**
-     * Get chart title.
-     */
-    EGT_NODISCARD std::string title() const;
-
-    /**
-     * Resize the LineChart.
-     *
-     * Change width and height of the LineChart.
-     *
-     * @param[in] size The new size of the LineChart.
-     */
-    void resize(const Size& size) override;
-
-    /**
-     * Add a percent bank beyond the min and maximum values.
-     */
-    void bank(float bank);
-
     void serialize(Serializer& serializer) const override;
 
     ~LineChart() override;
 
 protected:
 
-    /// @private
-    std::unique_ptr<detail::PlPlotLineChart> m_impl;
+    LineChart(Serializer::Properties& props, bool is_derived);
 
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -290,52 +387,17 @@ public:
      *
      * @param[in] props list of widget argument and its properties.
      */
-    PointChart(Serializer::Properties& props);
+    PointChart(Serializer::Properties& props)
+        : PointChart(props, false)
+    {
+    }
 
     PointChart(const PointChart&) = delete;
     PointChart& operator=(const PointChart&) = delete;
-    PointChart(PointChart&&) noexcept;
-    PointChart& operator=(PointChart&&) noexcept;
+    PointChart(PointChart&&) noexcept = default;
+    PointChart& operator=(PointChart&&) noexcept = default;
 
-    void draw(Painter& painter, const Rect& rect) override;
-
-    /**
-     * Set a new set of data to PointChart.
-     *
-     * @param[in] data is a data items for PointChart.
-     */
-    void data(const DataArray& data);
-
-    /**
-     * Get the data points set for PointChart.
-     *
-     * @return DataArray set for PointChart.
-     */
-    ChartBase::DataArray data() const;
-
-    /**
-    * Get the number of data points.
-    */
-    EGT_NODISCARD size_t data_size() const;
-
-    /**
-     * Add data items to an existing array.
-     *
-     * @param[in] data is a data items for PointChart.
-     */
-    void add_data(const DataArray& data);
-
-    /**
-     * Remove data items from top in an array.
-     *
-     * @param[in] count is the number of items to remove.
-     */
-    void remove_data(uint32_t count);
-
-    /**
-     * Remove all data items.
-     */
-    void clear();
+    void create_impl() override;
 
     /**
      * Select the point type.
@@ -351,84 +413,17 @@ public:
      */
     EGT_NODISCARD PointChart::PointType point_type() const;
 
-    /**
-     * Set chart labels.
-     *
-     * @param[in] xlabel is x-axis label.
-     * @param[in] ylabel is y-axis label.
-     * @param[in] title is Chart title.
-     */
-    void label(const std::string& xlabel,
-               const std::string& ylabel,
-               const std::string& title);
-
-    /**
-     * Get chart x-axis label.
-     */
-    EGT_NODISCARD std::string xlabel() const;
-
-    /**
-     * Get chart y-axis label.
-     */
-    EGT_NODISCARD std::string ylabel() const;
-
-    /**
-     * Get chart title.
-     */
-    EGT_NODISCARD std::string title() const;
-
-    /**
-    * Set the grid style.
-    */
-    void grid_style(GridFlag flag) override;
-
-    /**
-     * Get chart grid style.
-     *
-     * @return GridFlag
-     */
-    GridFlag grid_style() const override;
-
-    /**
-     * Set grid width
-     *
-     * @param[in] val size of a grid width.
-     */
-    void grid_width(int val);
-
-    /**
-     * Get chart grid width.
-     *
-     * @return grid width
-     */
-    int grid_width() const;
-
-    /**
-     * Resize the PointChart.
-     *
-     * Change width and height of the PointChart.
-     *
-     * @param[in] size The new size of the PointChart.
-     */
-    void resize(const Size& size) override;
-
-    /**
-     * Add a percent bank beyond the min and maximum values.
-     */
-    void bank(float bank);
-
     void serialize(Serializer& serializer) const override;
 
     ~PointChart() override;
 
 protected:
 
-    /// @private
-    std::unique_ptr<detail::PlPlotPointChart> m_impl;
+    PointChart(Serializer::Properties& props, bool is_derived);
 
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -462,100 +457,19 @@ public:
      *
      * @param[in] props list of widget argument and its properties.
      */
-    BarChart(Serializer::Properties& props);
+    BarChart(Serializer::Properties& props)
+        : BarChart(props, false)
+    {
+    }
+
+public:
 
     BarChart(const BarChart&) = delete;
     BarChart& operator=(const BarChart&) = delete;
-    BarChart(BarChart&&) noexcept;
-    BarChart& operator=(BarChart&&) noexcept;
+    BarChart(BarChart&&) noexcept = default;
+    BarChart& operator=(BarChart&&) noexcept = default;
 
-    void draw(Painter& painter, const Rect& rect) override;
-
-
-    /**
-     * Set a new set of data to BarChart.
-     *
-     * @param[in] data is a data items for BarChart.
-     */
-    void data(const DataArray& data);
-
-    /**
-     * Get the data points set for BarChart.
-     *
-     * @return DataArray set for BarChart.
-     */
-    DataArray data() const;
-
-    /**
-    * Get the number of data points.
-    */
-    EGT_NODISCARD size_t data_size() const;
-
-    /**
-     * Add data items to an existing array.
-     *
-     * @param[in] data is a data items for BarChart.
-     */
-    void add_data(const DataArray& data);
-
-    /**
-     * Set a new set of data to BarChart.
-     *
-     * @param[in] data is a data items for BarChart.
-     */
-    void data(const StringDataArray& data);
-
-    /**
-     * Get the data points set for BarChart.
-     *
-     * @return StringDataArray set for BarChart.
-     */
-    StringDataArray sdata() const;
-
-    /**
-     * Add data items to an existing array.
-     *
-     * @param[in] data is a data items for BarChart.
-     */
-    void add_data(const StringDataArray& data);
-
-    /**
-     * Remove data items from top in an array.
-     *
-     * @param[in] count is the number of items to remove.
-     */
-    void remove_data(uint32_t count);
-
-    /**
-     * Remove all data items.
-     */
-    void clear();
-
-    /**
-     * Set chart labels.
-     *
-     * @param[in] xlabel is x-axis label.
-     * @param[in] ylabel is y-axis label.
-     * @param[in] title is Chart title.
-     */
-    void label(const std::string& xlabel,
-               const std::string& ylabel,
-               const std::string& title);
-
-    /**
-     * Get chart x-axis label.
-     */
-    EGT_NODISCARD std::string xlabel() const;
-
-    /**
-     * Get chart y-axis label.
-     */
-    EGT_NODISCARD std::string ylabel() const;
-
-    /**
-     * Get chart title.
-     */
-    EGT_NODISCARD std::string title() const;
+    void create_impl() override;
 
     /**
      * Set bar style.
@@ -571,51 +485,13 @@ public:
      */
     EGT_NODISCARD BarPattern bar_style() const;
 
-    /**
-    * Set the grid style.
-    */
-    void grid_style(GridFlag flag) override;
-
-    /**
-     * Get chart grid style.
-     *
-     * @return GridFlag
-     */
-    GridFlag grid_style() const override;
-
-    /**
-     * Set grid width
-     *
-     * @param[in] val size of a grid width.
-     */
-    void grid_width(int val);
-
-    /**
-     * Get chart grid width.
-     *
-     * @return grid width
-     */
-    int grid_width() const;
-
-    /**
-     * Resize the BarChart.
-     *
-     * Change width and height of the BarChart.
-     *
-     * @param[in] size The new size of the BarChart.
-     */
-    void resize(const Size& size) override;
-
-    /**
-     * Add a percent bank beyond the min and maximum values.
-     */
-    void bank(float bank);
-
     void serialize(Serializer& serializer) const override;
 
     ~BarChart() override;
 
 protected:
+
+    BarChart(Serializer::Properties& props, bool is_derived);
 
     /// @private
     BarChart(const Rect& rect, std::unique_ptr<detail::PlPlotImpl>&& impl);
@@ -623,12 +499,9 @@ protected:
     /// @private
     BarChart(Serializer::Properties& props, std::unique_ptr<detail::PlPlotImpl>&& impl);
 
-    /// @private
-    std::unique_ptr<detail::PlPlotImpl> m_impl;
-
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 
@@ -654,12 +527,21 @@ public:
      *
      * @param[in] props list of widget argument and its properties.
      */
-    HorizontalBarChart(Serializer::Properties& props);
+    HorizontalBarChart(Serializer::Properties& props)
+        : HorizontalBarChart(props, false)
+    {
+    }
+
+protected:
+
+    HorizontalBarChart(Serializer::Properties& props, bool is_derived);
+
+public:
 
     HorizontalBarChart(const HorizontalBarChart&) = delete;
     HorizontalBarChart& operator=(const HorizontalBarChart&) = delete;
-    HorizontalBarChart(HorizontalBarChart&&) noexcept;
-    HorizontalBarChart& operator=(HorizontalBarChart&&) noexcept;
+    HorizontalBarChart(HorizontalBarChart&&) noexcept = default;
+    HorizontalBarChart& operator=(HorizontalBarChart&&) noexcept = default;
 
     ~HorizontalBarChart() override;
 };
@@ -673,10 +555,6 @@ public:
 class EGT_API PieChart: public Widget
 {
 public:
-
-    /// String data array type
-    using StringDataArray = ChartBase::StringDataArray;
-
     /**
      * Construct a PieChart with the specified size.
      *
@@ -689,12 +567,15 @@ public:
      *
      * @param[in] props list of widget argument and its properties.
      */
-    PieChart(Serializer::Properties& props);
+    PieChart(Serializer::Properties& props)
+        : PieChart(props, false)
+    {
+    }
 
     PieChart(const PieChart&) = delete;
     PieChart& operator=(const PieChart&) = delete;
-    PieChart(PieChart&&) noexcept;
-    PieChart& operator=(PieChart&&) noexcept;
+    PieChart(PieChart&&) noexcept = default;
+    PieChart& operator=(PieChart&&) noexcept = default;
 
     void draw(Painter& painter, const Rect& rect) override;
 
@@ -715,14 +596,14 @@ public:
      *
      * @param[in] data is a data items for PieChart.
      */
-    void data(const StringDataArray& data);
+    void data(const ChartItemArray& data);
 
     /**
      * Get the data points set for PieChart.
      *
      * @return StringDataArray set for PieChart.
      */
-    StringDataArray sdata() const;
+    ChartItemArray data() const;
 
     /**
      * Get the number of data points.
@@ -734,7 +615,7 @@ public:
      *
      * @param[in] data is a data items for PieChart.
      */
-    void add_data(const StringDataArray& data);
+    void add_data(const ChartItemArray& data);
 
     /**
      * Remove data items from top in an array.
@@ -762,13 +643,14 @@ public:
     ~PieChart() override;
 
 protected:
+    PieChart(Serializer::Properties& props, bool is_derived);
 
     /// @private
     std::unique_ptr<detail::PlPlotPieChart> m_impl;
 
 private:
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 }

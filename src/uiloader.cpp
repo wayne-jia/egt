@@ -5,6 +5,12 @@
  */
 #include "detail/base64.h"
 #include "detail/egtlog.h"
+#include <egt/themes/coconut.h>
+#include <egt/themes/lapis.h>
+#include <egt/themes/midnight.h>
+#include <egt/themes/shamrock.h>
+#include <egt/themes/sky.h>
+#include <egt/themes/ultraviolet.h>
 #include "egt/ui"
 #include "egt/uiloader.h"
 #include <rapidxml.hpp>
@@ -18,65 +24,22 @@ inline namespace v1
 namespace experimental
 {
 
+static const std::pair<const std::string, std::function<std::unique_ptr<egt::Theme>()>> theme_items[] =
+{
+    {"CoconutTheme", []{ return std::make_unique<egt::CoconutTheme>(); }},
+    {"LapisTheme", []{ return std::make_unique<egt::LapisTheme>(); }},
+    {"MidnightTheme", []{ return std::make_unique<egt::MidnightTheme>(); }},
+    {"SkyTheme", []{ return std::make_unique<egt::SkyTheme>(); }},
+    {"ShamrockTheme", []{ return std::make_unique<egt::ShamrockTheme>(); }},
+    {"UltraVioletTheme", []{ return std::make_unique<egt::UltraVioletTheme>(); }}
+};
+
 template <class T>
 static std::shared_ptr<Widget> create_widget(rapidxml::xml_node<>* node,
-        const std::shared_ptr<Frame>& parent)
+        const std::shared_ptr<Frame>& parent,
+        Serializer::Properties& saved_props)
 {
     auto wname = node->first_attribute("name");
-
-    Serializer::Properties tprops;
-    std::string ttype;
-    auto wtheme = node->first_node("theme");
-    if (wtheme)
-    {
-        for (auto tprop = wtheme->first_node("property"); tprop; tprop = tprop->next_sibling("property"))
-        {
-            auto tname = tprop->first_attribute("name");
-            if (!tname)
-            {
-                detail::warn("property with no theme name");
-                continue;
-            }
-
-            std::string pname = tname->value();
-            std::string pvalue;
-            Serializer::Attributes tattrs;
-            if (pname == "color")
-            {
-                auto tpattern = tprop->first_node("pattern");
-                if (tpattern)
-                {
-                    for (auto tpprop = tpattern->first_node("property"); tpprop; tpprop = tpprop->next_sibling("property"))
-                    {
-                        auto tppname = tpprop->first_attribute("name");
-                        if (!tppname)
-                        {
-                            detail::warn("pattern with no name");
-                            continue;
-                        }
-                        tattrs.emplace_back(tppname->value(), tpprop->value());
-                    }
-                }
-                else
-                {
-                    pvalue = tprop->value();
-                }
-            }
-            else
-            {
-                detail::error("invalid theme property : {} = {}", pname, tprop->value());
-                return nullptr;
-            }
-
-            for (const rapidxml::xml_attribute<>* attr = tprop->first_attribute(); attr;
-                 attr = attr->next_attribute())
-            {
-                tattrs.emplace_back(attr->name(), attr->value());
-            }
-
-            tprops.emplace_back(std::make_tuple(pname, pvalue, tattrs));
-        }
-    }
 
     Serializer::Properties props;
     if (node->first_node("property"))
@@ -137,20 +100,7 @@ static std::shared_ptr<Widget> create_widget(rapidxml::xml_node<>* node,
         if (wname)
             instance->name(wname->value());
 
-        if (!props.empty())
-        {
-            for (auto& p : props)
-            {
-                detail::warn("unhandled {} property : {}", instance->type(), std::get<0>(p));
-            }
-        }
-
-        if (wtheme)
-        {
-            egt::Theme dtheme(tprops);
-            dtheme.apply();
-            instance->theme(dtheme);
-        }
+        saved_props = std::move(props);
 
         return std::static_pointer_cast<Widget>(instance);
     }
@@ -159,7 +109,8 @@ static std::shared_ptr<Widget> create_widget(rapidxml::xml_node<>* node,
 
 using CreateFunction =
     std::function<std::shared_ptr<Widget>(rapidxml::xml_node<>* widget,
-            const std::shared_ptr<Frame>& parent)>;
+            const std::shared_ptr<Frame>& parent,
+            Serializer::Properties& saved_props)>;
 
 static const std::pair<std::string, CreateFunction> allocators[] =
 {
@@ -236,6 +187,7 @@ static std::shared_ptr<Widget> parse_widget(rapidxml::xml_node<>* node,
         const std::shared_ptr<Frame>& parent = nullptr)
 {
     std::shared_ptr<Widget> result;
+    Serializer::Properties props;
     std::string ttype;
 
     auto type = node->first_attribute("type");
@@ -252,7 +204,7 @@ static std::shared_ptr<Widget> parse_widget(rapidxml::xml_node<>* node,
     {
         if (i.first == ttype)
         {
-            result = i.second(node, parent);
+            result = i.second(node, parent, props);
             found = true;
         }
     }
@@ -269,7 +221,7 @@ static std::shared_ptr<Widget> parse_widget(rapidxml::xml_node<>* node,
             if (ttype == name)
             {
                 found = true;
-                result = x.second(node, parent);
+                result = x.second(node, parent, props);
                 break;
             }
         }
@@ -284,6 +236,16 @@ static std::shared_ptr<Widget> parse_widget(rapidxml::xml_node<>* node,
     for (auto child = node->first_node("widget"); child; child = child->next_sibling("widget"))
     {
         parse_widget(child, std::dynamic_pointer_cast<Frame>(result));
+    }
+
+    result->post_deserialize(props);
+
+    if (!props.empty())
+    {
+        for (auto& p : props)
+        {
+            detail::warn("unhandled {} property : {}", result->type(), std::get<0>(p));
+        }
     }
 
     return result;
@@ -324,6 +286,114 @@ static std::shared_ptr<Widget> load_document(T& doc)
              resource; resource = resource->next_sibling("resource"))
         {
             parse_resource(resource);
+        }
+    }
+
+    auto gtheme = root->first_node("theme");
+    if (gtheme)
+    {
+        for (auto tprop = gtheme->first_node("property"); tprop; tprop = tprop->next_sibling("property"))
+        {
+            auto tname = tprop->first_attribute("name");
+            if (!tname)
+            {
+                detail::warn("theme property with no name");
+                continue;
+            }
+
+            for (auto& i : theme_items)
+            {
+                if (i.first == tprop->value())
+                {
+                    egt::global_theme(std::move(i.second()));
+                    break;
+                }
+            }
+        }
+    }
+
+    auto gpalette = root->first_node("palette");
+    if (gpalette)
+    {
+        egt::Palette palette;
+        for (auto pprop = gpalette->first_node("property"); pprop; pprop = pprop->next_sibling("property"))
+        {
+            auto tname = pprop->first_attribute("name");
+            if (!tname)
+            {
+                detail::warn("palette property with no name");
+                continue;
+            }
+
+            std::string pname = tname->value();
+            std::string pvalue = pprop->value();
+            Serializer::Attributes pattrs;
+            if (pname == "color")
+            {
+                for (const rapidxml::xml_attribute<>* attr = pprop->first_attribute(); attr;
+                     attr = attr->next_attribute())
+                {
+                    pattrs.emplace_back(attr->name(), attr->value());
+                }
+
+                if (pvalue.empty())
+                {
+                    auto pattern = pprop->first_node("pattern");
+                    if (pattern)
+                    {
+                        for (auto patprop = pattern->first_node("property"); patprop; patprop = patprop->next_sibling("property"))
+                        {
+                            auto patname = patprop->first_attribute("name");
+                            if (!patname)
+                            {
+                                detail::warn("pattern property with no name");
+                                continue;
+                            }
+                            pattrs.emplace_back(patname->value(), patprop->value());
+                        }
+                    }
+                }
+                palette.deserialize(pname, pvalue, pattrs);
+            }
+            else
+            {
+                detail::error("invalid palette property : {} = {}", pname, pprop->value());
+            }
+
+            if (!palette.empty())
+                egt::global_palette(std::make_unique<egt::Palette>(palette));
+        }
+    }
+
+    auto gfont = root->first_node("font");
+    if (gfont)
+    {
+        egt::Font dfont;
+        for (auto fprop = gfont->first_node("property"); fprop; fprop = fprop->next_sibling("property"))
+        {
+            auto fname = fprop->first_attribute("name");
+            if (!fname)
+            {
+                detail::warn("font property with no name");
+                continue;
+            }
+
+            std::string fontname = fname->value();
+            std::string fontvalue;
+            Serializer::Attributes fontattrs;
+            if (fontname == "font")
+            {
+                fontvalue = fprop->value();
+
+                for (const rapidxml::xml_attribute<>* attr = fprop->first_attribute(); attr;
+                     attr = attr->next_attribute())
+                {
+                    fontattrs.emplace_back(attr->name(), attr->value());
+                }
+
+                dfont.deserialize(fontname, fontvalue, fontattrs);
+                egt::global_font(std::make_unique<egt::Font>(dfont));
+            }
         }
     }
 

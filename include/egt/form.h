@@ -47,7 +47,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit Form(Serializer::Properties& props) noexcept;
+    explicit Form(Serializer::Properties& props) noexcept
+        : Form(props, false)
+    {
+    }
+
+protected:
+
+    explicit Form(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     /**
      * Add a group to the Form.
@@ -128,7 +137,7 @@ protected:
     std::vector<Widget*> m_options;
 
     /// Option name text alignment.
-    AlignFlags m_name_align{AlignFlag::center | AlignFlag::left};
+    AlignFlags m_name_align{AlignFlag::center_vertical | AlignFlag::left};
 
     /// Group name text alignment.
     AlignFlags m_group_align{AlignFlag::bottom | AlignFlag::left};

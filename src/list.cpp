@@ -48,16 +48,11 @@ ListBox::ListBox(const ItemArray& items, const Rect& rect) noexcept
         add_item_private(i);
 }
 
-ListBox::ListBox(Serializer::Properties& props) noexcept
-    : Frame(props),
+ListBox::ListBox(Serializer::Properties& props, bool is_derived) noexcept
+    : Frame(props, true),
       m_view(*this, ScrolledView::Policy::never),
       m_sizer(Orientation::vertical, Justification::start)
 {
-    name("ListBox" + std::to_string(m_widgetid));
-
-    fill_flags(Theme::FillFlag::blend);
-    border(theme().default_border());
-
     m_sizer.align(AlignFlag::expand_horizontal);
 
     m_view.add(m_sizer);
@@ -70,6 +65,9 @@ ListBox::ListBox(Serializer::Properties& props) noexcept
     }
 
     deserialize(props);
+
+    if (!is_derived)
+        deserialize_leaf(props);
 }
 
 ListBox::ListBox(Frame& parent, const ItemArray& items, const Rect& rect) noexcept
@@ -246,6 +244,7 @@ void ListBox::deserialize(Serializer::Properties& props)
             Image image;
             AlignFlags text_align;
             auto attrs = std::get<2>(p);
+            bool is_selected = false;
             for (const auto& i : attrs)
             {
                 if (i.first == "image")
@@ -255,10 +254,12 @@ void ListBox::deserialize(Serializer::Properties& props)
                     text_align = AlignFlags(i.second);
 
                 if (i.first == "selected" && detail::from_string(i.second))
-                    selected(item_count() - 1);
+                    is_selected = true;
             }
 
             add_item(std::make_shared<StringItem>(std::get<1>(p), image, Rect(), text_align));
+            if (is_selected)
+                selected(item_count() - 1);
             return true;
         }
         return false;

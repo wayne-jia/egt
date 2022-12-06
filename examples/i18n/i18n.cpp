@@ -76,12 +76,12 @@ int main(int argc, char** argv)
 
     auto logo = std::make_shared<egt::ImageLabel>(egt::Image("icon:egt_logo_black.png;128"));
     logo->margin(10);
-    logo->align(egt::AlignFlag::center | egt::AlignFlag::bottom);
+    logo->align(egt::AlignFlag::center_horizontal | egt::AlignFlag::bottom);
     window.add(logo);
 
     auto next = std::make_shared<egt::ImageButton>(egt::Image("icon:arrow_right.png;64"));
     next->fill_flags().clear();
-    next->align(egt::AlignFlag::right | egt::AlignFlag::center);
+    next->align(egt::AlignFlag::right | egt::AlignFlag::center_vertical);
     window.add(next);
 
     std::vector<std::string> variations =
@@ -167,9 +167,16 @@ int main(int argc, char** argv)
     {
         if (english->checked())
         {
-            std::locale loc_en("en_US.utf8");
-            label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
-            label->text(get_translated_string(loc_en));
+            try
+            {
+                std::locale loc_en("en_US.utf8");
+                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->text(get_translated_string(loc_en));
+            }
+            catch (std::runtime_error&)
+            {
+                std::cout << "can't create locale for en_US.utf8" << std::endl;
+            }
         }
     });
 
@@ -179,9 +186,16 @@ int main(int argc, char** argv)
     {
         if (french->checked())
         {
-            std::locale loc_fr("fr_FR.utf8");
-            label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
-            label->text(get_translated_string(loc_fr));
+            try
+            {
+                std::locale loc_fr("fr_FR.utf8");
+                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->text(get_translated_string(loc_fr));
+            }
+            catch (std::runtime_error&)
+            {
+                std::cout << "can't create locale for fr_FR.utf8" << std::endl;
+            }
         }
     });
 
@@ -191,9 +205,16 @@ int main(int argc, char** argv)
     {
         if (german->checked())
         {
-            std::locale loc_de("de_DE.utf8");
-            label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
-            label->text(get_translated_string(loc_de));
+            try
+            {
+                std::locale loc_de("de_DE.utf8");
+                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->text(get_translated_string(loc_de));
+            }
+            catch (std::runtime_error&)
+            {
+                std::cout << "can't create locale for de_DE.utf8" << std::endl;
+            }
         }
     });
 
@@ -203,9 +224,16 @@ int main(int argc, char** argv)
     {
         if (spanish->checked())
         {
-            std::locale loc_es("es_ES.utf8");
-            label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
-            label->text(get_translated_string(loc_es));
+            try
+            {
+                std::locale loc_es("es_ES.utf8");
+                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->text(get_translated_string(loc_es));
+            }
+            catch (std::runtime_error&)
+            {
+                std::cout << "can't create locale for es_ES.utf8" << std::endl;
+            }
         }
     });
 
@@ -215,9 +243,16 @@ int main(int argc, char** argv)
     {
         if (hindi->checked())
         {
-            std::locale loc_hi("hi_IN.utf8");
-            label->font(egt::Font("Lohit Devanagari", 40, egt::Font::Weight::bold));
-            label->text(get_translated_string(loc_hi));
+            try
+            {
+                std::locale loc_hi("hi_IN.utf8");
+                label->font(egt::Font("Lohit Devanagari", 40, egt::Font::Weight::bold));
+                label->text(get_translated_string(loc_hi));
+            }
+            catch (std::runtime_error&)
+            {
+                std::cout << "can't create locale for hi_IN.utf8" << std::endl;
+            }
         }
     });
 
@@ -227,9 +262,16 @@ int main(int argc, char** argv)
     {
         if (chinese->checked())
         {
-            std::locale loc_zh("zh_CN.utf8");
-            label->font(egt::Font("Noto Sans CJK SC", 40, egt::Font::Weight::bold));
-            label->text(get_translated_string(loc_zh));
+            try
+            {
+                std::locale loc_zh("zh_CN.utf8");
+                label->font(egt::Font("Noto Sans CJK SC", 40, egt::Font::Weight::bold));
+                label->text(get_translated_string(loc_zh));
+            }
+            catch (std::runtime_error&)
+            {
+                std::cout << "can't create locale for es_ES.utf8" << std::endl;
+            }
         }
     });
 
@@ -250,9 +292,10 @@ int main(int argc, char** argv)
             vsizer.hide();
             hsizer.show();
             next->image(egt::Image(egt::Image("icon:arrow_left.png;64")));
-            next->align(egt::AlignFlag::left | egt::AlignFlag::center);
+            next->align(egt::AlignFlag::left | egt::AlignFlag::center_vertical);
             flag = false;
-            std::string lang = std::getenv("LANG");
+            auto env = std::getenv("LANG");
+            std::string lang = env ? env : "";
             if (!lang.empty())
             {
                 if (lang.compare(0, 3, "fr_") == 0)
@@ -286,7 +329,7 @@ int main(int argc, char** argv)
         {
             hsizer.hide();
             next->image(egt::Image(egt::Image("icon:arrow_right.png;64")));
-            next->align(egt::AlignFlag::right | egt::AlignFlag::center);
+            next->align(egt::AlignFlag::right | egt::AlignFlag::center_vertical);
             flag = true;
             vsizer.show();
             sequence.start();

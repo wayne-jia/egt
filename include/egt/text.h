@@ -208,7 +208,16 @@ public:
     /**
      * @param[in] props list of widget argument and its properties.
      */
-    explicit TextBox(Serializer::Properties& props) noexcept;
+    explicit TextBox(Serializer::Properties& props) noexcept
+        : TextBox(props, false)
+    {
+    }
+
+protected:
+
+    explicit TextBox(Serializer::Properties& props, bool is_derived) noexcept;
+
+public:
 
     TextBox(const TextBox&) = delete;
     TextBox& operator=(const TextBox&) = delete;
@@ -240,6 +249,17 @@ public:
      * Get the max length of allowed text.
      */
     EGT_NODISCARD size_t max_length() const { return m_max_len;}
+
+    /**
+     * Set the text flags.
+     *
+     * @param[in] text_flags Text flags.
+     */
+    void text_flags(const TextFlags& text_flags)
+    {
+        if (detail::change_if_diff<>(m_text_flags, text_flags))
+            damage();
+    }
 
     /**
      * Get a const ref of the flags.
@@ -409,7 +429,7 @@ protected:
     void hide_cursor();
 
     /// Process key events.
-    void handle_key(const Key& key);
+    virtual void handle_key(const Key& key);
 
     /// Validate the input against the validator pattern.
     bool validate_input(const std::string& str);
@@ -469,15 +489,17 @@ private:
     /// Maximum text length, or zero.
     size_t m_max_len{0};
 
+    Rect m_textbox_rect;
+
     /// Gain focus registration.
     Signal<>::RegisterHandle m_gain_focus_reg{};
 
     /// Lost focus registration.
     Signal<>::RegisterHandle m_lost_focus_reg{};
 
-    void initialize();
+    void initialize(bool init_inherited_properties = true);
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 namespace detail

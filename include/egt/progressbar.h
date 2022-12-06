@@ -14,6 +14,7 @@
 #include <egt/detail/alignment.h>
 #include <egt/detail/math.h>
 #include <egt/detail/meta.h>
+#include <egt/detail/screen/composerscreen.h>
 #include <egt/frame.h>
 #include <egt/painter.h>
 #include <egt/serialize.h>
@@ -71,14 +72,22 @@ public:
      * @param[in] props list of widget argument and its properties.
      */
     explicit ProgressBarType(Serializer::Properties& props) noexcept
-        : ValueRangeWidget<T>(props)
+        : ProgressBarType(props, false)
     {
-        this->name("ProgressBar" + std::to_string(this->m_widgetid));
-        this->fill_flags(Theme::FillFlag::blend);
-        this->border(this->theme().default_border());
-
-        deserialize(props);
     }
+
+protected:
+
+    explicit ProgressBarType(Serializer::Properties& props, bool is_derived) noexcept
+        : ValueRangeWidget<T>(props, true)
+    {
+        deserialize(props);
+
+        if (!is_derived)
+            this->deserialize_leaf(props);
+    }
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override
     {
@@ -95,7 +104,7 @@ public:
                                               widget.starting(),
                                               widget.ending(), 0, b.width());
 
-        if (width > 0.f)
+        if ((width > 0.0f) && b.height())
         {
             widget.theme().draw_box(painter,
                                     Theme::FillFlag::blend,
@@ -106,7 +115,14 @@ public:
 
         if (widget.show_label())
         {
-            std::string text = std::to_string(widget.value()) + "%";
+            std::string text = std::to_string(widget.value());
+            if (widget.show_percentage())
+            {
+                auto percentage = detail::normalize<float>(widget.value(),
+                                  widget.starting(),
+                                  widget.ending(), 0, 100);
+                text = std::to_string(static_cast<int>(percentage)) + "%";
+            }
             auto f = TextWidget::scale_font(Size(b.width() * 0.75,
                                                  b.height() * 0.75),
                                             text, widget.font());
@@ -154,6 +170,25 @@ public:
      */
     EGT_NODISCARD bool show_label() const { return m_show_label; }
 
+    /**
+     * Enable/disable showing the label text in percentage.
+     *
+     * @param[in] value When true, the label text is shown in percentage
+     */
+    void show_percentage(bool enable)
+    {
+        if (m_show_percentage != enable)
+        {
+            m_show_percentage = enable;
+            this->damage();
+        }
+    }
+
+    /**
+     * Get the show label in percentage.
+     */
+    EGT_NODISCARD bool show_percentage() const { return m_show_percentage; }
+
     void serialize(Serializer& serializer) const override;
 
 protected:
@@ -162,11 +197,19 @@ protected:
      */
     bool m_show_label{true};
 
+    /**
+     * When true, the value is displayed in percentage.
+     */
+    bool m_show_percentage{false};
+
 private:
     /// Default size.
     static Size m_default_size;
+    static Signal<>::RegisterHandle m_default_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 template <class T>
@@ -227,10 +270,33 @@ template <class T>
 Size ProgressBarType<T>::m_default_size;
 
 template <class T>
+Signal<>::RegisterHandle ProgressBarType<T>::m_default_size_handle = Signal<>::INVALID_HANDLE;
+
+template <class T>
+void ProgressBarType<T>::register_handler()
+{
+    if (m_default_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        m_default_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            m_default_size.clear();
+        });
+    }
+}
+
+template <class T>
+void ProgressBarType<T>::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(m_default_size_handle);
+    m_default_size_handle = Signal<>::INVALID_HANDLE;
+}
+
+template <class T>
 Size ProgressBarType<T>::default_size()
 {
     if (ProgressBarType<T>::m_default_size.empty())
     {
+        register_handler();
         auto ss = egt::Application::instance().screen()->size();
         ProgressBarType<T>::m_default_size = Size(ss.width() * 0.25, ss.height() * 0.05);
     }
@@ -241,6 +307,9 @@ Size ProgressBarType<T>::default_size()
 template <class T>
 void ProgressBarType<T>::default_size(const Size& size)
 {
+    if (!size.empty())
+        unregister_handler();
+
     ProgressBarType<T>::m_default_size = size;
 }
 
@@ -288,14 +357,22 @@ public:
      * @param[in] props list of widget argument and its properties.
      */
     explicit SpinProgressType(Serializer::Properties& props) noexcept
-        : ValueRangeWidget<T>(props)
+        : SpinProgressType(props, false)
     {
-        this->name("SpinProgress" + std::to_string(this->m_widgetid));
-        this->fill_flags(Theme::FillFlag::blend);
-
-        deserialize(props);
     }
 
+protected:
+
+    explicit SpinProgressType(Serializer::Properties& props, bool is_derived) noexcept
+        : ValueRangeWidget<T>(props, true)
+    {
+        deserialize(props);
+
+        if (!is_derived)
+            this->deserialize_leaf(props);
+    }
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override
     {
@@ -315,7 +392,12 @@ public:
         float linew = dim / 10.0f;
         float radius = dim / 2.0f - (linew / 2.0f);
         auto angle1 = detail::to_radians<float>(180, 0);
-        auto angle2 = detail::to_radians<float>(180, widget.value() / 100.0f * 360.0f);
+
+        auto min = std::min(widget.starting(), widget.ending());
+        auto max = std::max(widget.starting(), widget.ending());
+        auto angle2 = detail::to_radians<float>(180.0f,
+                                                detail::normalize_to_angle(static_cast<float>(widget.value()),
+                                                        static_cast<float>(min), static_cast<float>(max), 0.0f, 360.0f, true));
 
         painter.line_width(linew);
         painter.set(widget.color(Palette::ColorId::button_fg, Palette::GroupId::disabled));
@@ -382,8 +464,11 @@ protected:
 private:
     /// Default size.
     static Size m_default_size;
+    static Signal<>::RegisterHandle m_default_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -422,10 +507,33 @@ template <class T>
 Size SpinProgressType<T>::m_default_size;
 
 template <class T>
+Signal<>::RegisterHandle SpinProgressType<T>::m_default_size_handle = Signal<>::INVALID_HANDLE;
+
+template <class T>
+void SpinProgressType<T>::register_handler()
+{
+    if (m_default_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        m_default_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            m_default_size.clear();
+        });
+    }
+}
+
+template <class T>
+void SpinProgressType<T>::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(m_default_size_handle);
+    m_default_size_handle = Signal<>::INVALID_HANDLE;
+}
+
+template <class T>
 Size SpinProgressType<T>::default_size()
 {
     if (SpinProgressType<T>::m_default_size.empty())
     {
+        register_handler();
         auto ss = egt::Application::instance().screen()->size();
         SpinProgressType<T>::m_default_size = Size(ss.width() * 0.12, ss.height() * 0.20);
     }
@@ -435,6 +543,9 @@ Size SpinProgressType<T>::default_size()
 template <class T>
 void SpinProgressType<T>::default_size(const Size& size)
 {
+    if (!size.empty())
+        unregister_handler();
+
     SpinProgressType<T>::m_default_size = size;
 }
 
@@ -509,14 +620,22 @@ public:
      * @param[in] props list of widget argument and its properties.
      */
     explicit LevelMeterType(Serializer::Properties& props) noexcept
-        : ValueRangeWidget<T>(props)
+        : LevelMeterType(props, false)
     {
-        this->name("LevelMeter" + std::to_string(this->m_widgetid));
-        this->fill_flags(Theme::FillFlag::blend);
-        this->padding(2);
-
-        deserialize(props);
     }
+
+protected:
+
+    explicit LevelMeterType(Serializer::Properties& props, bool is_derived) noexcept
+        : ValueRangeWidget<T>(props, true)
+    {
+        deserialize(props);
+
+        if (!is_derived)
+            this->deserialize_leaf(props);
+    }
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override
     {
@@ -536,19 +655,22 @@ public:
                            widget.num_bars(), 0);
         const auto barheight = b.height() / widget.num_bars();
 
-        for (size_t i = 0; i < widget.num_bars(); i++)
+        if (static_cast<DefaultDim>(barheight) > widget.padding())
         {
-            auto color = widget.color(Palette::ColorId::button_fg, Palette::GroupId::disabled);
-            if (i >= limit)
-                color = widget.color(Palette::ColorId::button_fg);
+            for (size_t i = 0; i < widget.num_bars(); i++)
+            {
+                auto color = widget.color(Palette::ColorId::button_fg, Palette::GroupId::disabled);
+                if (i >= limit)
+                    color = widget.color(Palette::ColorId::button_fg);
 
-            Rect rect(b.x(),  b.y() + i * barheight, b.width(), barheight - widget.padding());
+                Rect rect(b.x(),  b.y() + i * barheight, b.width(), barheight - widget.padding());
 
-            widget.theme().draw_box(painter,
-                                    Theme::FillFlag::blend,
-                                    rect,
-                                    widget.color(Palette::ColorId::border),
-                                    color);
+                widget.theme().draw_box(painter,
+                                        Theme::FillFlag::blend,
+                                        rect,
+                                        widget.color(Palette::ColorId::border),
+                                        color);
+            }
         }
     }
 
@@ -557,7 +679,8 @@ public:
      */
     void num_bars(size_t bars)
     {
-        m_num_bars = bars;
+        if (bars && detail::change_if_diff(m_num_bars, bars))
+            this->damage();
     }
 
     /**
@@ -590,8 +713,11 @@ protected:
 private:
     /// Default size.
     static Size m_default_size;
+    static Signal<>::RegisterHandle m_default_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 
-    void deserialize(Serializer::Properties& props) override;
+    void deserialize(Serializer::Properties& props);
 };
 
 /**
@@ -630,10 +756,33 @@ template <class T>
 Size LevelMeterType<T>::m_default_size;
 
 template <class T>
+Signal<>::RegisterHandle LevelMeterType<T>::m_default_size_handle = Signal<>::INVALID_HANDLE;
+
+template <class T>
+void LevelMeterType<T>::register_handler()
+{
+    if (m_default_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        m_default_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            m_default_size.clear();
+        });
+    }
+}
+
+template <class T>
+void LevelMeterType<T>::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(m_default_size_handle);
+    m_default_size_handle = Signal<>::INVALID_HANDLE;
+}
+
+template <class T>
 Size LevelMeterType<T>::default_size()
 {
     if (LevelMeterType<T>::m_default_size.empty())
     {
+        register_handler();
         auto ss = egt::Application::instance().screen()->size();
         LevelMeterType<T>::m_default_size = Size(ss.width() * 0.05, ss.height() * 0.20);
     }
@@ -643,6 +792,9 @@ Size LevelMeterType<T>::default_size()
 template <class T>
 void LevelMeterType<T>::default_size(const Size& size)
 {
+    if (!size.empty())
+        unregister_handler();
+
     LevelMeterType<T>::m_default_size = size;
 }
 
@@ -707,11 +859,23 @@ public:
      * @param[in] props list of widget argument and its properties.
      */
     explicit AnalogMeterType(Serializer::Properties& props) noexcept
-        : ValueRangeWidget<T>(props)
+        : AnalogMeterType(props, false)
+    {
+    }
+
+protected:
+
+    explicit AnalogMeterType(Serializer::Properties& props, bool is_derived) noexcept
+        : ValueRangeWidget<T>(props, true)
     {
         this->name("AnalogMeter" + std::to_string(this->m_widgetid));
         this->fill_flags(Theme::FillFlag::blend);
+
+        if (!is_derived)
+            this->deserialize_leaf(props);
     }
+
+public:
 
     void draw(Painter& painter, const Rect& rect) override
     {
@@ -751,18 +915,19 @@ public:
                                -(hw + 10.0f) * yangle));
             painter.stroke();
 
-            const auto text = std::to_string(tick);
+            int text = static_cast<int>(detail::normalize<float>(tick, 0, 100, widget.starting(), widget.ending()));
             painter.set(widget.color(Palette::ColorId::text));
-            const auto size = painter.text_size(text);
+            const auto size = painter.text_size(std::to_string(text));
             painter.draw(Point(-(hw + 30.0f) * xangle - size.width() / 2.0f,
                                -(hw + 30.0f) * yangle - size.height() / 2.0f));
-            painter.draw(text);
+            painter.draw(std::to_string(text));
             painter.stroke();
         }
 
         // needle
-        const auto dest = Point((-hw - 15.0f) * std::cos(detail::pi<float>() * widget.value() * 0.01f),
-                                (-hw - 15.0f) * std::sin(detail::pi<float>() * widget.value() * 0.01f));
+        auto avalue = detail::normalize<float>(widget.value(), widget.starting(), widget.ending(), 0, 100);
+        const auto dest = Point((-hw - 15.0f) * std::cos(detail::pi<float>() * avalue * 0.01f),
+                                (-hw - 15.0f) * std::sin(detail::pi<float>() * avalue * 0.01f));
 
         painter.set(widget.color(Palette::ColorId::button_fg));
         painter.line_width(tick_width * 2.0f);
@@ -792,6 +957,9 @@ private:
 
     /// Default size.
     static Size m_default_size;
+    static Signal<>::RegisterHandle m_default_size_handle;
+    static void register_handler();
+    static void unregister_handler();
 };
 
 /**
@@ -830,11 +998,33 @@ template <class T>
 Size AnalogMeterType<T>::m_default_size;
 
 template <class T>
+Signal<>::RegisterHandle AnalogMeterType<T>::m_default_size_handle = Signal<>::INVALID_HANDLE;
+
+template <class T>
+void AnalogMeterType<T>::register_handler()
+{
+    if (m_default_size_handle == Signal<>::INVALID_HANDLE)
+    {
+        m_default_size_handle = detail::ComposerScreen::register_screen_resize_hook([]()
+        {
+            m_default_size.clear();
+        });
+    }
+}
+
+template <class T>
+void AnalogMeterType<T>::unregister_handler()
+{
+    detail::ComposerScreen::unregister_screen_resize_hook(m_default_size_handle);
+    m_default_size_handle = Signal<>::INVALID_HANDLE;
+}
+
+template <class T>
 Size AnalogMeterType<T>::default_size()
 {
-
     if (AnalogMeterType<T>::m_default_size.empty())
     {
+        register_handler();
         auto ss = egt::Application::instance().screen()->size();
         AnalogMeterType<T>::m_default_size = Size(ss.width() * 0.25, ss.height() * 0.20);
     }
@@ -844,7 +1034,10 @@ Size AnalogMeterType<T>::default_size()
 template <class T>
 void AnalogMeterType<T>::default_size(const Size& size)
 {
-    AnalogMeterType<T>::default_analogmeter_size_value = size;
+    if (!size.empty())
+        unregister_handler();
+
+    AnalogMeterType<T>::m_default_size = size;
 }
 
 }

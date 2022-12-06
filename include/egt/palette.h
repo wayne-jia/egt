@@ -322,6 +322,14 @@ public:
     void clear();
 
     /**
+     * Returns true if the palette is empty.
+     */
+    EGT_NODISCARD bool empty() const
+    {
+        return m_colors.empty();
+    }
+
+    /**
      * Check if a color exists in the palette.
      *
      * @param id Color id.
@@ -363,6 +371,23 @@ static_assert(detail::rule_of_5<Palette>(), "must fulfill rule of 5");
 EGT_API std::ostream& operator<<(std::ostream& os, const Palette::ColorId& color);
 /// Overloaded std::ostream insertion operator
 EGT_API std::ostream& operator<<(std::ostream& os, const Palette::GroupId& group);
+
+/**
+ * Get the global Palette.
+ *
+ * @return Reference to the current global Palette.
+ */
+EGT_API const Palette* global_palette();
+
+/**
+ * Set the global Palette.
+ */
+EGT_API void global_palette(std::unique_ptr<Palette>&& palette);
+
+/**
+ * Reset the global Palette.
+ */
+EGT_API void reset_global_palette();
 
 }
 }
