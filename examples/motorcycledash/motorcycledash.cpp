@@ -18,7 +18,7 @@
 #include <linux/can.h>
 #include <linux/can/raw.h>
 
-#define HAVE_LIBPLANES
+//#define HAVE_LIBPLANES
 
 #ifdef HAVE_LIBPLANES
 #include <planes/plane.h>
@@ -29,6 +29,7 @@
 
 
 #define DO_SVG_SERIALIZATION
+//#define ENABLE_SCALE_MOTOR
 //#define CAN_DEBUG
 
 #define MEDIA_FILE_PATH "/root/"
@@ -752,7 +753,10 @@ void MotorDash::serialize_all()
     SerializePNG("/usr/share/egt/examples/motorcycledash/moto.png", "eraw/moto_png.eraw");
 
     //Serialize background image
-    SerializeSVG("eraw/bkgrd.eraw", m_svg, "#bkgrd");
+    //SerializeSVG("eraw/bkgrd.eraw", m_svg, "#bkgrd");
+
+    /* workaround for librsvg-2.50.7 in which not support embedded png serialization */
+    SerializePNG("/usr/share/egt/examples/motorcycledash/bkgrd.png", "eraw/bkgrd.eraw");
 
     //Serialize Gear
     for (i = ID_MIN_TEXT_GEAR; i <= ID_MAX_TEXT_GEAR; i += STEPPER)
@@ -942,14 +946,6 @@ int main(int argc, char** argv)
     bool need_serialization = false;
 #endif
 
-#ifdef HAVE_LIBPLANES
-    //Scale effect variables
-    float scale_factor = 0.01;
-    bool is_scale_rev = false;
-    bool is_scale_2_max = false;
-    bool is_scale_finish = false;
-#endif
-
     egt::Application app(argc, argv);  //This call will cost ~270ms on 9x60ek board
     egt::TopWindow window;
     window.color(egt::Palette::ColorId::bg, egt::Palette::black);
@@ -1028,8 +1024,11 @@ int main(int argc, char** argv)
 #endif
 
 
-
-#ifdef HAVE_LIBPLANES
+#if defined(HAVE_LIBPLANES) && defined(ENABLE_SCALE_MOTOR)
+    float scale_factor = 0.01;
+    bool is_scale_rev = false;
+    bool is_scale_2_max = false;
+    bool is_scale_finish = false;
     std::cout << "Have libplanes" << std::endl;
     //Create scale image to HEO overlay
     egt::Sprite scale_s(egt::Image(motordash.DeSerialize("eraw/moto_png.eraw", rect)), egt::Size(400, 240), 1, egt::Point(200, 120),
@@ -1039,7 +1038,6 @@ int main(int argc, char** argv)
     motordash.add(scale_s);
     scale_s.show();
 #endif
-
 
 
 #ifdef EGT_STATISTICS_ENABLE
@@ -2279,7 +2277,7 @@ int main(int argc, char** argv)
 #endif
     });
 
-#ifdef HAVE_LIBPLANES
+#if defined(HAVE_LIBPLANES) && defined(ENABLE_SCALE_MOTOR)
     egt::PeriodicTimer scale_timer(std::chrono::milliseconds(16));
     scale_timer.on_timeout([&]()
     {
