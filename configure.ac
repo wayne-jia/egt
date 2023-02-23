@@ -288,7 +288,7 @@ if test "x$with_xkbcommon" = xyes && test "x${have_xkbcommon}" != xyes; then
 fi
 AM_CONDITIONAL([HAVE_XKBCOMMON], [test "x${have_xkbcommon}" = xyes])
 
-AX_PKG_CHECK_MODULES2(SDL2, [sdl2], [], [have_sdl2=yes], [have_sdl2=no])
+AX_PKG_CHECK_MODULES2(SDL2, [], [sdl2], [have_sdl2=yes], [have_sdl2=no])
 AM_CONDITIONAL([HAVE_SDL2], [test "x${have_sdl2}" = xyes])
 if test "x${have_sdl2}" = xyes; then
    AC_DEFINE(HAVE_SDL2, 1, [Have sdl2 support])
@@ -408,10 +408,10 @@ AC_ARG_WITH([readline],
     [with_readline=$withval],
     [with_readline=auto])
 AS_IF([test "x$with_readline" != "xno"],[
-   AC_CHECK_HEADER([readline/readline.h], [have_readline=yes], [have_readline=no])
+   AX_PKG_CHECK_MODULES2(readline, [], [readline], [have_readline=yes], [have_readline=no])
    if test "x${have_readline}" = xyes; then
-      LIBEGT_EXTRA_CXXFLAGS="-DLUA_USE_READLINE ${LIBEGT_EXTRA_CXXFLAGS}"
-      LIBEGT_EXTRA_LDFLAGS="-lreadline ${LIBEGT_EXTRA_LDFLAGS}"
+      LIBEGT_EXTRA_CXXFLAGS="-DLUA_USE_READLINE ${readline_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
+      LIBEGT_EXTRA_LDFLAGS="${readline_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
    fi
 ])
 if test "x$with_readline" = xyes && test "x${have_readline}" != xyes; then
@@ -448,7 +448,7 @@ fi
 AC_CHECK_DECL([CAIRO_HAS_FT_FONT], [], [
     AC_MSG_FAILURE([cairo is not compiled with freetype support and it is required.])
    ], [[#include <cairo/cairo-features.h>]])
-LIBEGT_EXTRA_LDFLAGS="-lfreetype ${LIBEGT_EXTRA_LDFLAGS}"
+LIBEGT_PRIVATE_LDFLAGS="-lfreetype ${LIBEGT_PRIVATE_LDFLAGS}"
 
 AC_ARG_WITH([fontconfig],
     AS_HELP_STRING([--without-fontconfig], [Ignore presence of fontconfig and disable it]),
@@ -459,7 +459,7 @@ AS_IF([test "x$with_fontconfig" != "xno"],[
    AC_CHECK_DECL([CAIRO_HAS_FC_FONT], [have_fontconfig=yes], [have_fontconfig=no], [[#include <cairo/cairo-features.h>]])
    if test "x${have_fontconfig}" = xyes; then
       AC_DEFINE(HAVE_FONTCONFIG, 1, [Have fontconfig support])
-      LIBEGT_EXTRA_LDFLAGS="-lfontconfig ${LIBEGT_EXTRA_LDFLAGS}"
+      LIBEGT_PRIVATE_LDFLAGS="-lfontconfig ${LIBEGT_PRIVATE_LDFLAGS}"
    fi
 ])
 if test "x$with_fontconfig" = xyes && test "x${have_fontconfig}" != xyes; then
@@ -584,36 +584,17 @@ AM_CONDITIONAL([HAVE_ZLIB], [test "x${have_zlib}" = xyes])
 AC_ARG_WITH([libmagic],
     AS_HELP_STRING([--without-libmagic], [Ignore presence of libmagic and disable it]))
 AS_IF([test "x$with_libmagic" != "xno"],[
-   AC_SEARCH_LIBS([magic_open], [magic], [MAGIC_LIB=-lmagic have_libmagic=yes], [have_libmagic=no])
-   AC_CHECK_HEADER([magic.h],
-     [],
-     [have_libmagic=no
-   ])
+   AX_PKG_CHECK_MODULES2(libmagic, [], [libmagic], [have_libmagic=yes], [have_libmagic=no])
    if test "x${have_libmagic}" = xyes; then
       AC_DEFINE(HAVE_LIBMAGIC, 1, [Have libmagic support])
-      LIBEGT_EXTRA_LDFLAGS="${MAGIC_LIB} ${LIBEGT_EXTRA_LDFLAGS}"
+      LIBEGT_EXTRA_CXXFLAGS="${libmagic_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
+      LIBEGT_EXTRA_LDFLAGS="${libmagic_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
    fi
 ])
-AM_CONDITIONAL([HAVE_LIBMAGIC], [test "x${have_libmagic}" = xyes])
-
-AC_ARG_WITH([filesystem],
-    AS_HELP_STRING([--without-filesystem], [Ignore presence of filesystem and disable it]),
-    [with_filesystem=$withval],
-    [with_filesystem=auto])
-AS_IF([test "x$with_filesystem" != "xno"],[
-   AC_CHECK_LIB([stdc++fs], [main], [have_libstdcppfs=yes], [have_libstdcppfs=no])
-   AM_CONDITIONAL([HAVE_EXPERIMENTAL_FILESYSTEM], [test "x${have_libstdcppfs}" = xyes])
-   if test "x${have_libstdcppfs}" = xyes;
-   then
-      AX_APPEND_FLAG([-lstdc++fs], [LDFLAGS])
-      AC_DEFINE(HAVE_EXPERIMENTAL_FILESYSTEM, 1, [Have experimental filesystem support])
-      AC_SUBST(include_filedialog, ["#define EGT_HAS_FILEDIALOG 1"])
-   fi
-])
-if test "x$with_filesystem" = xyes && test "x${have_libstdcppfs}" != xyes; then
-   AC_MSG_FAILURE([--with-filesystem was given but not found])
+if test "x$with_libmagic" = xyes && test "x${have_libmagic}" != xyes; then
+   AC_MSG_FAILURE([--with-libmagic was given, but libmagic not found])
 fi
-AM_CONDITIONAL([HAVE_EXPERIMENTAL_FILESYSTEM], [test "x${have_libstdcppfs}" = xyes])
+AM_CONDITIONAL([HAVE_LIBMAGIC], [test "x${have_libmagic}" = xyes])
 
 if test "x${have_gstreamer}" = xyes; then
    AC_SUBST(include_audio, ["#define EGT_HAS_AUDIO 1"])
@@ -632,6 +613,8 @@ AC_CHECK_HEADER([windows.h], [have_windows_h=yes], [have_windows_h=no])
 AM_CONDITIONAL([HAVE_WINDOWS_H], [test "x${have_windows_h}" = xyes])
 if test "x${have_windows_h}" = xyes; then
    AC_DEFINE(HAVE_WINDOWS_H, 1, [Have windows_h support])
+else
+   AX_APPEND_FLAG([-lstdc++fs], [LDFLAGS])
 fi
 
 AC_CHECK_PROG(XXD, xxd, yes)
@@ -716,13 +699,15 @@ if test "x$with_sndfile" = xyes && test "x${have_sndfile}" != xyes; then
 fi
 AM_CONDITIONAL([HAVE_SNDFILE], [test "x${have_sndfile}" = xyes])
 
+LIBEGT_EXTRA_LDFLAGS="${LIBEGT_PRIVATE_LDFLAGS} ${LIBEGT_EXTRA_LDFLAGS}"
+
 # Subst LIBEGT_EXTRA_CFLAGS & CXXFLAGS & LDFLAGS
 AC_SUBST(LIBEGT_EXTRA_CFLAGS)
 AC_SUBST(LIBEGT_EXTRA_CXXFLAGS)
 AC_SUBST(LIBEGT_EXTRA_LDFLAGS)
 
 # Libs.private section of libegt.pc
-libs_private="$LDFLAGS $LIBEGT_EXTRA_LDFLAGS"
+libs_private="$LDFLAGS $LIBEGT_PRIVATE_LDFLAGS"
 AC_SUBST(libs_private)
 
 AC_USE_SYSTEM_EXTENSIONS
@@ -842,7 +827,6 @@ echo "  Networking             ${have_libcurl:-no}"
 echo "  libmagic               ${have_libmagic:-no}"
 echo "  LUA Interpreter        ${have_lua:-no}"
 echo "  LUA Bindings           ${have_lua_bindings:-no}"
-echo "  C++17 Filesystem       ${have_libstdcppfs:-no}"
 echo "  ALSA Sound             ${have_alsa:-no}"
 echo "  sndfile                ${have_sndfile:-no}"
 echo "  plplot                 ${have_plplot:-no}"

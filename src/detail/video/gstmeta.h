@@ -7,6 +7,7 @@
 #define EGT_SRC_DETAIL_VIDEO_GSTMETA_H
 
 #include "egt/detail/filesystem.h"
+#include "detail/egtlog.h"
 #include <gst/gst.h>
 #include <memory>
 #include <string>
@@ -30,9 +31,10 @@ struct GstDeleter
 
 using GstStringHandle = std::unique_ptr<gchar, GstDeleter<void, g_free>>;
 using GstErrorHandle = std::unique_ptr<GError, GstDeleter<GError, g_error_free>>;
+using GstStructureHandle = std::unique_ptr<GstStructure, GstDeleter<GstStructure, gst_structure_free >>;
 
 template<class T>
-inline void gst_message_parse(T& func, GstMessage* msg, GstErrorHandle& err, GstStringHandle& debug)
+inline void gstreamer_message_parse(T& func, GstMessage* msg, GstErrorHandle& err, GstStringHandle& debug)
 {
     GError* gst_error = nullptr;
     gchar* string = nullptr;
@@ -42,7 +44,7 @@ inline void gst_message_parse(T& func, GstMessage* msg, GstErrorHandle& err, Gst
 }
 
 template<class T>
-inline void gst_init_plugins(T& plugins)
+inline void gstreamer_init_plugins(T& plugins)
 {
     GError* err = nullptr;
     if (!gst_init_check(nullptr, nullptr, &err))
@@ -99,6 +101,8 @@ inline void gst_init_plugins(T& plugins)
         }
     }
 }
+
+std::string gstreamer_get_device_path(GstDevice* device);
 
 }
 }

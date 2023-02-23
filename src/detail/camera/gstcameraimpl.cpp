@@ -51,10 +51,35 @@ CameraImpl::CameraImpl(CameraWindow& iface, const Rect& rect,
         "libgstaudioresample.so",
         "libgstautodetect.so",
     };
-    detail::gst_init_plugins(plugins);
+    detail::gstreamer_init_plugins(plugins);
 
     m_gmain_loop = g_main_loop_new(nullptr, FALSE);
     m_gmain_thread = std::thread(g_main_loop_run, m_gmain_loop);
+
+    m_device_monitor = gst_device_monitor_new();
+
+    GstCaps* caps = gst_caps_new_empty_simple("video/x-raw");
+    gst_device_monitor_add_filter(m_device_monitor, "Video/Source", caps);
+    gst_caps_unref(caps);
+
+    GList* devlist = gst_device_monitor_get_devices(m_device_monitor);
+    for (GList* i = g_list_first(devlist); i; i = g_list_next(i))
+    {
+        auto device = static_cast<GstDevice*>(i->data);
+        if (!device)
+            continue;
+
+        const std::string devnode = gstreamer_get_device_path(device);
+
+        if (std::find(m_devices.begin(), m_devices.end(), devnode) == m_devices.end())
+            m_devices.push_back(devnode);
+    }
+    g_list_free(devlist);
+
+    GstBus* bus = gst_device_monitor_get_bus(m_device_monitor);
+    gst_bus_add_watch(bus, &bus_callback, this);
+
+    gst_device_monitor_start(m_device_monitor);
 }
 
 gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer data)
@@ -71,7 +96,7 @@ gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer dat
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_error, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_error, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst error: {} {}",
@@ -92,7 +117,7 @@ gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer dat
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_warning, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_warning, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst warning: {} {}",
@@ -105,7 +130,7 @@ gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer dat
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_info, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_info, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst info: {} {}",
@@ -119,21 +144,18 @@ gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer dat
         GstDevice* device;
         gst_message_parse_device_added(message, &device);
 
-        std::string devnode;
-        GstStructure* props = gst_device_get_properties(device);
-        if (props)
-        {
-            EGTLOG_DEBUG("device properties: {}", gst_structure_to_string(props));
-            devnode = gst_structure_get_string(props, "device.path");
-            gst_structure_free(props);
-        }
+        const std::string devnode = gstreamer_get_device_path(device);
+
+        if (std::find(impl->m_devices.begin(), impl->m_devices.end(), devnode) != impl->m_devices.end())
+            break;
+
+        impl->m_devices.push_back(devnode);
 
         if (Application::check_instance())
         {
             asio::post(Application::instance().event().io(), [impl, devnode]()
             {
-                if (!devnode.empty() && devnode != impl->m_devnode)
-                    impl->m_interface.on_connect.invoke(devnode);
+                impl->m_interface.on_connect.invoke(devnode);
             });
         }
 
@@ -143,23 +165,24 @@ gboolean CameraImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer dat
     {
         GstDevice* device;
         gst_message_parse_device_removed(message, &device);
-        std::string devnode;
-        GstStructure* props = gst_device_get_properties(device);
-        if (props)
-        {
-            EGTLOG_DEBUG("device properties: {}", gst_structure_to_string(props));
-            devnode = gst_structure_get_string(props, "device.path");
-            gst_structure_free(props);
-        }
+
+        const std::string devnode = gstreamer_get_device_path(device);
+        const auto i = std::find(impl->m_devices.begin(), impl->m_devices.end(), devnode);
+        if (i == impl->m_devices.end())
+            break;
+
+        impl->m_devices.erase(i);
+
+        /**
+         * invoke disconnect only if current device is
+         * disconnected.
+         */
+        if (devnode != impl->m_devnode)
+            break;
 
         asio::post(Application::instance().event().io(), [impl, devnode]()
         {
-            /**
-             * invoke disconnect only if current device is
-             * disconnected.
-             */
-            if (devnode == impl->m_devnode)
-                impl->m_interface.on_disconnect.invoke(devnode);
+            impl->m_interface.on_disconnect.invoke(devnode);
         });
         break;
     }
@@ -278,20 +301,66 @@ GstFlowReturn CameraImpl::on_new_buffer(GstElement* elt, gpointer data)
 
 void CameraImpl::get_camera_device_caps()
 {
-    std::tuple<std::string, std::string, std::string,
-        std::vector<std::tuple<int, int>>> caps = detail::get_camera_device_caps(m_devnode, &bus_callback, this);
+    GList* devlist = gst_device_monitor_get_devices(m_device_monitor);
+    for (GList* i = g_list_first(devlist); i; i = g_list_next(i))
+    {
+        auto device = static_cast<GstDevice*>(i->data);
+        if (device == nullptr)
+            continue;
 
-    std::string dev = std::get<0>(caps);
-    m_devnode = dev.empty() ? "/dev/video0" : dev;
-    m_caps_name = std::get<1>(caps);
-    m_caps_format = std::get<2>(caps);
-    m_resolutions = std::get<3>(caps);
+        // Probe all device properties and store them internally:
+        GstStringHandle display_name{gst_device_get_display_name(device)};
+        EGTLOG_DEBUG("name : {}", display_name.get());
+
+        GstStringHandle dev_string{gst_device_get_device_class(device)};
+        EGTLOG_DEBUG("class : {}", dev_string.get());
+
+        if (gstreamer_get_device_path(device) != m_devnode)
+            continue;
+
+        GstCaps* caps = gst_device_get_caps(device);
+        if (caps)
+        {
+            m_resolutions.clear();
+            int size = gst_caps_get_size(caps);
+            EGTLOG_DEBUG("caps : ");
+            for (int j = 0; j < size; ++j)
+            {
+                GstStructure* s = gst_caps_get_structure(caps, j);
+                std::string name = std::string(gst_structure_get_name(s));
+                if (name == "video/x-raw")
+                {
+                    int width = 0;
+                    int height = 0;
+                    m_caps_name = name;
+                    gst_structure_get_int(s, "width", &width);
+                    gst_structure_get_int(s, "height", &height);
+                    const gchar* str = gst_structure_get_string(s, "format");
+                    m_caps_format = str ? str : "";
+                    m_resolutions.emplace_back(std::make_tuple(width, height));
+                    EGTLOG_DEBUG("{}, format=(string){}, width=(int){}, "
+                                 "height=(int){}", m_caps_name, m_caps_format, width, height);
+                }
+            }
+
+            if (!m_resolutions.empty())
+            {
+                // sort by camera width
+                std::sort(m_resolutions.begin(), m_resolutions.end(), [](
+                              std::tuple<int, int>& t1,
+                              std::tuple<int, int>& t2)
+                {
+                    return std::get<0>(t1) < std::get<0>(t2);
+                });
+            }
+            gst_caps_unref(caps);
+        }
+    }
+    g_list_free(devlist);
 }
 
 bool CameraImpl::start()
 {
-    std::string pipe;
-
     get_camera_device_caps();
 
     Rect box;
@@ -365,7 +434,7 @@ bool CameraImpl::start()
         "v4l2src device={} ! videoconvert ! video/x-raw,width={},height={},format={} ! {} " \
         "appsink name=appsink async=false enable-last-sample=false sync=true";
 
-    pipe = fmt::format(appsink_pipe, m_devnode, w, h, gst_format, vscale);
+    const std::string pipe = fmt::format(appsink_pipe, m_devnode, w, h, gst_format, vscale);
 
     EGTLOG_DEBUG(pipe);
 
@@ -415,7 +484,7 @@ void CameraImpl::scale(float scalex, float scaley)
 
 std::vector<std::string> CameraImpl::list_devices()
 {
-    return detail::get_camera_device_list(&bus_callback, this);
+    return get_camera_device_list();
 }
 
 void CameraImpl::device(const std::string& device)
@@ -449,6 +518,11 @@ void CameraImpl::stop()
 
 CameraImpl::~CameraImpl() noexcept
 {
+
+    GstBus* bus = gst_device_monitor_get_bus(m_device_monitor);
+    gst_bus_remove_watch(bus);
+    gst_device_monitor_stop(m_device_monitor);
+
     if (m_gmain_loop)
     {
         /*
@@ -464,55 +538,15 @@ CameraImpl::~CameraImpl() noexcept
     }
 }
 
-std::vector<std::string> get_camera_device_list(BusCallback bus_callback, void* instance)
+std::vector<std::string> CameraImpl::get_camera_device_list()
 {
-    std::vector<std::string> dlist;
-    GstDeviceMonitor* monitor = gst_device_monitor_new();
-
-    GstBus* bus = gst_device_monitor_get_bus(monitor);
-    gst_bus_add_watch(bus, bus_callback, instance);
-    gst_object_unref(bus);
-
-    GstCaps* caps = gst_caps_new_empty_simple("video/x-raw");
-    gst_device_monitor_add_filter(monitor, "Video/Source", caps);
-    gst_caps_unref(caps);
-
-    std::string caps_name;
-    std::string caps_format;
-    std::vector<std::tuple<int, int>> resolutions;
-    if (gst_device_monitor_start(monitor))
-    {
-        GList* devlist = gst_device_monitor_get_devices(monitor);
-        for (GList* i = g_list_first(devlist); i; i = g_list_next(i))
-        {
-            auto device = static_cast<GstDevice*>(i->data);
-            if (device == nullptr)
-                continue;
-
-            GstStructure* props = gst_device_get_properties(device);
-            if (props)
-            {
-                auto devnode = std::string(gst_structure_get_string(props, "device.path"));
-                gst_structure_free(props);
-                EGTLOG_DEBUG("device : {}", devnode);
-                dlist.push_back(devnode);
-            }
-        }
-        g_list_free(devlist);
-    }
-    return dlist;
+    return m_devices;
 }
 
 std::tuple<std::string, std::string, std::string, std::vector<std::tuple<int, int>>>
-get_camera_device_caps(const std::string& dev_name, BusCallback bus_callback, void* instance)
+get_camera_device_caps(const std::string& dev_name)
 {
-    std::string devnode;
-
     GstDeviceMonitor* monitor = gst_device_monitor_new();
-
-    GstBus* bus = gst_device_monitor_get_bus(monitor);
-    gst_bus_add_watch(bus, bus_callback, instance);
-    gst_object_unref(bus);
 
     GstCaps* caps = gst_caps_new_empty_simple("video/x-raw");
     gst_device_monitor_add_filter(monitor, "Video/Source", caps);
@@ -521,77 +555,67 @@ get_camera_device_caps(const std::string& dev_name, BusCallback bus_callback, vo
     std::string caps_name;
     std::string caps_format;
     std::vector<std::tuple<int, int>> resolutions;
-    if (gst_device_monitor_start(monitor))
+
+    GList* devlist = gst_device_monitor_get_devices(monitor);
+    for (GList* i = g_list_first(devlist); i; i = g_list_next(i))
     {
-        GList* devlist = gst_device_monitor_get_devices(monitor);
-        for (GList* i = g_list_first(devlist); i; i = g_list_next(i))
+        auto device = static_cast<GstDevice*>(i->data);
+        if (device == nullptr)
+            continue;
+
+        // Probe all device properties and store them internally:
+        GstStringHandle display_name{gst_device_get_display_name(device)};
+        EGTLOG_DEBUG("name : {}", display_name.get());
+
+        GstStringHandle dev_string{gst_device_get_device_class(device)};
+        EGTLOG_DEBUG("class : {}", dev_string.get());
+
+        if (gstreamer_get_device_path(device) != dev_name)
+            continue;
+
+        caps = gst_device_get_caps(device);
+        if (caps)
         {
-            auto device = static_cast<GstDevice*>(i->data);
-            if (device == nullptr)
-                continue;
-
-            // Probe all device properties and store them internally:
-            GstStringHandle display_name{gst_device_get_display_name(device)};
-            EGTLOG_DEBUG("name : {}", display_name.get());
-
-            GstStringHandle dev_string{gst_device_get_device_class(device)};
-            EGTLOG_DEBUG("class : {}", dev_string.get());
-
-            caps = gst_device_get_caps(device);
-            if (caps)
+            resolutions.clear();
+            int size = gst_caps_get_size(caps);
+            EGTLOG_DEBUG("caps : ");
+            for (int j = 0; j < size; ++j)
             {
-                resolutions.clear();
-                int size = gst_caps_get_size(caps);
-                EGTLOG_DEBUG("caps : ");
-                for (int j = 0; j < size; ++j)
+                GstStructure* s = gst_caps_get_structure(caps, j);
+                std::string name = std::string(gst_structure_get_name(s));
+                if (name == "video/x-raw")
                 {
-                    GstStructure* s = gst_caps_get_structure(caps, j);
-                    std::string name = std::string(gst_structure_get_name(s));
-                    if (name == "video/x-raw")
-                    {
-                        int width = 0;
-                        int height = 0;
-                        caps_name = name;
-                        gst_structure_get_int(s, "width", &width);
-                        gst_structure_get_int(s, "height", &height);
-                        caps_format = std::string(gst_structure_get_string(s, "format"));
-                        resolutions.emplace_back(std::make_tuple(width, height));
-                        EGTLOG_DEBUG("{}, format=(string){}, width=(int){}, "
-                                     "height=(int){}", caps_name, caps_format, width, height);
-                    }
+                    int width = 0;
+                    int height = 0;
+                    caps_name = name;
+                    gst_structure_get_int(s, "width", &width);
+                    gst_structure_get_int(s, "height", &height);
+                    const gchar* str = gst_structure_get_string(s, "format");
+                    caps_format = str ? str : "";
+                    resolutions.emplace_back(std::make_tuple(width, height));
+                    EGTLOG_DEBUG("{}, format=(string){}, width=(int){}, "
+                                 "height=(int){}", caps_name, caps_format, width, height);
                 }
-
-                if (!resolutions.empty())
-                {
-                    // sort by camera width
-                    std::sort(resolutions.begin(), resolutions.end(), [](
-                                  std::tuple<int, int>& t1,
-                                  std::tuple<int, int>& t2)
-                    {
-                        return std::get<0>(t1) < std::get<0>(t2);
-                    });
-                }
-                gst_caps_unref(caps);
             }
 
-            GstStructure* props = gst_device_get_properties(device);
-            if (props)
+            if (!resolutions.empty())
             {
-                EGTLOG_DEBUG("device properties: {}", gst_structure_to_string(props));
-
-                devnode = std::string(gst_structure_get_string(props, "device.path"));
-                gst_structure_free(props);
-
-                if (devnode == dev_name)
-                    break;
+                // sort by camera width
+                std::sort(resolutions.begin(), resolutions.end(), [](
+                              std::tuple<int, int>& t1,
+                              std::tuple<int, int>& t2)
+                {
+                    return std::get<0>(t1) < std::get<0>(t2);
+                });
             }
+            gst_caps_unref(caps);
         }
-        g_list_free(devlist);
+
+        break;
     }
+    g_list_free(devlist);
 
-    EGTLOG_DEBUG("camera device node : {}", devnode);
-
-    return std::make_tuple(devnode, caps_name, caps_format, resolutions);
+    return std::make_tuple(dev_name, caps_name, caps_format, resolutions);
 }
 
 }

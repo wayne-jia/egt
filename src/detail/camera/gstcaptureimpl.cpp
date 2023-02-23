@@ -52,7 +52,7 @@ CaptureImpl::CaptureImpl(experimental::CameraCapture& iface,
         "libgstlibav.so",
         "libgstvideoparsersbad.so",
     };
-    detail::gst_init_plugins(plugins);
+    detail::gstreamer_init_plugins(plugins);
 
     m_gmainLoop = g_main_loop_new(nullptr, FALSE);
     m_gmainThread = std::thread(g_main_loop_run, m_gmainLoop);
@@ -74,7 +74,7 @@ gboolean CaptureImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer da
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_error, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_error, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst error: {} {}",
@@ -95,7 +95,7 @@ gboolean CaptureImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer da
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_warning, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_warning, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst warning: {} {}",
@@ -108,7 +108,7 @@ gboolean CaptureImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer da
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_info, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_info, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst info: {} {}",
@@ -127,14 +127,7 @@ gboolean CaptureImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer da
         GstDevice* device;
         gst_message_parse_device_added(message, &device);
 
-        std::string devnode;
-        GstStructure* props = gst_device_get_properties(device);
-        if (props)
-        {
-            EGTLOG_DEBUG("device properties: {}", gst_structure_to_string(props));
-            devnode = gst_structure_get_string(props, "device.path");
-            gst_structure_free(props);
-        }
+        std::string devnode = gstreamer_get_device_path(device);
 
         if (Application::check_instance())
         {
@@ -151,14 +144,7 @@ gboolean CaptureImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer da
         GstDevice* device;
         gst_message_parse_device_removed(message, &device);
 
-        std::string devnode;
-        GstStructure* props = gst_device_get_properties(device);
-        if (props)
-        {
-            EGTLOG_DEBUG("device properties: {}", gst_structure_to_string(props));
-            devnode = gst_structure_get_string(props, "device.path");
-            gst_structure_free(props);
-        }
+        std::string devnode = gstreamer_get_device_path(device);
 
         impl->m_condition.notify_one();
 
@@ -194,7 +180,7 @@ void CaptureImpl::set_output(const std::string& output,
 void CaptureImpl::get_camera_device_caps()
 {
     std::tuple<std::string, std::string, std::string,
-        std::vector<std::tuple<int, int>>> caps = detail::get_camera_device_caps(m_devnode, &bus_callback, this);
+        std::vector<std::tuple<int, int>>> caps = detail::get_camera_device_caps(m_devnode);
 
     m_devnode = std::get<0>(caps);
 }

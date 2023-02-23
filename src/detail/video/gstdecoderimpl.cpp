@@ -189,7 +189,7 @@ gboolean GstDecoderImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_error, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_error, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst error: {} {}",
@@ -210,7 +210,7 @@ gboolean GstDecoderImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_warning, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_warning, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst warning: {} {}",
@@ -223,7 +223,7 @@ gboolean GstDecoderImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer
     {
         GstErrorHandle error;
         GstStringHandle debug;
-        gst_message_parse(gst_message_parse_info, message, error, debug);
+        gstreamer_message_parse(gst_message_parse_info, message, error, debug);
         if (error)
         {
             EGTLOG_DEBUG("gst info: {} {}",
@@ -259,16 +259,24 @@ gboolean GstDecoderImpl::bus_callback(GstBus* bus, GstMessage* message, gpointer
     }
     case GST_MESSAGE_STATE_CHANGED:
     {
-        GstState old_state;
-        GstState new_state;
-        GstState pending_state;
-        gst_message_parse_state_changed(message, &old_state, &new_state, &pending_state);
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-cstyle-cast)
         if (GST_MESSAGE_SRC(message) == GST_OBJECT(impl->m_pipeline))
         {
+            GstState old_state, new_state, pending_state;
+            gst_message_parse_state_changed(message, &old_state, &new_state, &pending_state);
+
             EGTLOG_DEBUG("state changed from {} to {}",
                          gst_element_state_get_name(old_state),
                          gst_element_state_get_name(new_state));
+
+            gchar* dump_name = g_strdup_printf("egt.%s_%s",
+                                               gst_element_state_get_name(old_state),
+                                               gst_element_state_get_name(new_state));
+
+            GST_DEBUG_BIN_TO_DOT_FILE_WITH_TS(GST_BIN(impl->m_pipeline),
+                                              GST_DEBUG_GRAPH_SHOW_ALL, dump_name);
+
+            g_free(dump_name);
 
             if (impl->playing())
             {

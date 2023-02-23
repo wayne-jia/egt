@@ -33,7 +33,6 @@ inline namespace v1
 {
 class Painter;
 class Frame;
-class ImageHolder;
 class Screen;
 
 /**
@@ -1373,6 +1372,16 @@ public:
     virtual void serialize(Serializer& serializer) const;
 
     /**
+     * Serialize the widget's children to the specified serializer.
+     */
+    virtual void serialize_children(Serializer& serializer) const { detail::ignoreparam(serializer); }
+
+    /**
+     * Deserialize the children of this widget.
+     */
+    virtual void deserialize_children(const Deserializer& deserializer) { detail::ignoreparam(deserializer); }
+
+    /**
      * Resume deserializing of the widget after its children have been deserialized.
      */
     virtual void post_deserialize(Serializer::Properties& props) { detail::ignoreparam(props); }
@@ -1565,7 +1574,6 @@ private:
     void deserialize(Serializer::Properties& props);
 
     friend class Frame;
-    friend class ImageHolder;
 };
 
 /// Enum string conversion map

@@ -33,6 +33,7 @@ class Pattern;
 class EGT_API Serializer
 {
 public:
+    using Context = void;
 
     Serializer() noexcept = default;
     Serializer(const Serializer&) = default;
@@ -46,13 +47,13 @@ public:
     using Properties = std::list<std::tuple<std::string, std::string, Serializer::Attributes>>;
 
     /// Add a widget to the serializer.
-    virtual bool add(const Widget* widget, int level = 0) = 0;
+    virtual bool add(const Widget* widget) = 0;
 
-    /// Add a node to the serializer.
-    virtual void add_node(std::string nodename) = 0;
+    /// Create a new child.
+    virtual Context* begin_child(const std::string& nodename) = 0;
 
-    /// Go to previous node.
-    virtual void previous_node() = 0;
+    /// Complete a child.
+    virtual void end_child(Context* context) = 0;
 
     /// Add a property.
     virtual void add_property(const std::string& name, const std::string& value,
@@ -87,18 +88,10 @@ public:
     void add_property(const std::string& name, bool value,
                       const Attributes& attrs = {});
 
-    /// Get the current level
-    EGT_NODISCARD int level() const { return m_level; }
-
     /// Write to the specified ostream.
     virtual void write(std::ostream& out) = 0;
 
     virtual ~Serializer() noexcept = default;
-
-protected:
-
-    /// Current serialize tree level
-    int m_level{0};
 };
 
 /**
@@ -124,11 +117,11 @@ public:
     /// Clear or reset, the serializer for re-use.
     void reset();
 
-    bool add(const Widget* widget, int level = 0) override;
+    bool add(const Widget* widget) override;
 
-    void add_node(std::string nodename) override;
+    Context* begin_child(const std::string& nodename) override;
 
-    void previous_node() override;
+    void end_child(Context* context) override;
 
     using Serializer::add_property;
 
@@ -175,11 +168,11 @@ public:
     /// Clear or reset, the serializer for re-use.
     void reset();
 
-    bool add(const Widget* widget, int level = 0) override;
+    bool add(const Widget* widget) override;
 
-    void add_node(std::string nodename) override;
+    Context* begin_child(const std::string& nodename) override;
 
-    void previous_node() override;
+    void end_child(Context* context) override;
 
     using Serializer::add_property;
 
@@ -201,6 +194,17 @@ private:
 
     struct XmlSerializerImpl;
     std::unique_ptr<XmlSerializerImpl> m_impl;
+};
+
+class EGT_API Deserializer
+{
+public:
+    virtual ~Deserializer() {}
+    virtual bool is_valid() const = 0;
+    virtual std::unique_ptr<Deserializer> first_child(const std::string& name = "") const = 0;
+    virtual std::unique_ptr<Deserializer> next_sibling(const std::string& name = "") const = 0;
+    virtual std::shared_ptr<Widget> parse_widget() const = 0;
+    virtual bool get_property(const std::string& name, std::string* value, Serializer::Attributes* attrs = nullptr) const = 0;
 };
 
 }
