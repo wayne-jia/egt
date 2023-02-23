@@ -209,6 +209,16 @@ Sprite::Sprite(const Image& image, const Size& frame_size,
     create_impl(image, frame_size, frame_count, frame_point);
 }
 
+Sprite::Sprite(const Image& image, const Size& frame_size,
+               int frame_count, const Point& frame_point,
+               PixelFormat format_hint, WindowHint hint)
+    : Window(Rect({}, image.size()), format_hint, hint)
+{
+    name("Sprite" + std::to_string(m_widgetid));
+    fill_flags().clear();
+    create_impl(image, frame_size, frame_count, frame_point);
+}
+
 Sprite::Sprite(Serializer::Properties& props, bool is_derived) noexcept
     : Window(props, true)
 {

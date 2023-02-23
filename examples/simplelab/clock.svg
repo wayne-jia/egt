@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="800"
+   height="480"
+   viewBox="0 0 211.66667 127"
+   version="1.1"
+   id="svg2524"
+   inkscape:version="1.1 (c68e22c387, 2021-05-23)"
+   sodipodi:docname="clock.svg"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <sodipodi:namedview
+     id="namedview2526"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="false"
+     inkscape:document-units="px"
+     showgrid="false"
+     units="px"
+     inkscape:zoom="1.9704153"
+     inkscape:cx="444.83008"
+     inkscape:cy="242.58845"
+     inkscape:window-width="2880"
+     inkscape:window-height="1586"
+     inkscape:window-x="-11"
+     inkscape:window-y="-11"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="panel" />
+  <defs
+     id="defs2521" />
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1">
+    <g
+       id="clock"
+       inkscape:label="#clock">
+      <g
+         id="panel"
+         inkscape:label="#panel">
+        <g
+           id="watch"
+           inkscape:label="#watch">
+          <g
+             id="panels"
+             inkscape:label="#panels">
+            <rect
+               style="fill:#5fbcd3;stroke:#000000;stroke-width:0.26458334;stroke-linecap:square;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+               id="rect852"
+               width="3.7262132"
+               height="5.0689926"
+               x="146.84973"
+               y="61.146824"
+               ry="0.92163497" />
+            <circle
+               style="fill:#5fbcd3;stroke:#000000;stroke-width:1.32291668;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1;fill-opacity:1"
+               id="ring"
+               cx="105.83334"
+               cy="63.5"
+               r="41.207802"
+               inkscape:label="#ring" />
+          </g>
+          <g
+             id="g965"
+             transform="translate(0,1.0583333)">
+            <g
+               id="g1099">
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect855"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="6.9439178"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect955"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="11.706414"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect957"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="16.46891"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect959"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="2.181417"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect1092"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="-2.5810831"
+                 ry="0.40377945" />
+            </g>
+          </g>
+          <g
+             id="g1107">
+            <g
+               id="g975"
+               transform="translate(0,103.18758)">
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect967"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="6.9439178"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect969"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="11.706414"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect971"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="16.46891"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect973"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="2.181417"
+                 ry="0.40377945" />
+              <rect
+                 style="fill:#c8beb7;stroke:#000000;stroke-width:0.187511;stroke-linecap:square"
+                 id="rect1090"
+                 width="35.660728"
+                 height="4.2396894"
+                 x="88.002968"
+                 y="21.231415"
+                 ry="0.40377945" />
+            </g>
+          </g>
+        </g>
+      </g>
+      <rect
+         style="fill:#ac0d0e;fill-opacity:1;stroke:none;stroke-width:0.284804;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="minute"
+         width="34.985161"
+         height="0.75959116"
+         x="104.34921"
+         y="63.120205"
+         inkscape:label="#minute" />
+      <g
+         id="g8788"
+         inkscape:label="#point">
+        <g
+           id="point"
+           inkscape:label="#point">
+          <circle
+             style="fill:#ac0d0e;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+             id="path3751"
+             cx="105.83334"
+             cy="63.5"
+             r="3.3072913" />
+          <circle
+             style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+             id="cpoint"
+             cx="105.83334"
+             cy="63.5"
+             r="2.595175"
+             inkscape:label="#cpoint" />
+          <ellipse
+             style="fill:#000000;fill-opacity:1;stroke:#000000;stroke-width:0.26458334;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:0"
+             id="circle"
+             cx="105.83334"
+             cy="63.5"
+             inkscape:label="#circle"
+             rx="1.4873821"
+             ry="1.5545211" />
+        </g>
+      </g>
+      <path
+         sodipodi:type="star"
+         style="fill:none;fill-opacity:1;stroke:#000000;stroke-width:7.55454;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+         id="hour"
+         inkscape:flatsided="false"
+         sodipodi:sides="3"
+         sodipodi:cx="207.57045"
+         sodipodi:cy="89.828773"
+         sodipodi:r1="49.006649"
+         sodipodi:r2="24.503325"
+         sodipodi:arg1="1.5345428"
+         sodipodi:arg2="2.5817404"
+         inkscape:rounded="0"
+         inkscape:randomized="0"
+         d="M 209.34672,138.80322 186.80796,102.84153 164.2692,66.879849 206.68231,65.34155 249.09543,63.803251 229.22108,101.30324 Z"
+         transform="matrix(-0.03788725,-0.01165159,0.00139039,-0.31749648,113.57311,86.692661)"
+         inkscape:transform-center-x="0.065026823"
+         inkscape:transform-center-y="-1.5823045"
+         inkscape:label="#hour" />
+    </g>
+  </g>
+</svg>
