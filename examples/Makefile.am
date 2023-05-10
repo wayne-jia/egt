@@ -84,7 +84,8 @@ smarthome/smarthome \
 cargodash/cargodash \
 simplelab/simplelab \
 miwigateway/miwigateway \
-svgconvertor/svgconvertor
+svgconvertor/svgconvertor \
+evdash/evdash
 endif
 
 if HAVE_ALSA
@@ -360,6 +361,15 @@ svgconvertor_svgconvertor_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 svgconvertor_svgconvertordir = $(prefix)/share/egt/examples/svgconvertor
 svgconvertor_svgconvertor_DATA = $(wildcard $(top_srcdir)/examples/svgconvertor/*.svg)
 svgconvertor_svgconvertor_LDFLAGS = $(AM_LDFLAGS)
+
+evdash_evdash_SOURCES = evdash/evdash.cpp
+evdash_evdash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/evdash\"
+evdash_evdash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+evdash_evdashdir = $(prefix)/share/egt/examples/evdash
+evdash_evdash_DATA = $(wildcard $(top_srcdir)/examples/evdash/*.svg) \
+  $(wildcard $(top_srcdir)/examples/evdash/*.png)
+evdash_evdash_LDFLAGS = $(AM_LDFLAGS)
 
 sizers_sizers_SOURCES = sizers/sizers.cpp
 sizers_sizers_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
