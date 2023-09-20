@@ -52,6 +52,7 @@ squares/squares \
 progressring/progressring \
 tachometer/tachometer \
 whiteboard/whiteboard \
+motorcycledash/motorcycledash \
 widgets/widgets
 
 if HAVE_LUA
@@ -79,7 +80,6 @@ bin_PROGRAMS += \
 dash/dash \
 gauge/gauge \
 sevensegment/sevensegment \
-motorcycledash/motorcycledash \
 smarthome/smarthome \
 cargodash/cargodash \
 simplelab/simplelab \
