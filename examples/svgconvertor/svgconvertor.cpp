@@ -58,7 +58,11 @@ private:
   const string& m_svgpath;
 };
 
-static void SerializePNG(const char* png_src, const std::string& png_dst);
+static void SerializePNG(const char* png_src);
+static void InitErawHFile(void);
+static void EndErawHFile(void);
+static void WriteTableIndexFile(void);
+static void ReadTableIndexFile(void);
 
 constexpr std::uint32_t hash_str_to_uint32(const char* data)
 {
@@ -68,8 +72,23 @@ constexpr std::uint32_t hash_str_to_uint32(const char* data)
     return h;
 }
 
+typedef struct {
+    string name;
+    unsigned int offset = 0;
+    unsigned int len = 0;
+} eraw_st;
+
+#define ERAW_NAME "eraw.bin"
+unsigned int offset = 0;
+unsigned int table_index = 0;
+
+std::vector<std::shared_ptr<eraw_st>> eraw_v;
+
 void SVG_CVT::saveErawById(const string& filename, const string& id)
 {
+    //eraw_st local_eraw;
+    unsigned int len = 0;
+
     auto box = m_svg.id_box(id);
     auto layer = make_shared<Image>(m_svg.render(id, box));
 
@@ -77,7 +96,45 @@ void SVG_CVT::saveErawById(const string& filename, const string& id)
     const auto data = cairo_image_surface_get_data(layer->surface().get());
     const auto width = cairo_image_surface_get_width(layer->surface().get());
     const auto height = cairo_image_surface_get_height(layer->surface().get());
-    e.save(filename, data, box.x(), box.y(), width, height);
+    e.save(ERAW_NAME, data, box.x(), box.y(), width, height, &len);
+
+    //local_eraw.name = filename;
+    //local_eraw.offset = offset;
+    //local_eraw.len = len;
+    
+    std::ofstream erawmap("eraw.h", std::ios_base::app);
+    if (!erawmap.is_open()) {
+        cout << "eraw.cfg open ERROR!" << endl;
+        return;
+    }
+
+    erawmap << "    {";
+    erawmap << "\"";
+    erawmap << filename.c_str();
+    erawmap << "\"";
+    erawmap << ", ";
+    erawmap << offset;
+    erawmap << ", ";
+    erawmap << len;
+    erawmap << "},    //";
+    erawmap << table_index++;
+    erawmap << "\t\n";
+
+    // erawmap << "#define ";
+    // erawmap << filename;
+    // erawmap << " ";
+    // erawmap << offset;
+    // erawmap << "\t\n";
+    // erawmap << "#define ";
+    // erawmap << filename + "_LEN";
+    // erawmap << " ";
+    // erawmap << len;
+    // erawmap << "\t\n";
+
+    erawmap.close();
+    //eraw_v.push_back(local_eraw);
+    WriteTableIndexFile();
+    offset += len;
 }
 
 XMLElement* SVG_CVT::queryUserNodeByName(XMLElement* root, const string& name)
@@ -99,7 +156,7 @@ void SVG_CVT::recursiveGLabel(XMLElement* g1)
         {
             case hash_str_to_uint32("g"):
                 id = svgWgt->Attribute("id");
-                path = "./eraw/" + id + ".eraw";
+                path = id;
                 id = "#" + id;
                 saveErawById(path, id);
                 recursiveGLabel(svgWgt);
@@ -115,7 +172,7 @@ void SVG_CVT::recursiveGLabel(XMLElement* g1)
             case hash_str_to_uint32("polyline"):
             case hash_str_to_uint32("polygon"):
                 id = svgWgt->Attribute("id");
-                path = "./eraw/" + id + ".eraw";
+                path = id;
                 id = "#" + id;
                 saveErawById(path, id);
                 break;
@@ -143,7 +200,7 @@ void SVG_CVT::convertNotGLabel(XMLElement* notg)
         case hash_str_to_uint32("polyline"):
         case hash_str_to_uint32("polygon"):
             id = notg->Attribute("id");
-            path = "./eraw/" + id + ".eraw";
+            path = id;
             id = "#" + id;
             saveErawById(path, id);
             break;
@@ -155,23 +212,6 @@ void SVG_CVT::convertNotGLabel(XMLElement* notg)
 void SVG_CVT::serializeSVG()
 {
 	XMLDocument doc;
-
-    if (access("./eraw", F_OK))
-    {
-        if (0 > mkdir("./eraw", S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH))
-        {
-            cerr << "Create serialization dir eraw failed, please check permission!!!" << endl;
-            return;
-        }
-    }
-    else
-    {
-        if (-1 == system("rm -rf ./eraw/*"))
-        {
-            cerr << "rm -rf ./eraw/* failed, please check permission!!!" << endl;
-            return;
-        }
-    }
 
 	if (doc.LoadFile(m_svgpath.c_str())!=0)
 	{
@@ -196,8 +236,11 @@ void SVG_CVT::serializeSVG()
     }
 }
 
-static void SerializePNG(const char* png_src, const std::string& png_dst)
+static void SerializePNG(const char* png_src)
 {
+    // eraw_st local_eraw;
+    unsigned int len = 0;
+
     egt::shared_cairo_surface_t surface;
     egt::detail::ErawImage e;
     surface =
@@ -206,14 +249,120 @@ static void SerializePNG(const char* png_src, const std::string& png_dst)
     const auto data = cairo_image_surface_get_data(surface.get());
     const auto width = cairo_image_surface_get_width(surface.get());
     const auto height = cairo_image_surface_get_height(surface.get());
-    e.save(png_dst, data, 0, 0, width, height);
+    e.save(ERAW_NAME, data, 0, 0, width, height, &len);
+
+    // local_eraw.name = png_src;
+    // local_eraw.offset = offset;
+    // local_eraw.len = len;
+    
+    // eraw_v.push_back(local_eraw);
+    // offset += len;
+
+    std::string s(png_src);
+    std::string png = s.substr(0, s.length()-4);
+
+    std::ofstream erawmap("eraw.h", std::ios_base::app);
+    if (!erawmap.is_open()) {
+        cout << "eraw.cfg open ERROR!" << endl;
+        return;
+    }
+
+    erawmap << "    {";
+    erawmap << "\"";
+    erawmap << png.c_str();
+    erawmap << "\"";
+    erawmap << ", ";
+    erawmap << offset;
+    erawmap << ", ";
+    erawmap << len;
+    erawmap << "},    //";
+    erawmap << table_index++;
+    erawmap << "\t\n";
+
+    // erawmap << "#define ";
+    // erawmap << png;
+    // erawmap << " ";
+    // erawmap << offset;
+    // erawmap << "\t\n";
+    // erawmap << "#define ";
+    // erawmap << png + "_LEN";
+    // erawmap << " ";
+    // erawmap << len;
+    // erawmap << "\t\n";
+
+    erawmap.close();
+    //eraw_v.push_back(local_eraw);
+    offset += len;
+    WriteTableIndexFile();
 }
+
+static void WriteTableIndexFile(void) {
+    std::ofstream indexfile("index.txt");
+    if (!indexfile.is_open()) {
+        cout << "indexfile open ERROR!" << endl;
+        return;
+    }
+    
+    indexfile << table_index << " " << offset;
+    indexfile.close();
+}
+
+static void ReadTableIndexFile(void) {
+    std::ifstream indexfile("index.txt", std::ios::in);
+    if (!indexfile.is_open()) {
+        cout << "indexfile open ERROR!" << endl;
+        return;
+    }
+    
+    indexfile >> table_index >> offset;
+    indexfile.close();
+}
+
+static void InitErawHFile(void) {
+    std::ofstream erawmap("eraw.h", std::ios_base::app);
+    if (!erawmap.is_open()) {
+        cout << "eraw.cfg open ERROR!" << endl;
+        return;
+    }
+    
+    erawmap << "typedef struct {";
+    erawmap << "\t\n";
+    erawmap << "    std::string name;";
+    erawmap << "\t\n";
+    erawmap << "    int offset;";
+    erawmap << "\t\n";
+    erawmap << "    int len;";
+    erawmap << "\t\n";
+    erawmap << "} eraw_st;";
+    erawmap << "\t\n";
+    erawmap << "\t\n";
+    erawmap << "eraw_st offset_table[] = {";
+    erawmap << "\t\n";
+
+    erawmap.close();
+}
+
+static void EndErawHFile(void) {
+    std::ofstream erawmap("eraw.h", std::ios_base::app);
+    if (!erawmap.is_open()) {
+        cout << "eraw.cfg open ERROR!" << endl;
+        return;
+    }
+    
+    erawmap << "};";
+    erawmap << "\t\n";
+
+    erawmap.close();
+}
+
 
 int main(int argc, char** argv)
 {
     cxxopts::Options options("svgconvertor", "SVG format convertor");
     options.add_options()
     ("h,help", "help")
+    ("s,starttoken", "add start token of eraw.h")
+    ("e,endtoken", "add end token of eraw.h")
     ("i,input-format", "input format (svg, png)",
      cxxopts::value<std::string>()->default_value("svg"))
     ("positional", "SOURCE", cxxopts::value<std::vector<std::string>>())
@@ -229,11 +378,33 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    if (result.count("starttoken"))
+    {
+        InitErawHFile();
+        WriteTableIndexFile();
+        cout << "Now you can convert SVG or PNG file!" << endl;
+        return 0;
+    }
+
+    if (result.count("endtoken"))
+    {
+        EndErawHFile();
+        if (-1 == system("rm index.txt"))
+        {
+            cerr << "rm index.txt failed, please check permission!!!" << endl;
+            return 1;
+        }
+        cout << "Convertion finished! Copy eraw.h to source, and copy eraw.bin to target!" << endl;
+        return 0;
+    }
+
     if (result.count("positional") != 1)
     {
         cerr << options.help() << endl;
         return 1;
     }
+
+    ReadTableIndexFile();
 
     auto& positional = result["positional"].as<vector<std::string>>();
 
@@ -246,14 +417,15 @@ int main(int argc, char** argv)
         SvgImage svg(filepath, SizeF(0, 0));
         SVG_CVT svg_cvt(in, svg);
         svg_cvt.serializeSVG();
+        cout << "SVG converted done!" << endl;
     }
 
     if (result["input-format"].as<string>() == "png")
     {
         // const char *pname = nullptr;
         // SET_FILE(pname, in);
-        SerializePNG(in.c_str(), "png.eraw");
-        cout << "PNG converted OK!" << endl;
+        SerializePNG(in.c_str());
+        cout << "PNG converted done!" << endl;
     }
 
     return 0;

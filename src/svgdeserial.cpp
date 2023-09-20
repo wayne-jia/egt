@@ -85,11 +85,30 @@ shared_cairo_surface_t SVGDeserial::DeSerialize(const std::string& filename, std
     return detail::ErawImage::load(filename, rect);
 }
 
+shared_cairo_surface_t SVGDeserial::DeSerialize(const unsigned char* buf, size_t len, std::shared_ptr<egt::Rect>& rect)
+{
+    return detail::ErawImage::load(buf, len, rect);
+}
+
 std::shared_ptr<GaugeLayer> SVGDeserial::AddWidgetByID(const std::string& id, bool show)
 {
     auto rect = std::make_shared<Rect>();
     std::shared_ptr<GaugeLayer> widget;
     widget = std::make_shared<GaugeLayer>(Image(DeSerialize(id, rect)));
+    widget->box(*rect);
+    if (show)
+        widget->show();
+    else
+        widget->hide();
+    add(widget);
+    return widget;
+}
+
+std::shared_ptr<GaugeLayer> SVGDeserial::AddWidgetByBuf(const unsigned char* buf, size_t len, bool show)
+{
+    auto rect = std::make_shared<Rect>();
+    std::shared_ptr<GaugeLayer> widget;
+    widget = std::make_shared<GaugeLayer>(Image(DeSerialize(buf, len, rect)));
     widget->box(*rect);
     if (show)
         widget->show();
@@ -105,6 +124,20 @@ std::shared_ptr<NeedleLayer> SVGDeserial::AddRotateWidgetByID(const std::string&
     auto rect = std::make_shared<Rect>();
     std::shared_ptr<NeedleLayer> widget;
     widget = std::make_shared<NeedleLayer>(Image(DeSerialize(id, rect)), min, max, min_angle, max_angle, clockwise);
+    widget->box(*rect);
+    widget->needle_center(center - widget->box().point());
+    widget->needle_point(center);
+    widget->show();
+    add(widget);
+    return widget;
+}
+
+std::shared_ptr<NeedleLayer> SVGDeserial::AddRotateWidgetByBuf(const unsigned char* buf, size_t len, int min, int max,
+        int min_angle, int max_angle, bool clockwise, Point center)
+{
+    auto rect = std::make_shared<Rect>();
+    std::shared_ptr<NeedleLayer> widget;
+    widget = std::make_shared<NeedleLayer>(Image(DeSerialize(buf, len, rect)), min, max, min_angle, max_angle, clockwise);
     widget->box(*rect);
     widget->needle_center(center - widget->box().point());
     widget->needle_point(center);
