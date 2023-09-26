@@ -318,7 +318,7 @@ TYPED_TEST(Widgets, Properties)
     widget->readonly(false);
     EXPECT_EQ(widget->readonly(), false);
     widget->align(egt::AlignFlag::right | egt::AlignFlag::center_vertical);
-    EXPECT_EQ(widget->align(), egt::AlignFlag::right | egt::AlignFlag::center_vertical);
+    EXPECT_EQ(widget->align(), egt::AlignFlags(egt::AlignFlag::right | egt::AlignFlag::center_vertical));
     widget->padding(10);
     widget->border(11);
     widget->margin(12);
@@ -359,13 +359,13 @@ TEST(AlignFlags, Basic)
     bool state = false;
     egt::AlignFlags flags1("left|right");
     flags1.on_change([&state]() { state = true; });
-    EXPECT_TRUE(flags1.is_set(egt::AlignFlag::left));
+    EXPECT_FALSE(flags1.is_set(egt::AlignFlag::left));
     EXPECT_TRUE(flags1.is_set(egt::AlignFlag::right));
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::bottom));
 
     flags1.clear(egt::AlignFlag::right);
     EXPECT_TRUE(state); state = false;
-    EXPECT_TRUE(flags1.is_set(egt::AlignFlag::left));
+    EXPECT_FALSE(flags1.is_set(egt::AlignFlag::left));
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::right));
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::bottom));
 
@@ -373,7 +373,7 @@ TEST(AlignFlags, Basic)
     EXPECT_TRUE(state); state = false;
     flags1.set(egt::AlignFlag::bottom);
     EXPECT_FALSE(state);
-    EXPECT_TRUE(flags1.is_set(egt::AlignFlag::left));
+    EXPECT_FALSE(flags1.is_set(egt::AlignFlag::left));
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::right));
     EXPECT_TRUE(flags1.is_set(egt::AlignFlag::bottom));
 
@@ -383,26 +383,28 @@ TEST(AlignFlags, Basic)
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::right));
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::bottom));
 
-    flags1.set({egt::AlignFlag::left, egt::AlignFlag::right});
+    flags1.set(egt::AlignFlag::left);
+    flags1.set(egt::AlignFlag::right);
     EXPECT_TRUE(state); state = false;
-    flags1.set({egt::AlignFlag::left, egt::AlignFlag::right});
-    EXPECT_FALSE(state);
-    EXPECT_TRUE(flags1.is_set(egt::AlignFlag::left));
+    flags1.set(egt::AlignFlag::left);
+    flags1.set(egt::AlignFlag::right);
+    EXPECT_TRUE(state);
+    EXPECT_FALSE(flags1.is_set(egt::AlignFlag::left));
     EXPECT_TRUE(flags1.is_set(egt::AlignFlag::right));
     EXPECT_FALSE(flags1.is_set(egt::AlignFlag::bottom));
-    EXPECT_EQ(flags1.to_string(), "left|right");
+    EXPECT_EQ(flags1.to_string(), "right");
 
     egt::Button b;
     b.align().on_change([&state]() { state = true; });
     b.align(flags1);
     EXPECT_TRUE(state); state = false;
-    EXPECT_TRUE(b.align().is_set(egt::AlignFlag::left));
+    EXPECT_FALSE(b.align().is_set(egt::AlignFlag::left));
     EXPECT_TRUE(b.align().is_set(egt::AlignFlag::right));
     EXPECT_FALSE(b.align().is_set(egt::AlignFlag::bottom));
 
     b.align(b.align() | egt::AlignFlag::bottom);
     EXPECT_TRUE(state); state = false;
-    EXPECT_TRUE(b.align().is_set(egt::AlignFlag::left));
+    EXPECT_FALSE(b.align().is_set(egt::AlignFlag::left));
     EXPECT_TRUE(b.align().is_set(egt::AlignFlag::right));
     EXPECT_TRUE(b.align().is_set(egt::AlignFlag::bottom));
 }

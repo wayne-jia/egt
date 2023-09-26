@@ -246,7 +246,7 @@ void ComboBox::clear()
     }
 }
 
-void ComboBox::set_parent(Frame* parent)
+void ComboBox::set_parent(Widget* parent)
 {
     Widget::set_parent(parent);
 
@@ -257,7 +257,7 @@ void ComboBox::set_parent(Frame* parent)
     {
         Application::instance().main_window()->add(m_popup);
 
-        m_popup->special_child_draw_callback(parent->special_child_draw_callback());
+        m_popup->special_child_draw_callback(special_child_draw_callback(parent));
     }
 }
 

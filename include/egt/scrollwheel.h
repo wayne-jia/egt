@@ -32,7 +32,7 @@ inline namespace v1
  *
  * @ingroup controls
  */
-class EGT_API Scrollwheel : public StaticGrid
+class EGT_API Scrollwheel : public Widget
 {
 public:
 
@@ -168,10 +168,14 @@ public:
 protected:
     /// @private
     void init(bool in_deserialize = false);
+    /// @private
+    void update_orientation();
     /// Array of items.
     ItemArray m_items;
     /// Currently selected index.
     size_t m_selected{0};
+    /// Layout grid.
+    StaticGrid m_grid;
     /// Up button.
     ImageButton m_button_up;
     /// Down button.

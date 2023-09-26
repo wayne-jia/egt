@@ -8,7 +8,6 @@
 #endif
 
 #include "detail/utf8text.h"
-#include "egt/canvas.h"
 #include "egt/detail/alignment.h"
 #include "egt/detail/enum.h"
 #include "egt/detail/layout.h"
@@ -56,79 +55,99 @@ TextRect TextRect::split(size_t pos, cairo_t* cr) noexcept
     cairo_text_extents_t tail_te;
     cairo_text_extents(cr, tail_text.c_str(), &tail_te);
 
+    /*
+     * Fix a former rounding issue when computing:
+     * tail_rect.width() - head_te.x_advance
+     * to update tail_rect.width().
+     *
+     * Now converting, here and once for all, the double 'head_te.x_advance'
+     * (see its definition in cairo.h) into the DefaultDim (int) 'head_width'.
+     */
+    DefaultDim head_width = head_te.x_advance;
     Rect tail_rect(m_rect);
-    tail_rect.x(tail_rect.x() + head_te.x_advance);
-    tail_rect.width(tail_rect.width() - head_te.x_advance);
-    TextRect tail(m_behave, tail_rect, tail_text, tail_te, m_text_rect_flags);
+    tail_rect.x(tail_rect.x() + head_width);
+    tail_rect.width(tail_rect.width() - head_width);
+    TextRectFlags flags(m_text_rect_flags);
+    flags.clear(TextRectFlag::bol);
+    TextRect tail(m_behave, tail_rect, tail_text, tail_te, flags);
 
     m_text = head_text;
-    m_rect.width(head_te.x_advance);
+    m_rect.width(head_width);
     m_te = head_te;
 
     return tail;
 }
 
-static void tokenize(TextRects& rects,
-                     cairo_t* cr,
-                     cairo_font_extents_t& fe,
-                     const std::string& text,
-                     const TextBox::TextFlags& flags)
+void TextBox::tokenize(TextRects& rects)
 {
+    cairo_t* cr = context();
+    cairo_font_extents_t fe;
+    cairo_font_extents(cr, &fe);
+
     // tokenize based on words or code points
     static const std::string delimiters = " \t\n\r";
     std::vector<std::string> tokens;
 
-    tokens.reserve(text.length());
+    tokens.reserve(m_text.length());
 
-    if (flags.is_set(TextBox::TextFlag::multiline) &&
-        flags.is_set(TextBox::TextFlag::word_wrap))
+    bool multiline = text_flags().is_set(TextBox::TextFlag::multiline);
+    if (multiline && text_flags().is_set(TextBox::TextFlag::word_wrap))
     {
-        detail::tokenize_with_delimiters(text.cbegin(),
-                                         text.cend(),
+        detail::tokenize_with_delimiters(m_text.cbegin(),
+                                         m_text.cend(),
                                          delimiters.cbegin(),
                                          delimiters.cend(),
                                          tokens);
     }
     else
     {
-        for (detail::utf8_const_iterator ch(text.begin(), text.begin(), text.end());
-             ch != detail::utf8_const_iterator(text.end(), text.begin(), text.end()); ++ch)
+        for (detail::utf8_const_iterator ch(m_text.begin(), m_text.begin(), m_text.end());
+             ch != detail::utf8_const_iterator(m_text.end(), m_text.begin(), m_text.end()); ++ch)
         {
-            tokens.emplace_back(detail::utf8_char_to_string(ch.base(), text.cend()));
+            auto t = detail::utf8_char_to_string(ch.base(), m_text.cend());
+
+            if (!multiline && t == "\n")
+                break;
+
+            tokens.emplace_back(t);
         }
     }
 
     uint32_t default_behave = 0;
     uint32_t behave = default_behave;
 
+    bool empty_line = true;
     for (const auto& t : tokens)
     {
         cairo_text_extents_t te;
 
         if (t == "\n")
         {
+            TextRect::TextRectFlags flags = {};
+            if (!empty_line)
+                flags.set(TextRect::TextRectFlag::eonel);
+
             memset(&te, 0, sizeof(te));
             te.width = 1;
             te.height = fe.height;
             te.x_advance = 1;
-            rects.emplace_back(behave, Rect(0, 0, te.x_advance, fe.height), t, te);
+            rects.emplace_back(behave, Rect(0, 0, te.x_advance, fe.height), t, te, flags);
             behave |= LAY_BREAK;
+            empty_line = true;
         }
         else
         {
             cairo_text_extents(cr, t.c_str(), &te);
             rects.emplace_back(behave, Rect(0, 0, te.x_advance, fe.height), t, te);
             behave = default_behave;
+            empty_line = false;
         }
     }
 }
 
-static void compute_layout(const Rect& boundaries,
-                           TextRects& rects,
-                           Justification justify,
-                           Orientation orient,
-                           const AlignFlags& align)
+void TextBox::compute_layout(TextRects& rects)
 {
+    const auto boundaries = text_boundaries();
     lay_context ctx;
     lay_init_context(&ctx);
 
@@ -144,15 +163,18 @@ static void compute_layout(const Rect& boundaries,
 
     lay_set_size_xy(&ctx, outer_parent, boundaries.width(), boundaries.height());
 
-    uint32_t contains = detail::justify_to_contains(justify, orient);
+    uint32_t contains = detail::justify_to_contains(Justification::start, Orientation::flex);
     lay_set_contain(&ctx, inner_parent, contains);
 
-    uint32_t dbehave = detail::align_to_behave(align);
+    uint32_t dbehave = detail::align_to_behave(text_align());
     lay_set_behave(&ctx, inner_parent, dbehave);
     lay_insert(&ctx, outer_parent, inner_parent);
 
     for (const auto& r : rects)
     {
+        if (r.end_of_non_empty_line())
+            continue;
+
         lay_id c = lay_item(&ctx);
         lay_set_size_xy(&ctx, c, r.rect().width(), r.rect().height());
         lay_set_behave(&ctx, c, r.behave());
@@ -161,22 +183,46 @@ static void compute_layout(const Rect& boundaries,
 
     lay_run_context(&ctx);
 
+    DefaultDim line_y = boundaries.y() - 1;
+    bool next_is_beginning_of_line = true;
+
     auto it = rects.begin();
     auto child = lay_first_child(&ctx, inner_parent);
     while (child != LAY_INVALID_ID)
     {
         lay_vec4 r = lay_get_rect(&ctx, child);
-        it->rect(Rect(boundaries.x() + r[0], boundaries.y() + r[1], r[2], r[3]));
+        auto x = boundaries.x() + r[0];
+        auto y = boundaries.y() + r[1];
+        it->point(Point(x, y));
+        x += it->rect().width();
+
+        if (line_y != y || next_is_beginning_of_line)
+        {
+            next_is_beginning_of_line = false;
+            it->mark_beginning_of_line();
+            line_y = y;
+        }
+
+        if (it->text() == "\n")
+            next_is_beginning_of_line = true;
 
         lay_item_t* pchild = lay_get_item(&ctx, child);
         child = pchild->next_sibling;
         ++it;
+
+        if (it != rects.end() && it->end_of_non_empty_line())
+        {
+            it->point(Point(x, y));
+            next_is_beginning_of_line = true;
+            ++it;
+        }
     }
 }
 
-static void consolidate(TextRects& rects,
-                        cairo_t* cr)
+void TextBox::consolidate(TextRects& rects)
 {
+    cairo_t* cr = context();
+
     for (auto it = rects.begin(); it != rects.end();)
     {
         auto nx = std::next(it, 1);
@@ -195,21 +241,21 @@ static void consolidate(TextRects& rects,
     }
 }
 
-static void clear_selection(TextRects& rects)
+void TextBox::clear_selection(TextRects& rects)
 {
     for (auto& r : rects)
         r.deselect();
 }
 
-static void set_selection(TextRects& rects,
-                          cairo_t* cr,
-                          size_t select_start,
-                          size_t select_len)
+void TextBox::set_selection(TextRects& rects)
 {
-    if (!select_len)
+    if (!m_select_len)
         return;
 
+    cairo_t* cr = context();
     size_t pos = 0;
+    size_t select_start = m_select_start;
+    size_t select_len = m_select_len;
     size_t select_end = select_start + select_len;
     for (auto it = rects.begin(); it != rects.end(); ++it)
     {
@@ -268,10 +314,10 @@ static void set_selection(TextRects& rects,
     }
 }
 
-static void get_line(const TextRects& rects,
-                     TextRects::iterator& pos,
-                     std::string& line,
-                     Rect& rect)
+void TextBox::get_line(const TextRects& rects,
+                       TextRects::iterator& pos,
+                       std::string& line,
+                       Rect& rect)
 {
     line.clear();
     rect.clear();
@@ -295,8 +341,8 @@ static void get_line(const TextRects& rects,
     }
 }
 
-static std::string longest_prefix(const std::string& s1,
-                                  const std::string& s2)
+std::string TextBox::longest_prefix(const std::string& s1,
+                                    const std::string& s2)
 {
     detail::utf8_const_iterator it1(s1.cbegin(), s1.cbegin(), s1.cend());
     detail::utf8_const_iterator end1(s1.cend(), s1.cbegin(), s1.cend());
@@ -312,28 +358,34 @@ static std::string longest_prefix(const std::string& s1,
     return std::string(s1.cbegin(), it1.base());
 }
 
-static std::string longest_suffix(const std::string& s1,
-                                  const std::string& s2)
+std::string TextBox::longest_suffix(const std::string& s1,
+                                    const std::string& s2)
 {
-    utf8::iterator<std::string::const_reverse_iterator> it1(s1.crbegin(), s1.crbegin(), s1.crend());
-    utf8::iterator<std::string::const_reverse_iterator> end1(s1.crend(), s1.crbegin(), s1.crend());
-    utf8::iterator<std::string::const_reverse_iterator> it2(s2.crbegin(), s2.crbegin(), s2.crend());
-    utf8::iterator<std::string::const_reverse_iterator> end2(s2.crend(), s2.crbegin(), s2.crend());
+    detail::utf8_const_iterator begin1(s1.cbegin(), s1.cbegin(), s1.cend());
+    detail::utf8_const_iterator it1(s1.cend(), s1.cbegin(), s1.cend());
+    detail::utf8_const_iterator begin2(s2.cbegin(), s2.cbegin(), s2.cend());
+    detail::utf8_const_iterator it2(s2.cend(), s2.cbegin(), s2.cend());
 
-    while (it1 != end1 && it2 != end2 && *it1 == *it2)
+    while (it1 != begin1 && it2 != begin2)
     {
-        ++it1;
-        ++it2;
+        auto next1 = it1--;
+        auto next2 = it2--;
+
+        if (*it1 != *it2)
+        {
+            it1 = next1;
+            it2 = next2;
+            break;
+        }
     }
 
-    return std::string(it1.base().base(), s1.cend());
+    return std::string(it1.base(), s1.cend());
 }
 
-static void tag_default_aligned_line(TextRects& prev,
-                                     TextRects::iterator& prev_pos,
-                                     TextRects& next,
-                                     TextRects::iterator& next_pos,
-                                     Widget& parent)
+void TextBox::tag_default_aligned_line(TextRects& prev,
+                                       TextRects::iterator& prev_pos,
+                                       TextRects& next,
+                                       TextRects::iterator& next_pos)
 {
     std::string prev_line;
     Rect prev_rect;
@@ -351,16 +403,14 @@ static void tag_default_aligned_line(TextRects& prev,
         auto y_max = std::max(prev_rect.y() + prev_rect.height(), next_rect.y() + next_rect.height());
         Rect r(x_min, y_min, x_max - x_min, y_max - y_min);
         if (!r.empty())
-            parent.damage(r);
+            damage_text(r);
     }
 }
 
-static void tag_left_aligned_line(TextRects& prev,
-                                  TextRects::iterator& prev_pos,
-                                  TextRects& next,
-                                  TextRects::iterator& next_pos,
-                                  Widget& parent,
-                                  cairo_t* cr)
+void TextBox::tag_left_aligned_line(TextRects& prev,
+                                    TextRects::iterator& prev_pos,
+                                    TextRects& next,
+                                    TextRects::iterator& next_pos)
 {
     std::string prev_line;
     Rect prev_rect;
@@ -381,7 +431,7 @@ static void tag_left_aligned_line(TextRects& prev,
             auto y = prev_rect.y();
             auto w = prev_rect.width() - next_rect.width();
             auto h = prev_rect.height();
-            parent.damage(Rect(x, y, w, h));
+            damage_text(Rect(x, y, w, h));
         }
         return;
     }
@@ -391,7 +441,7 @@ static void tag_left_aligned_line(TextRects& prev,
 
     size_t len = detail::utf8len(prefix);
     size_t l;
-    while ((l = next_it->length()) < len)
+    while ((l = next_it->length()) <= len)
     {
         prefix_rect.width(prefix_rect.width() + next_it->rect().width());
         len -= l;
@@ -400,7 +450,7 @@ static void tag_left_aligned_line(TextRects& prev,
 
     if (len && len < next_it->length())
     {
-        TextRect tail(std::move(next_it->split(len, cr)));
+        TextRect tail(std::move(next_it->split(len, context())));
         prefix_rect.width(prefix_rect.width() + next_it->rect().width());
         next.insert(std::next(next_it), std::move(tail));
     }
@@ -409,15 +459,13 @@ static void tag_left_aligned_line(TextRects& prev,
     r.x(prefix_rect.x() + prefix_rect.width());
     r.width(std::max(next_rect.width(), prev_rect.width()) - prefix_rect.width());
     if (!r.empty())
-        parent.damage(r);
+        damage_text(r);
 }
 
-static void tag_right_aligned_line(TextRects& prev,
-                                   TextRects::iterator& prev_pos,
-                                   TextRects& next,
-                                   TextRects::iterator& next_pos,
-                                   Widget& parent,
-                                   cairo_t* cr)
+void TextBox::tag_right_aligned_line(TextRects& prev,
+                                     TextRects::iterator& prev_pos,
+                                     TextRects& next,
+                                     TextRects::iterator& next_pos)
 {
     std::string prev_line;
     Rect prev_rect;
@@ -438,7 +486,7 @@ static void tag_right_aligned_line(TextRects& prev,
             auto y = prev_rect.y();
             auto w = prev_rect.width() - next_rect.width();
             auto h = prev_rect.height();
-            parent.damage(Rect(x, y, w, h));
+            damage_text(Rect(x, y, w, h));
         }
         return;
     }
@@ -457,7 +505,7 @@ static void tag_right_aligned_line(TextRects& prev,
 
     if (len && len < next_it->length())
     {
-        TextRect tail(next_it->split(len, cr));
+        TextRect tail(next_it->split(len, context()));
         prefix_rect.width(prefix_rect.width() + next_it->rect().width());
         next.insert(std::next(next_it), std::move(tail));
     }
@@ -466,56 +514,49 @@ static void tag_right_aligned_line(TextRects& prev,
     r.x(std::min(next_rect.x(), prev_rect.x()));
     r.width(prefix_rect.x() + prefix_rect.width() - r.x());
     if (!r.empty())
-        parent.damage(r);
+        damage_text(r);
 }
 
-static void tag_line(const AlignFlags& text_align,
-                     TextRects& prev,
-                     TextRects::iterator& prev_pos,
-                     TextRects& next,
-                     TextRects::iterator& next_pos,
-                     Widget& parent,
-                     cairo_t* cr)
+void TextBox::tag_line(TextRects& prev,
+                       TextRects::iterator& prev_pos,
+                       TextRects& next,
+                       TextRects::iterator& next_pos)
 {
     /* Currently AlignFlag::expand_horizontal is left-aligned. */
-    if (text_align.is_set(AlignFlag::left) ||
-        text_align.is_set(AlignFlag::expand_horizontal))
-        tag_left_aligned_line(prev, prev_pos, next, next_pos, parent, cr);
-    else if (text_align.is_set(AlignFlag::right))
-        tag_right_aligned_line(prev, prev_pos, next, next_pos, parent, cr);
+    if (text_align().is_set(AlignFlag::left) ||
+        text_align().is_set(AlignFlag::expand_horizontal))
+        tag_left_aligned_line(prev, prev_pos, next, next_pos);
+    else if (text_align().is_set(AlignFlag::right))
+        tag_right_aligned_line(prev, prev_pos, next, next_pos);
     else
-        tag_default_aligned_line(prev, prev_pos, next, next_pos, parent);
+        tag_default_aligned_line(prev, prev_pos, next, next_pos);
 }
 
-static void tag_text(const AlignFlags& text_align,
-                     TextRects& prev,
-                     TextRects& next,
-                     Widget& parent,
-                     cairo_t* cr)
+void TextBox::tag_text(TextRects& prev, TextRects& next)
 {
     auto prev_pos = prev.begin();
     auto next_pos = next.begin();
     while (prev_pos != prev.end() && next_pos != next.end())
-        tag_line(text_align, prev, prev_pos, next, next_pos, parent, cr);
+        tag_line(prev, prev_pos, next, next_pos);
 
     std::string line;
     Rect rect;
     while (next_pos != next.end())
     {
         get_line(next, next_pos, line, rect);
-        parent.damage(rect);
+        damage_text(rect);
     }
 
     while (prev_pos != prev.end())
     {
         get_line(prev, prev_pos, line, rect);
-        parent.damage(rect);
+        damage_text(rect);
     }
 }
 
-static void get_line_selection(const TextRects& rects,
-                               TextRects::const_iterator& pos,
-                               Rect& rect)
+void TextBox::get_line_selection(const TextRects& rects,
+                                 TextRects::const_iterator& pos,
+                                 Rect& rect)
 {
     rect.clear();
 
@@ -548,11 +589,10 @@ static void get_line_selection(const TextRects& rects,
     }
 }
 
-static void tag_line_selection(const TextRects& prev,
-                               TextRects::const_iterator& prev_pos,
-                               const TextRects& next,
-                               TextRects::const_iterator& next_pos,
-                               Widget& parent)
+void TextBox::tag_line_selection(const TextRects& prev,
+                                 TextRects::const_iterator& prev_pos,
+                                 const TextRects& next,
+                                 TextRects::const_iterator& next_pos)
 {
     Rect pr;
     get_line_selection(prev, prev_pos, pr);
@@ -565,13 +605,13 @@ static void tag_line_selection(const TextRects& prev,
 
     if (pr.width() && !nr.width())
     {
-        parent.damage(pr);
+        damage_text(pr);
         return;
     }
 
     if (nr.width() && !pr.width())
     {
-        parent.damage(nr);
+        damage_text(nr);
         return;
     }
 
@@ -580,7 +620,7 @@ static void tag_line_selection(const TextRects& prev,
     if (min_lx != max_lx)
     {
         Rect left(min_lx, pr.y(), max_lx - min_lx, pr.height());
-        parent.damage(left);
+        damage_text(left);
     }
 
     auto min_rx = std::min(pr.x() + pr.width(), nr.x() + nr.width());
@@ -588,37 +628,38 @@ static void tag_line_selection(const TextRects& prev,
     if (min_rx != max_rx)
     {
         Rect right(min_rx, pr.y(), max_rx - min_rx, pr.height());
-        parent.damage(right);
+        damage_text(right);
     }
 }
 
-static void tag_text_selection(const TextRects& prev,
-                               const TextRects& next,
-                               Widget& parent)
+void TextBox::tag_text_selection(const TextRects& prev,
+                                 const TextRects& next)
 {
     auto prev_pos = prev.cbegin();
     auto next_pos = next.cbegin();
     while (prev_pos != prev.cend() && next_pos != next.cend())
-        tag_line_selection(prev, prev_pos, next, next_pos, parent);
+        tag_line_selection(prev, prev_pos, next, next_pos);
 }
 
 #define fl(f) static_cast<float>(f)
 
-static void draw_text(Painter& painter,
-                      const Rect& rect,
-                      const TextRects& rects,
-                      const Font& font,
-                      const TextBox::TextFlags& flags,
-                      const Pattern& text_color,
-                      const Pattern& highlight_color)
+void TextBox::draw_text(Painter& painter, const Rect& rect)
 {
+    const auto clip = Rect::intersection(text_area(), rect);
+    if (clip.empty())
+        return;
+
+    Painter::AutoSaveRestore sr(painter);
+    painter.draw(clip);
+    painter.clip();
+
     auto cr = painter.context().get();
 
-    painter.set(font);
+    painter.set(font());
     cairo_font_extents_t fe;
     cairo_font_extents(cr, &fe);
 
-    for (const auto& r : rects)
+    for (const auto& r : m_rects)
     {
         if (r.text() != "\n")
         {
@@ -639,58 +680,39 @@ static void draw_text(Painter& painter,
                 auto r2 = RectF(p2, s);
                 if (!r2.empty())
                 {
-                    painter.set(highlight_color);
+                    painter.set(color(Palette::ColorId::text_highlight));
                     painter.draw(r2);
                     painter.fill();
                 }
             }
 
-            painter.set(text_color);
+            painter.set(color(Palette::ColorId::text));
             painter.draw(p);
             painter.draw(r.text());
-        }
-        else
-        {
-            if (!flags.is_set(TextBox::TextFlag::multiline))
-                break;
         }
     }
 }
 
-static void prepare_text(TextRects& rects,
-                         cairo_t* cr,
-                         const Rect& b,
-                         const std::string& text,
-                         const Font& font,
-                         const TextBox::TextFlags& flags,
-                         const AlignFlags& text_align,
-                         Justification justify,
-                         size_t select_start,
-                         size_t select_len)
+void TextBox::prepare_text(TextRects& rects)
 {
-    cairo_set_scaled_font(cr, font.scaled_font());
-    cairo_font_extents_t fe;
-    cairo_font_extents(cr, &fe);
+    cairo_set_scaled_font(context(), font().scaled_font());
 
     rects.clear();
 
-    tokenize(rects, cr, fe, text, flags);
-    compute_layout(b, rects, justify, Orientation::flex, text_align);
-    set_selection(rects, cr, select_start, select_len);
+    tokenize(rects);
+    compute_layout(rects);
+    set_selection(rects);
 }
 
 constexpr static auto CURSOR_WIDTH = 2;
 constexpr static auto CURSOR_X_MARGIN = 1;
 constexpr static auto CURSOR_RECT_WIDTH = CURSOR_WIDTH + 2 * CURSOR_X_MARGIN;
 
-static void get_cursor_rect(const TextRects& rects,
-                            cairo_t* cr,
-                            const Rect& boundaries,
-                            const Font& font,
-                            size_t cursor_pos,
-                            Rect& rect)
+void TextBox::get_cursor_rect()
 {
-    cairo_set_scaled_font(cr, font.scaled_font());
+    cairo_t* cr = context();
+    const Rect boundaries = text_boundaries();
+    cairo_set_scaled_font(cr, font().scaled_font());
     cairo_font_extents_t fe;
     cairo_font_extents(cr, &fe);
 
@@ -698,16 +720,18 @@ static void get_cursor_rect(const TextRects& rects,
     Size s(CURSOR_RECT_WIDTH, fe.height);
 
     size_t pos = 0;
-    for (const auto& r : rects)
+    for (auto itr = m_rects.cbegin(); itr != m_rects.cend(); ++itr)
     {
+        const auto& r = *itr;
+
         size_t l = r.length();
-        if (pos + l < cursor_pos)
+        if (pos + l < m_cursor_pos)
         {
             pos += l;
             continue;
         }
 
-        if (pos == cursor_pos)
+        if (pos == m_cursor_pos)
         {
             p = r.rect().point();
             p.x(p.x() - CURSOR_X_MARGIN);
@@ -721,8 +745,19 @@ static void get_cursor_rect(const TextRects& rects,
             break;
         }
 
+        if (pos + l == m_cursor_pos)
+        {
+            auto next = std::next(itr);
+            if (next != m_rects.cend() && next->beginning_of_line())
+            {
+                p = next->rect().point();
+                p.x(p.x() - CURSOR_X_MARGIN);
+                break;
+            }
+        }
+
         auto it = r.text().begin();
-        utf8::advance(it, cursor_pos - pos, r.text().end());
+        utf8::advance(it, m_cursor_pos - pos, r.text().end());
         std::string str(r.text().begin(), it);
 
         cairo_text_extents_t te;
@@ -733,8 +768,291 @@ static void get_cursor_rect(const TextRects& rects,
         break;
     }
 
-    rect.point(p);
-    rect.size(s);
+    m_cursor_rect.point(p);
+    m_cursor_rect.size(s);
+}
+
+void TextBox::refresh_text_area()
+{
+    prepare_text(m_rects);
+    get_cursor_rect();
+    invalidate_text_rect();
+    update_sliders();
+    move_sliders();
+}
+
+Rect TextBox::text_area() const
+{
+    bool hscrollable = text_flags().is_set(TextBox::TextFlag::horizontal_scrollable);
+    bool vscrollable = text_flags().is_set(TextBox::TextFlag::vertical_scrollable);
+
+    auto b = content_area();
+
+    if (!hscrollable && !vscrollable)
+        return b;
+
+    if (hscrollable)
+        b.height(b.height() - m_slider_dim);
+
+    if (vscrollable)
+        b.width(b.width() - m_slider_dim);
+
+    // Don't return a negative size
+    if (b.empty())
+        return Rect(b.point(), Size());
+
+    return b;
+}
+
+void TextBox::init_sliders()
+{
+    auto redraw = [this]()
+    {
+        damage();
+        prepare_text(m_rects);
+        get_cursor_rect();
+        invalidate_text_rect();
+    };
+
+    m_hslider.orient(Orientation::horizontal);
+    m_hslider.slider_flags().set({Slider::SliderFlag::rectangle_handle,
+                                  Slider::SliderFlag::consistent_line});
+    m_hslider.on_value_changed.on_event(redraw);
+    m_hslider.live_update(true);
+    m_hslider.hide();
+    m_components.push_back(&m_hslider);
+
+    m_vslider.orient(Orientation::vertical);
+    m_vslider.slider_flags().set({Slider::SliderFlag::rectangle_handle,
+                                  Slider::SliderFlag::inverted,
+                                  Slider::SliderFlag::consistent_line});
+    m_vslider.on_value_changed.on_event(redraw);
+    m_vslider.live_update(true);
+    m_vslider.hide();
+    m_components.push_back(&m_vslider);
+
+    resize_sliders();
+}
+
+void TextBox::resize_sliders()
+{
+    bool hscrollable = text_flags().is_set(TextBox::TextFlag::horizontal_scrollable);
+    bool vscrollable = text_flags().is_set(TextBox::TextFlag::vertical_scrollable);
+
+    if (!hscrollable && !vscrollable)
+    {
+        update_sliders();
+        return;
+    }
+
+    auto c = content_area();
+
+    if (hscrollable)
+    {
+        auto b = c;
+        b.y(b.y() + b.height() - m_slider_dim);
+        b.height(m_slider_dim);
+
+        if (vscrollable)
+            b.width(b.width() - m_slider_dim);
+
+        m_hslider.move(b.point() - point());
+        m_hslider.resize(b.size());
+    }
+
+    if (vscrollable)
+    {
+        auto b = c;
+        b.x(b.x() + b.width() - m_slider_dim);
+        b.width(m_slider_dim);
+
+        if (hscrollable)
+            b.height(b.height() - m_slider_dim);
+
+        m_vslider.move(b.point() - point());
+        m_vslider.resize(b.size());
+    }
+
+    update_sliders();
+    move_sliders();
+}
+
+DefaultDim TextBox::half_screens(DefaultDim size, DefaultDim screen_size)
+{
+    /*
+     * Sanity check to avoid zero division that can occurs in two cases:
+     * - When a TextBox is expanded, usually its size is not set. So, when
+     *   initializing the TextBox, the size is null.
+     * - When the screen_size is 1 as it will be divided by two.
+     */
+    if (screen_size < 2)
+        return 0;
+
+    DefaultDim n = size;
+    DefaultDim d = screen_size >> 1;
+    return ((n + d - 1) / d) * d;
+}
+
+void TextBox::update_hslider()
+{
+    if (!text_flags().is_set(TextBox::TextFlag::horizontal_scrollable))
+    {
+        if (m_hslider.visible())
+        {
+            m_hslider.hide();
+            if (m_hslider.value())
+                m_hslider.value(0);
+            else
+                damage_hslider();
+        }
+        return;
+    }
+
+    auto draw_sz = text_area().size();
+    auto text_sz = text_size();
+    DefaultDim delta = half_screens(text_sz.width() - draw_sz.width(), draw_sz.width());
+    bool visible = delta > 0;
+
+    if (visible && m_hslider.ending() != delta)
+    {
+        m_hslider.ending(delta);
+        damage_hslider();
+    }
+
+    if (visible && !m_hslider.visible())
+    {
+        m_hslider.show();
+        damage_hslider();
+    }
+    else if (!visible && m_hslider.visible())
+    {
+        m_hslider.hide();
+        if (m_hslider.value())
+            m_hslider.value(0);
+        else
+            damage_hslider();
+    }
+}
+
+void TextBox::update_vslider()
+{
+    if (!text_flags().is_set(TextBox::TextFlag::vertical_scrollable))
+    {
+        if (m_vslider.visible())
+        {
+            m_vslider.hide();
+            if (m_vslider.value())
+                m_vslider.value(0);
+            else
+                damage_vslider();
+        }
+        return;
+    }
+
+    auto draw_sz = text_area().size();
+    auto text_sz = text_size();
+    DefaultDim delta = half_screens(text_sz.height() - draw_sz.height(), draw_sz.height());
+    bool visible = delta > 0;
+
+    if (visible && m_vslider.ending() != delta)
+    {
+        m_vslider.ending(delta);
+        damage_vslider();
+    }
+
+    if (visible && !m_vslider.visible())
+    {
+        m_vslider.show();
+        damage_vslider();
+    }
+    else if (!visible && m_vslider.visible())
+    {
+        m_vslider.hide();
+        if (m_vslider.value())
+            m_vslider.value(0);
+        else
+            damage_vslider();
+    }
+}
+
+void TextBox::update_sliders()
+{
+    update_hslider();
+    update_vslider();
+}
+
+void TextBox::move_hslider()
+{
+    if (!m_hslider.visible())
+        return;
+
+    const auto area = text_area();
+
+    if (m_cursor_rect.left() < area.left())
+    {
+        auto delta = half_screens(area.left() - m_cursor_rect.left(), area.width());
+        m_hslider.value(m_hslider.value() - delta);
+    }
+    else if (m_cursor_rect.right() > area.right())
+    {
+        auto delta = half_screens(m_cursor_rect.right() - area.right(), area.width());
+        m_hslider.value(m_hslider.value() + delta);
+    }
+}
+
+void TextBox::move_vslider()
+{
+    if (!m_vslider.visible())
+        return;
+
+    const auto area = text_area();
+
+    if (m_cursor_rect.top() < area.top())
+    {
+        auto delta = half_screens(area.top() - m_cursor_rect.top(), area.height());
+        m_vslider.value(m_vslider.value() - delta);
+    }
+    else if (m_cursor_rect.bottom() > area.bottom())
+    {
+        auto delta = half_screens(m_cursor_rect.bottom() - area.bottom(), area.height());
+        m_vslider.value(m_vslider.value() + delta);
+    }
+}
+
+void TextBox::move_sliders()
+{
+    move_hslider();
+    move_vslider();
+}
+
+void TextBox::draw_sliders(Painter& painter, const Rect& rect)
+{
+    bool hvisible = m_hslider.visible();
+    bool vvisible = m_vslider.visible();
+
+    if (!hvisible && !vvisible)
+        return;
+
+    // Change the origin to paint the sliders.
+    Painter::AutoSaveRestore sr(painter);
+
+    const auto& origin = point();
+    if (origin.x() || origin.y())
+    {
+        auto cr = painter.context();
+        cairo_translate(cr.get(),
+                        origin.x(),
+                        origin.y());
+    }
+
+    // Component rect
+    const auto crect = rect - origin;
+
+    if (hvisible)
+        m_hslider.draw(painter, crect);
+
+    if (vvisible)
+        m_vslider.draw(painter, crect);
 }
 
 static AlignFlags default_text_align_value{AlignFlag::expand};
@@ -768,6 +1086,8 @@ TextBox::TextBox(const std::string& text,
                  const TextFlags& flags) noexcept
     : TextWidget( {}, rect, text_align),
 m_timer(std::chrono::seconds(1)),
+m_canvas(Size(1, 1)),
+m_cr(m_canvas.context().get()),
 m_text_flags(flags)
 {
     name("TextBox" + std::to_string(m_widgetid));
@@ -797,7 +1117,9 @@ TextBox::TextBox(Frame& parent,
 
 TextBox::TextBox(Serializer::Properties& props, bool is_derived) noexcept
     : TextWidget(props, true),
-      m_timer(std::chrono::seconds(1))
+      m_timer(std::chrono::seconds(1)),
+      m_canvas(Size(1, 1)),
+      m_cr(m_canvas.context().get())
 {
     initialize(false);
 
@@ -816,6 +1138,8 @@ void TextBox::initialize(bool init_inherited_properties)
         border_radius(4.0);
         padding(5);
     }
+
+    init_sliders();
 
     m_timer.on_timeout([this]() { cursor_timeout(); });
 
@@ -855,6 +1179,75 @@ void TextBox::handle(Event& event)
     default:
         break;
     }
+
+    switch (event.id())
+    {
+    case EventId::raw_pointer_down:
+    case EventId::raw_pointer_up:
+    case EventId::raw_pointer_move:
+    case EventId::pointer_click:
+    case EventId::pointer_dblclick:
+    case EventId::pointer_hold:
+    case EventId::pointer_drag_start:
+    case EventId::pointer_drag:
+    case EventId::pointer_drag_stop:
+    {
+        auto pos = display_to_local(event.pointer().point);
+
+        for (auto& component : m_components)
+        {
+            if (!component->can_handle_event())
+                continue;
+
+            if (component->box().intersect(pos))
+            {
+                component->handle(event);
+                break;
+            }
+        }
+
+        break;
+    }
+
+    default:
+        break;
+    }
+
+    if (event.quit())
+        return;
+
+    switch (event.id())
+    {
+    case EventId::raw_pointer_down:
+    {
+        auto p = display_to_local(event.pointer().point) + point();
+        if (text_area().intersect(p))
+        {
+            auto pos = point2pos(p);
+            cursor_set(pos);
+            selection_clear();
+            m_select_drag_start = pos;
+        }
+        break;
+    }
+
+    case EventId::pointer_drag_start:
+    case EventId::pointer_drag:
+    {
+        auto p = display_to_local(event.pointer().point) + point();
+        if (text_area().intersect(p))
+        {
+            auto pos = point2pos(p);
+            auto start = std::min(m_select_drag_start, pos);
+            auto len = std::abs(static_cast<long long>(pos - m_select_drag_start));
+            selection(start, len);
+        }
+        break;
+    }
+
+    default:
+        break;
+    }
 }
 
 void TextBox::handle_key(const Key& key)
@@ -868,14 +1261,16 @@ void TextBox::handle_key(const Key& key)
     {
         if (cursor())
         {
-            selection(cursor() - 1, 1);
+            if (!m_select_len)
+                selection(cursor() - 1, 1);
             selection_delete();
         }
         break;
     }
     case EKEY_DELETE:
     {
-        selection(cursor(), 1);
+        if (!m_select_len)
+            selection(cursor(), 1);
         selection_delete();
         break;
     }
@@ -902,6 +1297,7 @@ void TextBox::handle_key(const Key& key)
         {
             cursor_backward();
         }
+        move_sliders();
         break;
     }
     case EKEY_RIGHT:
@@ -921,6 +1317,7 @@ void TextBox::handle_key(const Key& key)
         {
             cursor_forward();
         }
+        move_sliders();
         break;
     }
     /// NOLINTNEXTLINE(bugprone-branch-clone)
@@ -928,27 +1325,91 @@ void TextBox::handle_key(const Key& key)
     {
         if (text_flags().is_set(TextFlag::multiline))
         {
-            // TODO
+            auto pos = up();
+            if (key.state.is_set(Key::KeyMod::shift))
+            {
+                selection_move(pos - selection_cursor(), false);
+            }
+            else if (m_select_len)
+            {
+                // Move the cursor up and deselect the text
+                cursor_set(pos, false);
+                m_select_len = 0;
+                selection_damage();
+            }
+            else
+            {
+                cursor_set(pos, false);
+            }
         }
+        move_sliders();
         break;
     }
     case EKEY_DOWN:
     {
         if (text_flags().is_set(TextFlag::multiline))
         {
-            // TODO
+            auto pos = down();
+            if (key.state.is_set(Key::KeyMod::shift))
+            {
+                selection_move(pos - selection_cursor(), false);
+            }
+            else if (m_select_len)
+            {
+                // Move the cursor down and deselect the text
+                cursor_set(pos, false);
+                m_select_len = 0;
+                selection_damage();
+            }
+            else
+            {
+                cursor_set(pos, false);
+            }
         }
+        move_sliders();
         break;
     }
     /// NOLINTNEXTLINE(bugprone-branch-clone)
     case EKEY_END:
     {
-        // TODO
+        auto eol = key.state.is_set(Key::KeyMod::control) ? detail::utf8len(m_text) : end_of_line();
+        if (key.state.is_set(Key::KeyMod::shift))
+        {
+            selection_move(eol - selection_cursor());
+        }
+        else if (m_select_len)
+        {
+            // Move the cursor to the end of line and deselect the text
+            cursor_set(eol);
+            m_select_len = 0;
+            selection_damage();
+        }
+        else
+        {
+            cursor_set(eol);
+        }
+        move_sliders();
         break;
     }
     case EKEY_HOME:
     {
-        // TODO
+        auto bol = key.state.is_set(Key::KeyMod::control) ? 0 : beginning_of_line();
+        if (key.state.is_set(Key::KeyMod::shift))
+        {
+            selection_move(bol - selection_cursor());
+        }
+        else if (m_select_len)
+        {
+            // Move the cursor to the beginning of the line and deselect the text
+            cursor_set(bol);
+            m_select_len = 0;
+            selection_damage();
+        }
+        else
+        {
+            cursor_set(bol);
+        }
+        move_sliders();
         break;
     }
     default:
@@ -968,30 +1429,12 @@ constexpr static auto CURSOR_Y_OFFSET = 2.;
 
 void TextBox::draw(Painter& painter, const Rect& rect)
 {
-    if ((m_cr.get() != painter.context().get()) ||
-        m_textbox_rect != content_area())
+    State state(&font(), flags(), text_align(), text_flags());
+
+    if (m_state != state)
     {
-        m_cr = painter.context();
-
-        m_textbox_rect = content_area();
-
-        prepare_text(m_rects,
-                     m_cr.get(),
-                     content_area(),
-                     m_text,
-                     font(),
-                     text_flags(),
-                     text_align(),
-                     Justification::start,
-                     m_select_start,
-                     m_select_len);
-
-        get_cursor_rect(m_rects,
-                        m_cr.get(),
-                        content_area(),
-                        font(),
-                        m_cursor_pos,
-                        m_cursor_rect);
+        m_state = std::move(state);
+        refresh_text_area();
     }
 
     // box
@@ -1009,14 +1452,7 @@ void TextBox::draw(Painter& painter, const Rect& rect)
         painter.fill();
     }
 
-    draw_text(painter,
-              rect,
-              m_rects,
-              font(),
-              text_flags(),
-              color(Palette::ColorId::text),
-              color(Palette::ColorId::text_highlight));
-
+    draw_text(painter, rect);
 
     if (m_cursor_rect.intersect(rect))
     {
@@ -1032,6 +1468,15 @@ void TextBox::draw(Painter& painter, const Rect& rect)
             painter.stroke();
         }
     }
+
+    draw_sliders(painter, rect);
+}
+
+void TextBox::resize(const Size& size)
+{
+    TextWidget::resize(size);
+    refresh_text_area();
+    resize_sliders();
 }
 
 void TextBox::text(const std::string& str)
@@ -1047,6 +1492,9 @@ void TextBox::clear()
     selection_clear();
     cursor_begin();
     TextWidget::clear();
+    invalidate_text_rect();
+    update_sliders();
+    move_sliders();
 }
 
 void TextBox::max_length(size_t len)
@@ -1077,12 +1525,9 @@ size_t TextBox::append(const std::string& str)
 
 size_t TextBox::width_to_len(const std::string& str) const
 {
-    const auto b = content_area();
+    const auto b = text_area();
 
-    Canvas c(Size(1, 1));
-    auto cr = c.context();
-    Painter painter(cr);
-    painter.set(font());
+    cairo_set_scaled_font(context(), font().scaled_font());
 
     size_t len = 0;
     float total = 0;
@@ -1091,7 +1536,7 @@ size_t TextBox::width_to_len(const std::string& str) const
     {
         const auto txt = detail::utf8_char_to_string(ch.base(), str.cend());
         cairo_text_extents_t te;
-        cairo_text_extents(cr.get(), txt.c_str(), &te);
+        cairo_text_extents(context(), txt.c_str(), &te);
         if (total + static_cast<float>(te.x_advance) > b.width())
             return len;
         total += static_cast<float>(te.x_advance);
@@ -1117,7 +1562,7 @@ size_t TextBox::insert(const std::string& str)
 
     if (!text_flags().is_set(TextFlag::multiline) &&
         text_flags().is_set(TextFlag::fit_to_width) &&
-        !content_area().empty())
+        !text_area().empty())
     {
         /*
          * Have to go through the motions and build the expected string at this
@@ -1153,29 +1598,16 @@ size_t TextBox::insert(const std::string& str)
 
         on_text_changed.invoke();
 
-        if (m_cr)
-        {
-            TextRects rects;
-            prepare_text(rects,
-                         m_cr.get(),
-                         content_area(),
-                         m_text,
-                         font(),
-                         text_flags(),
-                         text_align(),
-                         Justification::start,
-                         m_select_start,
-                         m_select_len);
-            tag_text(text_align(), m_rects, rects, *this, m_cr.get());
-            m_rects = std::move(rects);
-        }
-        else
-        {
-            damage();
-        }
+        TextRects rects;
+        prepare_text(rects);
+        tag_text(m_rects, rects);
+        m_rects = std::move(rects);
 
         cursor_forward(len);
         continue_show_cursor();
+        invalidate_text_rect();
+        update_sliders();
+        move_sliders();
     }
 
     return len;
@@ -1212,27 +1644,30 @@ void TextBox::cursor_backward(size_t count)
 
 void TextBox::cursor_set(size_t pos)
 {
+    cursor_set(pos, true);
+}
+
+void TextBox::cursor_set(size_t pos, bool save_column)
+{
     const auto len = detail::utf8len(m_text);
     if (pos > len)
         pos = len;
 
     if (m_cursor_pos != pos)
     {
-        m_cursor_pos = pos;
-
-        if (m_cr)
-        {
-            damage(m_cursor_rect);
-            get_cursor_rect(m_rects,
-                            m_cr.get(),
-                            content_area(),
-                            font(),
-                            m_cursor_pos,
-                            m_cursor_rect);
-        }
+        change_cursor(pos, save_column);
+        damage_cursor();
+        get_cursor_rect();
     }
 
     show_cursor();
+}
+
+void TextBox::change_cursor(size_t pos, bool save_column)
+{
+    m_cursor_pos = pos;
+    if (save_column)
+        m_saved_column = m_cursor_pos - beginning_of_line();
 }
 
 void TextBox::selection_all()
@@ -1242,18 +1677,12 @@ void TextBox::selection_all()
 
 void TextBox::selection_damage()
 {
-    if (!m_cr)
-    {
-        damage();
-        return;
-    }
-
-    consolidate(m_rects, m_cr.get());
+    consolidate(m_rects);
     TextRects rects(m_rects);
     clear_selection(rects);
-    consolidate(rects, m_cr.get());
-    set_selection(rects, m_cr.get(), m_select_start, m_select_len);
-    tag_text_selection(m_rects, rects, *this);
+    consolidate(rects);
+    set_selection(rects);
+    tag_text_selection(m_rects, rects);
     m_rects = std::move(rects);
 }
 
@@ -1271,63 +1700,64 @@ void TextBox::selection(size_t pos, size_t length)
 
     if (pos != m_select_start || length != m_select_len)
     {
+        m_select_origin = pos;
         m_select_start = pos;
         m_select_len = length;
         selection_damage();
     }
 }
 
-void TextBox::selection_forward(size_t count)
+size_t TextBox::selection_cursor()
 {
     if (!m_select_len)
+    {
+        m_select_origin = m_cursor_pos;
         m_select_start = m_cursor_pos;
-
-    size_t select_end = m_select_start + m_select_len;
-    if (select_end == m_cursor_pos && m_select_len)
-    {
-        count = std::min(count, m_select_len);
-
-        // Reduce the selection from the left
-        m_select_start += count;
-        m_select_len -= count;
-        selection_damage();
     }
-    else if (select_end < detail::utf8len(m_text))
-    {
-        count = std::min(count, detail::utf8len(m_text) - select_end);
 
-        // Extend the selection to the right
-        if (m_cursor_state)
-            hide_cursor();
-        m_select_len += count;
-        selection_damage();
+    if (m_select_origin == m_select_start + m_select_len)
+        return m_select_start;
+
+    return m_select_start + m_select_len;
+}
+
+void TextBox::selection_move(size_t count, bool save_column)
+{
+    if (!count)
+        return;
+
+    if (!m_select_len)
+    {
+        m_select_origin = m_cursor_pos;
+        m_select_start = m_cursor_pos;
     }
+
+    auto a = m_select_origin;
+    auto b = selection_cursor() + count;
+    auto len = detail::utf8len(m_text);
+
+    auto start = std::min(std::max(std::min(a, b), (size_t)0), len);
+    auto end = std::min(std::max(std::max(a, b), (size_t)0), len);
+
+    if (m_cursor_state)
+        hide_cursor();
+
+    m_select_start = start;
+    m_select_len = end - start;
+    selection_damage();
+
+    change_cursor((end == m_select_origin) ? start : end, save_column);
+    get_cursor_rect();
+}
+
+void TextBox::selection_forward(size_t count)
+{
+    selection_move(count);
 }
 
 void TextBox::selection_backward(size_t count)
 {
-    if (!m_select_len)
-        m_select_start = m_cursor_pos;
-
-    if (m_select_start == m_cursor_pos && m_select_len)
-    {
-        count = std::min(count, m_select_len);
-
-        // Reduce the selection from the right
-        m_select_len -= count;
-        selection_damage();
-    }
-    else if (m_select_start > 0)
-    {
-        count = std::min(count, m_select_start);
-
-        // Extend the selection to the left
-        if (m_cursor_state)
-            hide_cursor();
-        m_select_start -= count;
-        m_select_len += count;
-        selection_damage();
-    }
+    selection_move(-count);
 }
 
 void TextBox::selection_clear()
@@ -1362,33 +1792,20 @@ void TextBox::selection_delete()
         utf8::advance(i, m_select_start, m_text.end());
         auto l = i;
         utf8::advance(l, m_select_len, m_text.end());
-        size_t p = utf8::distance(m_text.begin(), i);
 
         m_text.erase(i, l);
-        cursor_set(p);
         selection_clear();
         on_text_changed.invoke();
 
-        if (m_cr)
-        {
-            TextRects rects;
-            prepare_text(rects,
-                         m_cr.get(),
-                         content_area(),
-                         m_text,
-                         font(),
-                         text_flags(),
-                         text_align(),
-                         Justification::start,
-                         m_select_start,
-                         m_select_len);
-            tag_text(text_align(), m_rects, rects, *this, m_cr.get());
-            m_rects = std::move(rects);
-        }
-        else
-        {
-            damage();
-        }
+        TextRects rects;
+        prepare_text(rects);
+        tag_text(m_rects, rects);
+        m_rects = std::move(rects);
+
+        cursor_set(m_select_start);
+        invalidate_text_rect();
+        update_sliders();
+        move_sliders();
     }
 }
 
@@ -1414,17 +1831,32 @@ bool TextBox::validate_input(const std::string& str)
     return true;
 }
 
+Point TextBox::text_offset() const
+{
+    return Point(m_hslider.visible() ? m_hslider.value() : 0,
+                 m_vslider.visible() ? m_vslider.value() : 0);
+}
+
+void TextBox::text_offset(const Point& p)
+{
+    if (m_hslider.visible())
+        m_hslider.value(p.x());
+
+    if (m_vslider.visible())
+        m_vslider.value(p.y());
+}
+
 void TextBox::cursor_timeout()
 {
     m_cursor_state = !m_cursor_state;
-    damage(m_cursor_rect);
+    damage_cursor();
 }
 
 void TextBox::show_cursor()
 {
     m_cursor_state = true;
     m_timer.start();
-    damage(m_cursor_rect);
+    damage_cursor();
 }
 
 void TextBox::continue_show_cursor()
@@ -1432,7 +1864,7 @@ void TextBox::continue_show_cursor()
     if (m_cursor_state)
     {
         m_timer.start();
-        damage(m_cursor_rect);
+        damage_cursor();
     }
 }
 
@@ -1440,7 +1872,192 @@ void TextBox::hide_cursor()
 {
     m_timer.cancel();
     m_cursor_state = false;
-    damage(m_cursor_rect);
+    damage_cursor();
+}
+
+size_t TextBox::point2pos(const Point& p) const
+{
+    size_t pos = 0;
+    for (const auto& r : m_rects)
+    {
+        const auto& rect = r.rect();
+
+        if (rect.bottom() < p.y())
+        {
+            pos += r.length();
+            continue;
+        }
+
+        if (rect.top() > p.y())
+            break;
+
+        if (rect.right() < p.x())
+        {
+            if (r.text() == "\n")
+                break;
+
+            pos += r.length();
+            continue;
+        }
+
+        if (rect.left() > p.x())
+            break;
+
+        if (r.text() ==  "\n")
+            break;
+
+        auto delta_x = p.x() - rect.x();
+
+        auto* cr = context();
+        cairo_set_scaled_font(cr, font().scaled_font());
+        for (size_t len = r.length(); len > 0; --len)
+        {
+            cairo_text_extents_t te;
+            cairo_text_extents(cr, r.text().substr(0, len).c_str(), &te);
+            if (te.x_advance <= delta_x)
+            {
+                pos += len;
+                break;
+            }
+        }
+    }
+
+    return pos;
+}
+
+size_t TextBox::beginning_of_line(size_t cursor_pos) const
+{
+    size_t pos = 0;
+    size_t bol = pos;
+
+    for (auto it = m_rects.cbegin(); it != m_rects.cend(); ++it)
+    {
+        if (it->beginning_of_line())
+            bol = pos;
+
+        auto len = it->length();
+        if (pos + len < cursor_pos)
+        {
+            pos += len;
+            continue;
+        }
+
+        if (pos + len > cursor_pos)
+            break;
+
+        auto next = std::next(it);
+        if ((it->text() == "\n") ||
+            (next != m_rects.cend() && next->beginning_of_line()))
+            bol = pos + len;
+
+        break;
+    }
+
+    return bol;
+}
+
+size_t TextBox::end_of_line(size_t cursor_pos) const
+{
+    size_t pos = 0;
+    size_t eol = pos;
+
+    for (auto it = m_rects.cbegin(); it != m_rects.cend(); ++it)
+    {
+        auto next = std::next(it);
+
+        auto len = it->length();
+        if (pos + len <= cursor_pos)
+        {
+            pos += len;
+            if (next == m_rects.cend())
+                eol = pos;
+
+            continue;
+        }
+
+        if ((it->text() == "\n") ||
+            (next != m_rects.cend() && next->beginning_of_line()))
+        {
+            eol = pos + len - 1;
+            break;
+        }
+
+        pos += len;
+        eol = pos;
+    }
+
+    return eol;
+}
+
+size_t TextBox::up(size_t cursor_pos) const
+{
+    auto bol = beginning_of_line(cursor_pos);
+
+    if (bol <= 0)
+        return cursor_pos;
+
+    bol = beginning_of_line(bol - 1);
+    auto eol = end_of_line(bol);
+    return bol + std::min(m_saved_column, eol - bol);
+}
+
+size_t TextBox::down(size_t cursor_pos) const
+{
+    auto eol = end_of_line(cursor_pos);
+
+    if (eol >= detail::utf8len(m_text))
+        return cursor_pos;
+
+    auto bol = beginning_of_line(eol + 1);
+    eol = end_of_line(bol);
+    return bol + std::min(m_saved_column, eol - bol);
+}
+
+Rect TextBox::text_boundaries() const
+{
+    return text_area() - text_offset();
+}
+
+void TextBox::invalidate_text_rect()
+{
+    m_text_rect_valid = false;
+}
+
+Rect TextBox::text_rect() const
+{
+    if (!m_text_rect_valid)
+    {
+        m_text_rect.clear();
+
+        for (const auto& rect : m_rects)
+        {
+            if (rect.text() == "\n")
+                continue;
+
+            const auto& r = rect.rect();
+
+            if (m_text_rect.empty())
+                m_text_rect = r;
+            else
+                m_text_rect = Rect::merge(m_text_rect, r);
+        }
+
+        const auto& r = m_cursor_rect;
+
+        if (m_text_rect.empty())
+            m_text_rect = r;
+        else
+            m_text_rect = Rect::merge(m_text_rect, r);
+
+        m_text_rect_valid = true;
+    }
+
+    return m_text_rect;
+}
+
+Size TextBox::text_size() const
+{
+    return text_rect().size();
 }
 
 Size TextBox::min_size_hint() const
@@ -1454,6 +2071,13 @@ Size TextBox::min_size_hint() const
 
     auto s = text_size(text);
     s += Widget::min_size_hint() + Size(0, CURSOR_Y_OFFSET * 2.);
+
+    if (text_flags().is_set(TextBox::TextFlag::horizontal_scrollable))
+        s.height(s.height() + m_slider_dim);
+
+    if (text_flags().is_set(TextBox::TextFlag::vertical_scrollable))
+        s.width(s.width() + m_slider_dim);
+
     return s;
 }
 
@@ -1470,6 +2094,8 @@ const std::pair<TextBox::TextFlag, char const*> detail::EnumStrings<TextBox::Tex
     {TextBox::TextFlag::multiline, "multiline"},
     {TextBox::TextFlag::word_wrap, "word_wrap"},
     {TextBox::TextFlag::no_virt_keyboard, "no_virt_keyboard"},
+    {TextBox::TextFlag::horizontal_scrollable, "horizontal_scrollable"},
+    {TextBox::TextFlag::vertical_scrollable, "vertical_scrollable"},
 };
 
 void TextBox::serialize(Serializer& serializer) const

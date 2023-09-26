@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([libegt],[1.6])
+AC_INIT([libegt],[1.7])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_SRCDIR([Makefile.am])
@@ -613,8 +613,6 @@ AC_CHECK_HEADER([windows.h], [have_windows_h=yes], [have_windows_h=no])
 AM_CONDITIONAL([HAVE_WINDOWS_H], [test "x${have_windows_h}" = xyes])
 if test "x${have_windows_h}" = xyes; then
    AC_DEFINE(HAVE_WINDOWS_H, 1, [Have windows_h support])
-else
-   AX_APPEND_FLAG([-lstdc++fs], [LDFLAGS])
 fi
 
 AC_CHECK_PROG(XXD, xxd, yes)
@@ -767,6 +765,11 @@ AC_ARG_ENABLE([snippets],
   [AS_HELP_STRING([--enable-snippets], [build snippets examples [default=no]])],
   [enable_snippets=$enableval], [enable_snippets=no])
 AM_CONDITIONAL([ENABLE_SNIPPETS], [test "x${enable_snippets}" = xyes])
+
+AC_ARG_ENABLE([unittests],
+  [AS_HELP_STRING([--enable-unittests], [build unit tests [default=no]])],
+  [enable_unittests=$enableval], [enable_unittests=no])
+AM_CONDITIONAL([ENABLE_UNITTESTS], [test "x${enable_unittests}" = xyes])
 
 AC_CONFIG_FILES([Makefile
 	src/Makefile

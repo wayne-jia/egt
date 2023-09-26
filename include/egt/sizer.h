@@ -88,6 +88,10 @@ protected:
 
 public:
 
+    /**
+     * @warning The layout library, that is used to position widgets, handles
+     * coordinates with 16-bits integers, be careful about overflows.
+     */
     void layout() override;
 
     /**
@@ -128,7 +132,7 @@ protected:
         if (orient() == Orientation::flex)
         {
             Rect result = size();
-            for (auto& child : m_children)
+            for (auto& child : children())
                 result = Rect::merge(result, child->box());
 
             return result.size();
@@ -139,7 +143,7 @@ protected:
 
         if (orient() == Orientation::horizontal)
         {
-            for (auto& child : m_children)
+            for (auto& child : children())
             {
                 if (!child->align().is_set(AlignFlag::expand_horizontal))
                 {
@@ -150,7 +154,7 @@ protected:
         }
         else
         {
-            for (auto& child : m_children)
+            for (auto& child : children())
             {
                 if (!child->align().is_set(AlignFlag::expand_vertical))
                 {

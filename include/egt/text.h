@@ -11,10 +11,12 @@
  * @brief Working with text input.
  */
 
+#include <egt/canvas.h>
 #include <egt/detail/meta.h>
 #include <egt/flags.h>
 #include <egt/font.h>
 #include <egt/image.h>
+#include <egt/slider.h>
 #include <egt/textwidget.h>
 #include <egt/timer.h>
 #include <egt/types.h>
@@ -38,6 +40,12 @@ public:
     {
         /// Text is selected
         selected = detail::bit(0),
+
+        /// End of non-empty line
+        eonel = detail::bit(1),
+
+        /// Beginning of line
+        bol = detail::bit(2),
     };
 
     /// TextRect flags.
@@ -58,12 +66,16 @@ public:
     const std::string& text(void) const { return m_text; }
     const Rect& rect(void) const { return m_rect; }
     void rect(const Rect& r) { m_rect = r; }
+    void point(const Point& p) { m_rect.point(p); }
     const TextRectFlags& flags(void) const { return m_text_rect_flags; }
     uint32_t behave(void) const { return m_behave; }
     const cairo_text_extents_t& text_extents(void) const { return m_te; }
     void select(void) { m_text_rect_flags.set(TextRectFlag::selected); }
     void deselect(void) { m_text_rect_flags.clear(TextRectFlag::selected); }
     bool is_selected(void) const { return m_text_rect_flags.is_set(TextRectFlag::selected); }
+    bool end_of_non_empty_line(void) const { return m_text_rect_flags.is_set(TextRectFlag::eonel); }
+    void mark_beginning_of_line(void) { m_text_rect_flags.set(TextRectFlag::bol); }
+    bool beginning_of_line(void) const { return m_text_rect_flags.is_set(TextRectFlag::bol); }
 
     bool can_consolidate(const TextRect& r) const noexcept
     {
@@ -128,7 +140,7 @@ public:
         /// When not multiline, only allow max length to be what can fit.
         fit_to_width = detail::bit(0),
 
-        /// Enable multi-line text.
+        /// Enable multi-line text. expand_vertical align flag must be set, be careful to not set top or bottom later.
         multiline = detail::bit(1),
 
         /// Wrap at word boundaries instead of character boundaries.  Must be flag::multiline.
@@ -136,6 +148,12 @@ public:
 
         /// Do not display a virtual keyboard when focus is gained.
         no_virt_keyboard = detail::bit(3),
+
+        /// Horizontal scrollable
+        horizontal_scrollable = detail::bit(4),
+
+        /// Vertical scrollable
+        vertical_scrollable = detail::bit(5),
     };
 
     /// Text flags.
@@ -228,6 +246,8 @@ public:
 
     void draw(Painter& painter, const Rect& rect) override;
 
+    void resize(const Size& size) override;
+
     using TextWidget::text;
 
     void text(const std::string& str) override;
@@ -258,7 +278,10 @@ public:
     void text_flags(const TextFlags& text_flags)
     {
         if (detail::change_if_diff<>(m_text_flags, text_flags))
+        {
+            resize_sliders();
             damage();
+        }
     }
 
     /**
@@ -357,6 +380,24 @@ public:
     void selection_backward(size_t count = 1);
 
     /**
+     * Move the selection cursor to count character(s):
+     * - to the left, if count is negative
+     * - to the right, if count is positive
+     * Do nothing if count is zero.
+     *
+     * Also, set the selection origin (its fixed end), if needed.
+     * In all cases, the cursor is positioned to the new selection cursor.
+     */
+    void selection_move(size_t count, bool save_column = true);
+
+    /**
+     * Get the position of the moving end of the selection, as opposed to its
+     * origin (the fixed end of the selection).
+     * Set the selection origin, if needed.
+     */
+    EGT_NODISCARD size_t selection_cursor();
+
+    /**
      * Get the start position of the selection.
      */
     EGT_NODISCARD size_t selection_start() const
@@ -410,11 +451,34 @@ public:
      */
     void add_validator_function(ValidatorCallback callback);
 
+    /**
+     * Get the position offset of the drawn text as compared to the whole text.
+     */
+    EGT_NODISCARD Point text_offset() const;
+
+    /**
+     * Set the position offset of the drawn text as compared to the whole text.
+     */
+    void text_offset(const Point& p);
+
     void serialize(Serializer& serializer) const override;
 
     ~TextBox() noexcept override;
 
 protected:
+
+    /// Get the rectangle of the text boundaries.
+    EGT_NODISCARD Rect text_boundaries() const;
+
+    /// Get the rectangle of a text.
+    EGT_NODISCARD Rect text_rect() const;
+
+    /// Get the size of a text.
+    using TextWidget::text_size;
+    EGT_NODISCARD Size text_size() const;
+
+    /// Invalidate the cache used by text_rect()
+    void invalidate_text_rect();
 
     /// Type array used for validator callbacks.
     using ValidatorCallbackArray = std::vector<ValidatorCallback>;
@@ -428,6 +492,39 @@ protected:
     /// Hide/disable the visibility of the cursor.
     void hide_cursor();
 
+    /// Set the cursor position.
+    void cursor_set(size_t pos, bool save_column);
+
+    /// Change the value of m_cursor_pos.
+    void change_cursor(size_t pos, bool save_column = true);
+
+    /// Convert point coordinates to position in text for cursor or selection.
+    size_t point2pos(const Point& p) const;
+
+    /// Get the position of the beginning of the line at cursor_pos.
+    size_t beginning_of_line(size_t cursor_pos) const;
+
+    /// Get the position of the beginning of the current line.
+    size_t beginning_of_line() const { return beginning_of_line(m_cursor_pos); }
+
+    /// Get the position of the end of the line at cursor_pos.
+    size_t end_of_line(size_t cursor_pos) const;
+
+    /// Get the position of the end of the current line.
+    size_t end_of_line() const { return end_of_line(m_cursor_pos); }
+
+    /// Get the position in the line befor cursor_pos at the same column, if possible.
+    size_t up(size_t cursor_pos) const;
+
+    /// Get the position in the previous line at the same column, if possible.
+    size_t up() const { return up(m_cursor_pos); }
+
+    /// Get the position in the line after cursor_pos at the same column, if possible.
+    size_t down(size_t cursor_pos) const;
+
+    /// Get the position in the next line at the same column, if possible.
+    size_t down() const { return down(m_cursor_pos); }
+
     /// Process key events.
     virtual void handle_key(const Key& key);
 
@@ -436,6 +533,161 @@ protected:
 
     /// Compute damage rectangles for selection updates
     void selection_damage();
+
+    /// Get the cairo context to compute text extents, hence the text layout.
+    cairo_t* context() const { return m_cr; }
+
+    /// Split the text into atomic tokens that fill the TextRects parameter.
+    void tokenize(TextRects& rects);
+
+    /// Compute the text layout from the tokens contained in the TextRects.
+    void compute_layout(TextRects& rects);
+
+    /// Merge adjacent TextRect items, when possible.
+    void consolidate(TextRects& rects);
+
+    /// Clear the TextRectFlag::selected flag from all TextRects in rects.
+    void clear_selection(TextRects& rects);
+
+    /**
+     * Add the TextRectFlag::selected flag to TextRects based on the
+     * m_select_start and m_select_len values.
+     *
+     * Split TextRects if needed.
+     */
+    void set_selection(TextRects& rects);
+
+    /**
+     * Get the std::string and Rect from pos to the first follwing TextRect in
+     * rects with a different height, or till the end of rects if any.
+     */
+    static void get_line(const TextRects& rects,
+                         TextRects::iterator& pos,
+                         std::string& line,
+                         Rect& rect);
+
+    /// Compute the longest common prefix between two strings.
+    static std::string longest_prefix(const std::string& s1, const std::string& s2);
+
+    /// Compute the longest common suffix between two strings.
+    static std::string longest_suffix(const std::string& s1, const std::string& s2);
+
+    /// Damage the merged rectangle of two text lines if they are not equal.
+    void tag_default_aligned_line(TextRects& prev,
+                                  TextRects::iterator& prev_pos,
+                                  TextRects& next,
+                                  TextRects::iterator& next_pos);
+
+    /// Damage the merge rectangle of two text lines, excluding their common prefix.
+    void tag_left_aligned_line(TextRects& prev,
+                               TextRects::iterator& prev_pos,
+                               TextRects& next,
+                               TextRects::iterator& next_pos);
+
+    /// Damage the merge rectangle of two text lines, excluding their common suffix.
+    void tag_right_aligned_line(TextRects& prev,
+                                TextRects::iterator& prev_pos,
+                                TextRects& next,
+                                TextRects::iterator& next_pos);
+
+    /// Damage the differences between two text lines, based on the text alignment.
+    void tag_line(TextRects& prev,
+                  TextRects::iterator& prev_pos,
+                  TextRects& next,
+                  TextRects::iterator& next_pos);
+
+    /// Damage the differences between two texts.
+    void tag_text(TextRects& prev, TextRects& next);
+
+    /// Compute the merged Rect for the selected TextRects on the same line as pos.
+    static void get_line_selection(const TextRects& rects,
+                                   TextRects::const_iterator& pos,
+                                   Rect& rect);
+
+    /// Damage the differences between two selected text lines.
+    void tag_line_selection(const TextRects& prev,
+                            TextRects::const_iterator& prev_pos,
+                            const TextRects& next,
+                            TextRects::const_iterator& next_pos);
+
+    /// Damage the differences between two selected texts.
+    void tag_text_selection(const TextRects& prev, const TextRects& next);
+
+    /// Tokenize and compute the layout of a text; fill TextRects accordingly.
+    void prepare_text(TextRects& rects);
+
+    /// Update m_cursor_rect based on the current position of the cursor.
+    void get_cursor_rect();
+
+    /// Draw the text based on the m_rects TextRects.
+    void draw_text(Painter& painter, const Rect& rect);
+
+    /// Compute the new text layout and cursor rectangle.
+    void refresh_text_area();
+
+    /// Return the rectangle boundaries where the text can be drawn.
+    EGT_NODISCARD Rect text_area() const;
+
+    /// Init sliders.
+    void init_sliders();
+
+    /// Resize the sliders whenever the widget size changes.
+    void resize_sliders();
+
+    /// Return the lowest multiple of 'screen_size' / 2, greater than 'size'.
+    static DefaultDim half_screens(DefaultDim size, DefaultDim screen_size);
+
+    /// Update the horizontal slider.
+    void update_hslider();
+
+    /// Update the vertical slider.
+    void update_vslider();
+
+    /// Update the horizontal and vertical sliders as needed.
+    void update_sliders();
+
+    /// Move the horizontal slider, if needed, to track the cursor.
+    void move_hslider();
+
+    /// Move the vertical slider, if needed, to track the cursor.
+    void move_vslider();
+
+    /// Move sliders, if needed, to track the cursor.
+    void move_sliders();
+
+    /// Draw sliders.
+    void draw_sliders(Painter& painter, const Rect& rect);
+
+    /// Damage a component.
+    void damage_component(Widget& component)
+    {
+        damage(component.box() + point());
+    }
+
+    /// Damage the horizontal slider.
+    void damage_hslider()
+    {
+        return damage_component(m_hslider);
+    }
+
+    /// Damage the vertical slider.
+    void damage_vslider()
+    {
+        return damage_component(m_vslider);
+    }
+
+    /// Damage the text but only if visible.
+    void damage_text(const Rect& rect)
+    {
+        damage(Rect::intersection(rect, text_area()));
+    }
+
+    /// Damage the cursor but only if visible.
+    void damage_cursor()
+    {
+        /// The cursor may cross the content area; hence intersect with the box.
+        damage(Rect::intersection(m_cursor_rect, box()));
+    }
 
     /// Timer for blinking the cursor.
     PeriodicTimer m_timer;
@@ -447,6 +699,12 @@ protected:
     size_t m_cursor_pos{0};
 
     /**
+     * Save the column of the cursor when it was moved for the last time, except
+     * when the cursor is moved with the UP and DOWN keys.
+     */
+    size_t m_saved_column{0};
+
+    /**
      * Selection start position.
      * This is a UTF-8 offset.
      */
@@ -455,16 +713,29 @@ protected:
     /// Selection length.
     size_t m_select_len{0};
 
+    /// Selection origin.
+    size_t m_select_origin{0};
+
+    /// Selection drag start.
+    size_t m_select_drag_start{0};
+
     /// Validation of the input.
     bool m_validate_input{false};
 
     /// Callbacks invoked to validate the input.
     ValidatorCallbackArray m_validator_callbacks;
 
+    /// The canvas that provides a cairo context to compute the text layout.
+    Canvas m_canvas;
+
+    /// The cache for text_rect().
+    mutable Rect m_text_rect;
+    mutable bool m_text_rect_valid{false};
+
     /**
      * Cairo context.
      */
-    shared_cairo_t m_cr;
+    cairo_t* m_cr{nullptr};
 
     TextRects m_rects;
     Rect m_cursor_rect;
@@ -476,6 +747,59 @@ protected:
     EGT_NODISCARD size_t width_to_len(const std::string& str) const;
 
 private:
+    class State
+    {
+    public:
+        State() noexcept
+        {}
+
+        explicit State(const Font* font,
+                       const Widget::Flags& flags,
+                       const AlignFlags& text_align,
+                       const TextFlags& text_flags) noexcept
+            : m_font(font),
+              m_flags(flags),
+              m_text_align(text_align),
+              m_text_flags(text_flags)
+        {}
+
+        State& operator=(const State& rhs) noexcept
+        {
+            m_font = rhs.m_font;
+            m_flags = rhs.m_flags;
+            m_text_align = rhs.m_text_align;
+            m_text_flags = rhs.m_text_flags;
+            return *this;
+        }
+
+        State& operator=(State&& rhs) noexcept
+        {
+            m_font = rhs.m_font;
+            m_flags = std::move(rhs.m_flags);
+            m_text_align = std::move(rhs.m_text_align);
+            m_text_flags = std::move(rhs.m_text_flags);
+            return *this;
+        }
+
+        bool operator==(const State& rhs) const noexcept
+        {
+            return m_font == rhs.m_font &&
+                   m_flags == rhs.m_flags &&
+                   m_text_align == rhs.m_text_align &&
+                   m_text_flags == rhs.m_text_flags;
+        }
+
+        bool operator!=(const State& rhs) const noexcept
+        {
+            return !operator==(rhs);
+        }
+
+    private:
+        const Font* m_font{nullptr};
+        Widget::Flags m_flags;
+        AlignFlags m_text_align;
+        TextFlags m_text_flags;
+    };
 
     /// Callback for the cursor timeout.
     void cursor_timeout();
@@ -489,7 +813,19 @@ private:
     /// Maximum text length, or zero.
     size_t m_max_len{0};
 
-    Rect m_textbox_rect;
+    State m_state;
+
+    /// Horizontal slider shown when scrollable.
+    Slider m_hslider;
+
+    /// Vertical slider shown when scrollable.
+    Slider m_vslider;
+
+    /// Width/height of the slider when shown.
+    DefaultDim m_slider_dim{8};
+
+    /// Widget components.
+    std::list<Widget*> m_components;
 
     /// Gain focus registration.
     Signal<>::RegisterHandle m_gain_focus_reg{};

@@ -144,6 +144,14 @@ Sound::Sound(const std::string& uri, const std::string& device)
     open_file();
 }
 
+void Sound::media(const std::string& uri)
+{
+    if (detail::change_if_diff(m_uri, uri))
+    {
+        open_file();
+    }
+}
+
 void Sound::open_file()
 {
     std::string path;
@@ -160,16 +168,18 @@ void Sound::open_file()
     }
 
 #ifdef HAVE_SNDFILE
+    if (m_impl->in)
+        stop();
+
     m_impl->in = SndfileHandle(path.c_str());
     init_alsa_params(m_impl->in.samplerate(), m_impl->in.channels());
-#else
     if (m_impl->channels == 0 || m_impl->rate == 0)
     {
         detail::error("can't play sound file {}: sndfile not available and rate "
                       "and channel not specified", path);
         return;
     }
-
+#else
     m_impl->in.open(path, std::ios::binary | std::ios::in);
 #endif
 
@@ -184,9 +194,35 @@ void Sound::open_alsa_device(const std::string& device)
     static const auto MAX_RETRIES = 10;
     int tries = 0;
     int err;
+
+    /* Enumerate sound devices */
+    char** hints;
+    int err1 = snd_device_name_hint(-1, "pcm", (void***)&hints);
+    if (err1 != 0)
+    {
+        throw std::runtime_error(fmt::format("No PCM device found"));
+    }
+
+    char** n = hints;
+    std::string devname = "default";
+    while (*n != NULL)
+    {
+        devname = snd_device_name_get_hint(*n, "NAME");
+        EGTLOG_DEBUG("devname: {}", devname);
+        if (devname.find("CLASSD") != std::string::npos)
+        {
+            // if ClassD present then use CLASSD or else use last sound
+            // device from this list.
+            break;
+        }
+        n++;
+    }
+
+    snd_device_name_free_hint((void**)hints);
+
     do
     {
-        err = snd_pcm_open(&m_impl->handle, device.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
+        err = snd_pcm_open(&m_impl->handle, devname.c_str(), SND_PCM_STREAM_PLAYBACK, 0);
         if (err == -EBUSY)
         {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -196,7 +232,7 @@ void Sound::open_alsa_device(const std::string& device)
     if (err < 0)
     {
         throw std::runtime_error(fmt::format("can't open '{}' PCM device: {}",
-                                             device, snd_strerror(err)));
+                                             devname, snd_strerror(err)));
 
     }
 }
@@ -418,6 +454,12 @@ void Sound::play(bool repeat)
 
         snd_pcm_drain(m_impl->handle);
     });
+}
+
+void Sound::stop()
+{
+    snd_pcm_drain(m_impl->handle);
+    m_impl->interrupt = true;
 }
 
 Sound::Sound(Sound&&) noexcept = default;
