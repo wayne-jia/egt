@@ -354,7 +354,7 @@ smarthome_smarthome_DATA = $(wildcard $(top_srcdir)/examples/smarthome/*.svg) \
   $(wildcard $(top_srcdir)/examples/smarthome/*.png)
 smarthome_smarthome_LDFLAGS = $(AM_LDFLAGS)
 
-svgconvertor_svgconvertor_SOURCES = svgconvertor/svgconvertor.cpp svgconvertor/tinyxml2.cpp
+svgconvertor_svgconvertor_SOURCES = svgconvertor/svgconvertor.cpp
 svgconvertor_svgconvertor_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
 	-DEXAMPLEDATA=\"$(datadir)/egt/examples/svgconvertor\"
 svgconvertor_svgconvertor_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)

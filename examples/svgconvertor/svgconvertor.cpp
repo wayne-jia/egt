@@ -3,59 +3,34 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  *
- * This software use TinyXML-2 which is released under the zlib license:
- * This software is provided 'as-is', without any express or implied warranty.
- * In no event will the authors be held liable for any damages arising from the use of this software.
- * Permission is granted to anyone to use this software for any purpose, including commercial applications,
- * and to alter it and redistribute it freely, subject to the following restrictions:
- * The origin of this software must not be misrepresented; you must not claim that you wrote the original software.
- * If you use this software in a product, an acknowledgment in the product documentation would be appreciated but is not required.
- * Altered source versions must be plainly marked as such, and must not be misrepresented as being the original software.
- * This notice may not be removed or altered from any source distribution.
- *
  */
 #include <egt/ui>
 #include <iostream>
 #include <string>
 #include <cstring>
 #include <cxxopts.hpp>
-#include "../src/detail/erawimage.h"
-#include "../src/detail/eraw.h"
-#include "tinyxml2.h"
+#include <rapidxml.hpp>
+#include <rapidxml_utils.hpp>
+#include "../../src/detail/erawimage.h"
 
 using namespace std;
 using namespace egt;
-using namespace tinyxml2;
-
-/*
-// #define SET_FILE(_ptr_, _filename_) do {  \
-// 	_ptr_ = strrchr(_filename_, '/');  \
-// 	if (_ptr_ == NULL)  \
-// 		_ptr_ = _filename_;  \
-// 	else  \
-// 		_ptr_++;  \
-// } while (0)
-*/
 
 class SVG_CVT
 {
 public:
 	SVG_CVT(const string& svgpath, SvgImage& svg) noexcept
-      : m_svg(svg),
-        m_svgpath(svgpath)
-	{ }
+      : m_svgpath(svgpath), m_svg(svg)
+	{}
 
-  void serializeSVG();
-  void saveErawById(const string& filename, const string& id);
-  void recursiveGLabel(XMLElement* g1);
-  void convertNotGLabel(XMLElement* notg);
-  XMLElement* queryUserNodeByName(XMLElement* root, const string& node);
-  //constexpr std::uint32_t hash_str_to_uint32(const char* data);
-  ~SVG_CVT() {}
+    void serializeSVG();
+    void saveErawById(const string& filename, const string& id);
+    void recursiveGLabel(rapidxml::xml_node<>* g1);
+    void convertNotGLabel(rapidxml::xml_node<>* notg);
 
 private:
-  SvgImage& m_svg;
-  const string& m_svgpath;
+    const string& m_svgpath;
+    SvgImage& m_svg;
 };
 
 static void SerializePNG(const char* png_src);
@@ -64,9 +39,9 @@ static void EndErawHFile(void);
 static void WriteTableIndexFile(void);
 static void ReadTableIndexFile(void);
 
-constexpr std::uint32_t hash_str_to_uint32(const char* data)
+constexpr uint32_t hash_str_to_uint32(const char* data)
 {
-    std::uint32_t h(0);
+    uint32_t h(0);
     for (int i = 0; data && ('\0' != data[i]); i++)
         h = (h << 6) ^ (h >> 26) ^ data[i];
     return h;
@@ -82,13 +57,11 @@ typedef struct {
 unsigned int offset = 0;
 unsigned int table_index = 0;
 
-std::vector<std::shared_ptr<eraw_st>> eraw_v;
+vector<shared_ptr<eraw_st>> eraw_v;
 
 void SVG_CVT::saveErawById(const string& filename, const string& id)
 {
-    //eraw_st local_eraw;
     unsigned int len = 0;
-
     auto box = m_svg.id_box(id);
     auto layer = make_shared<Image>(m_svg.render(id, box));
 
@@ -97,14 +70,10 @@ void SVG_CVT::saveErawById(const string& filename, const string& id)
     const auto width = cairo_image_surface_get_width(layer->surface().get());
     const auto height = cairo_image_surface_get_height(layer->surface().get());
     e.save(ERAW_NAME, data, box.x(), box.y(), width, height, &len);
-
-    //local_eraw.name = filename;
-    //local_eraw.offset = offset;
-    //local_eraw.len = len;
-    
-    std::ofstream erawmap("eraw.h", std::ios_base::app);
+ 
+    ofstream erawmap("eraw.h", ios_base::app);
     if (!erawmap.is_open()) {
-        cout << "eraw.cfg open ERROR!" << endl;
+        cerr << "eraw.cfg open ERROR!" << endl;
         return;
     }
 
@@ -119,48 +88,31 @@ void SVG_CVT::saveErawById(const string& filename, const string& id)
     erawmap << "},    //";
     erawmap << table_index++;
     erawmap << "\t\n";
-
-    // erawmap << "#define ";
-    // erawmap << filename;
-    // erawmap << " ";
-    // erawmap << offset;
-    // erawmap << "\t\n";
-    // erawmap << "#define ";
-    // erawmap << filename + "_LEN";
-    // erawmap << " ";
-    // erawmap << len;
-    // erawmap << "\t\n";
-
     erawmap.close();
-    //eraw_v.push_back(local_eraw);
     WriteTableIndexFile();
     offset += len;
 }
 
-XMLElement* SVG_CVT::queryUserNodeByName(XMLElement* root, const string& name)
+void SVG_CVT::recursiveGLabel(rapidxml::xml_node<>* g)
 {
-	XMLElement* userNode = root->FirstChildElement("defs");
-	while(userNode->Name() != name)
-		userNode = userNode->NextSiblingElement();
-	return userNode;
-}
-
-void SVG_CVT::recursiveGLabel(XMLElement* g1)
-{
+    rapidxml::xml_attribute<>* id_attr;
     string id;
     string path;
-    XMLElement* svgWgt = g1->FirstChildElement();
+    auto svgWgt = g->first_node();
+
     while (NULL != svgWgt)
     {
-        switch (hash_str_to_uint32(svgWgt->Name()))
+        switch (hash_str_to_uint32(svgWgt->name()))
         {
             case hash_str_to_uint32("g"):
-                id = svgWgt->Attribute("id");
+                id_attr = svgWgt->first_attribute("id");
+                id = id_attr->value();
                 path = id;
                 id = "#" + id;
                 saveErawById(path, id);
                 recursiveGLabel(svgWgt);
                 break;
+
             case hash_str_to_uint32("rect"):
             case hash_str_to_uint32("path"):
             case hash_str_to_uint32("text"):
@@ -171,23 +123,28 @@ void SVG_CVT::recursiveGLabel(XMLElement* g1)
             case hash_str_to_uint32("line"):
             case hash_str_to_uint32("polyline"):
             case hash_str_to_uint32("polygon"):
-                id = svgWgt->Attribute("id");
+                id_attr = svgWgt->first_attribute("id");
+                id = id_attr->value();
                 path = id;
                 id = "#" + id;
                 saveErawById(path, id);
                 break;
+
             default:
                 break;
         }
-        svgWgt = svgWgt->NextSiblingElement();
+
+        svgWgt = svgWgt->next_sibling();
     }
 }
 
-void SVG_CVT::convertNotGLabel(XMLElement* notg)
+void SVG_CVT::convertNotGLabel(rapidxml::xml_node<>* notg)
 {
+    rapidxml::xml_attribute<>* id_attr;
     string id;
     string path;
-    switch (hash_str_to_uint32(notg->Name()))
+
+    switch (hash_str_to_uint32(notg->name()))
     {
         case hash_str_to_uint32("rect"):
         case hash_str_to_uint32("path"):
@@ -199,11 +156,13 @@ void SVG_CVT::convertNotGLabel(XMLElement* notg)
         case hash_str_to_uint32("line"):
         case hash_str_to_uint32("polyline"):
         case hash_str_to_uint32("polygon"):
-            id = notg->Attribute("id");
+            id_attr = notg->first_attribute("id");
+            id = id_attr->value();
             path = id;
             id = "#" + id;
             saveErawById(path, id);
             break;
+
         default:
             break;
     }
@@ -211,34 +170,33 @@ void SVG_CVT::convertNotGLabel(XMLElement* notg)
 
 void SVG_CVT::serializeSVG()
 {
-	XMLDocument doc;
+    rapidxml::file<> xml_file(m_svgpath.c_str());
+    rapidxml::xml_document<> doc;
+    doc.parse<0>(xml_file.data());
 
-	if (doc.LoadFile(m_svgpath.c_str())!=0)
-	{
-		cerr<<"load svg file failed"<<endl;
-		return;
-	}
-
-	XMLElement* root = doc.RootElement();
-	XMLElement* g1 = queryUserNodeByName(root, "g"); //Find the first 'g' label in SVG file, the starting of SVG graphics description
-    while (NULL != g1)
+    auto svg = doc.first_node("svg");
+    if (svg)
     {
-        if (!strcmp("g", g1->Name()))
+        auto g = svg->first_node("g"); //Find the first 'g' label in SVG file, the starting of SVG graphics description
+	    while (NULL != g)
         {
-            recursiveGLabel(g1);
-        }
-        else
-        {
-            convertNotGLabel(g1);
-        }
+            if (!strcmp("g", g->name()))
+                recursiveGLabel(g);
+            else
+                convertNotGLabel(g);
 
-        g1 = g1->NextSiblingElement();
+            g = g->next_sibling();
+        }
+    }
+    else
+    {
+        cerr << "file format is incorrect" << endl;
+		return;
     }
 }
 
 static void SerializePNG(const char* png_src)
 {
-    // eraw_st local_eraw;
     unsigned int len = 0;
 
     egt::shared_cairo_surface_t surface;
@@ -251,19 +209,12 @@ static void SerializePNG(const char* png_src)
     const auto height = cairo_image_surface_get_height(surface.get());
     e.save(ERAW_NAME, data, 0, 0, width, height, &len);
 
-    // local_eraw.name = png_src;
-    // local_eraw.offset = offset;
-    // local_eraw.len = len;
-    
-    // eraw_v.push_back(local_eraw);
-    // offset += len;
-
-    std::string s(png_src);
-    std::string png = s.substr(0, s.length()-4);
-
-    std::ofstream erawmap("eraw.h", std::ios_base::app);
-    if (!erawmap.is_open()) {
-        cout << "eraw.cfg open ERROR!" << endl;
+    string s(png_src);
+    string png = s.substr(0, s.length()-4);
+    ofstream erawmap("eraw.h", ios_base::app);
+    if (!erawmap.is_open()) 
+    {
+        cerr << "eraw.cfg open ERROR!" << endl;
         return;
     }
 
@@ -278,28 +229,17 @@ static void SerializePNG(const char* png_src)
     erawmap << "},    //";
     erawmap << table_index++;
     erawmap << "\t\n";
-
-    // erawmap << "#define ";
-    // erawmap << png;
-    // erawmap << " ";
-    // erawmap << offset;
-    // erawmap << "\t\n";
-    // erawmap << "#define ";
-    // erawmap << png + "_LEN";
-    // erawmap << " ";
-    // erawmap << len;
-    // erawmap << "\t\n";
-
     erawmap.close();
-    //eraw_v.push_back(local_eraw);
     offset += len;
     WriteTableIndexFile();
 }
 
-static void WriteTableIndexFile(void) {
-    std::ofstream indexfile("index.txt");
-    if (!indexfile.is_open()) {
-        cout << "indexfile open ERROR!" << endl;
+static void WriteTableIndexFile(void) 
+{
+    ofstream indexfile("index.txt");
+    if (!indexfile.is_open()) 
+    {
+        cerr << "indexfile open ERROR!" << endl;
         return;
     }
     
@@ -307,10 +247,12 @@ static void WriteTableIndexFile(void) {
     indexfile.close();
 }
 
-static void ReadTableIndexFile(void) {
-    std::ifstream indexfile("index.txt", std::ios::in);
-    if (!indexfile.is_open()) {
-        cout << "indexfile open ERROR!" << endl;
+static void ReadTableIndexFile(void) 
+{
+    ifstream indexfile("index.txt", ios::in);
+    if (!indexfile.is_open()) 
+    {
+        cerr << "indexfile open ERROR!" << endl;
         return;
     }
     
@@ -318,10 +260,12 @@ static void ReadTableIndexFile(void) {
     indexfile.close();
 }
 
-static void InitErawHFile(void) {
-    std::ofstream erawmap("eraw.h", std::ios_base::app);
-    if (!erawmap.is_open()) {
-        cout << "eraw.cfg open ERROR!" << endl;
+static void InitErawHFile(void) 
+{
+    ofstream erawmap("eraw.h", ios_base::app);
+    if (!erawmap.is_open()) 
+    {
+        cerr << "eraw.cfg open ERROR!" << endl;
         return;
     }
     
@@ -338,20 +282,20 @@ static void InitErawHFile(void) {
     erawmap << "\t\n";
     erawmap << "eraw_st offset_table[] = {";
     erawmap << "\t\n";
-
     erawmap.close();
 }
 
-static void EndErawHFile(void) {
-    std::ofstream erawmap("eraw.h", std::ios_base::app);
-    if (!erawmap.is_open()) {
-        cout << "eraw.cfg open ERROR!" << endl;
+static void EndErawHFile(void) 
+{
+    ofstream erawmap("eraw.h", ios_base::app);
+    if (!erawmap.is_open()) 
+    {
+        cerr << "eraw.cfg open ERROR!" << endl;
         return;
     }
     
     erawmap << "};";
     erawmap << "\t\n";
-
     erawmap.close();
 }
 
@@ -361,11 +305,11 @@ int main(int argc, char** argv)
     cxxopts::Options options("svgconvertor", "SVG format convertor");
     options.add_options()
     ("h,help", "help")
-    ("s,starttoken", "add start token of eraw.h")
-    ("e,endtoken", "add end token of eraw.h")
+    ("s,starttoken", "start token of eraw.h")
+    ("e,endtoken", "end token of eraw.h")
     ("i,input-format", "input format (svg, png)",
-     cxxopts::value<std::string>()->default_value("svg"))
-    ("positional", "SOURCE", cxxopts::value<std::vector<std::string>>())
+     cxxopts::value<string>()->default_value("svg"))
+    ("positional", "SOURCE", cxxopts::value<vector<string>>())
     ;
     options.positional_help("SOURCE");
 
@@ -394,7 +338,7 @@ int main(int argc, char** argv)
             cerr << "rm index.txt failed, please check permission!!!" << endl;
             return 1;
         }
-        cout << "Convertion finished! Copy eraw.h to source, and copy eraw.bin to target!" << endl;
+        cout << "Conversion finished! Copy eraw.h to source, and copy eraw.bin to target!" << endl;
         return 0;
     }
 
@@ -406,7 +350,7 @@ int main(int argc, char** argv)
 
     ReadTableIndexFile();
 
-    auto& positional = result["positional"].as<vector<std::string>>();
+    auto& positional = result["positional"].as<vector<string>>();
 
     string in = positional[0];
     string filepath;
@@ -422,8 +366,6 @@ int main(int argc, char** argv)
 
     if (result["input-format"].as<string>() == "png")
     {
-        // const char *pname = nullptr;
-        // SET_FILE(pname, in);
         SerializePNG(in.c_str());
         cout << "PNG converted done!" << endl;
     }
