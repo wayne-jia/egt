@@ -51,6 +51,7 @@ space/space \
 sprite/sprite \
 squares/squares \
 whiteboard/whiteboard \
+motorcycledash/motorcycledash \
 widgets/widgets
 
 if HAVE_LUA
@@ -295,6 +296,15 @@ sevensegment_sevensegment_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 sevensegment_sevensegmentdir = $(prefix)/share/egt/examples/sevensegment
 sevensegment_sevensegment_DATA = $(wildcard $(top_srcdir)/examples/sevensegment/*.svg)
 sevensegment_sevensegment_LDFLAGS = $(AM_LDFLAGS)
+
+motorcycledash_motorcycledash_SOURCES = motorcycledash/motorcycledash.cpp
+motorcycledash_motorcycledash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/motorcycledash\"
+motorcycledash_motorcycledash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+motorcycledash_motorcycledashdir = $(prefix)/share/egt/examples/motorcycledash
+motorcycledash_motorcycledash_DATA = $(wildcard $(top_srcdir)/examples/motorcycledash/*.svg) \
+  $(wildcard $(top_srcdir)/examples/motorcycledash/*.png)
+motorcycledash_motorcycledash_LDFLAGS = $(AM_LDFLAGS)
 
 sizers_sizers_SOURCES = sizers/sizers.cpp
 sizers_sizers_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
