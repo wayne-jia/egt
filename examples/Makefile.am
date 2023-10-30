@@ -53,6 +53,7 @@ progressring/progressring \
 tachometer/tachometer \
 whiteboard/whiteboard \
 motorcycledash/motorcycledash \
+patientmonitor/patientmonitor \
 widgets/widgets
 
 if HAVE_LUA
@@ -406,6 +407,11 @@ squares_squares_SOURCES = squares/squares.cpp
 squares_squares_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
 squares_squares_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 squares_squares_LDFLAGS = $(AM_LDFLAGS)
+
+patientmonitor_patientmonitor_SOURCES = patientmonitor/patientmonitor.cpp
+patientmonitor_patientmonitor_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
+patientmonitor_patientmonitor_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+patientmonitor_patientmonitor_LDFLAGS = $(AM_LDFLAGS)
 
 progressring_progressring_SOURCES = progressring/progressring.cpp
 progressring_progressring_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
