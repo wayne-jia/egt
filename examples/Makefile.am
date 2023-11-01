@@ -54,6 +54,7 @@ tachometer/tachometer \
 whiteboard/whiteboard \
 motorcycledash/motorcycledash \
 patientmonitor/patientmonitor \
+evcharganimate/evcharganimate \
 widgets/widgets
 
 if HAVE_LUA
@@ -412,6 +413,11 @@ patientmonitor_patientmonitor_SOURCES = patientmonitor/patientmonitor.cpp
 patientmonitor_patientmonitor_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
 patientmonitor_patientmonitor_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 patientmonitor_patientmonitor_LDFLAGS = $(AM_LDFLAGS)
+
+evcharganimate_evcharganimate_SOURCES = evcharganimate/evcharganimate.cpp
+evcharganimate_evcharganimate_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
+evcharganimate_evcharganimate_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+evcharganimate_evcharganimate_LDFLAGS = $(AM_LDFLAGS)
 
 progressring_progressring_SOURCES = progressring/progressring.cpp
 progressring_progressring_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
