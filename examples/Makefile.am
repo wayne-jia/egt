@@ -51,7 +51,6 @@ space/space \
 sprite/sprite \
 squares/squares \
 whiteboard/whiteboard \
-motorcycledash/motorcycledash \
 widgets/widgets
 
 if HAVE_LUA
@@ -98,6 +97,11 @@ endif
 if ENABLE_VIRTUALKEYBOARD
 bin_PROGRAMS += \
 virtualkeyboard/virtualkeyboard
+endif
+
+if ENABLE_SVGDESERIAL
+bin_PROGRAMS += \
+motorcycledash/motorcycledash
 endif
 
 EXTRA_DIST =

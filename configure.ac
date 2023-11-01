@@ -768,6 +768,11 @@ AC_ARG_ENABLE([snippets],
   [enable_snippets=$enableval], [enable_snippets=no])
 AM_CONDITIONAL([ENABLE_SNIPPETS], [test "x${enable_snippets}" = xyes])
 
+AC_ARG_ENABLE([svgdeserial],
+  [AS_HELP_STRING([--enable-svgdeserial], [build svgdeserial functionality [default=no]])],
+  [enable_svgdeserial=$enableval], [enable_svgdeserial=no])
+AM_CONDITIONAL([ENABLE_SVGDESERIAL], [test "x${enable_svgdeserial}" = xyes])
+
 AC_CONFIG_FILES([Makefile
 	src/Makefile
 	external/Makefile
