@@ -27,9 +27,9 @@ int main(int argc, char** argv)
     auto circlePtr = smplab.AddWidgetByID("/root/eraw/circle.eraw", true);
     auto needle_point = circlePtr->box().center();
     animations.push_back(smplab.RotateAnimation(smplab.AddRotateWidgetByID("/root/eraw/hour.eraw", 0, 100, 0, 360, true, needle_point),
-                         0, 100, std::chrono::seconds(3), egt::easing_circular_easein, egt::easing_circular_easeout));
+                         std::chrono::seconds(3), egt::easing_circular_easein, egt::easing_circular_easeout));
     animations.push_back(smplab.RotateAnimation(smplab.AddRotateWidgetByID("/root/eraw/minute.eraw", 0, 100, 0, 360, true, needle_point),
-                         0, 200, std::chrono::seconds(7), egt::easing_sine_easein, egt::easing_sine_easeout));
+                         std::chrono::seconds(7), egt::easing_sine_easein, egt::easing_sine_easeout));
 
     return app.run();
 }

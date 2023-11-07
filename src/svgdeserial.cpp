@@ -146,18 +146,18 @@ std::shared_ptr<NeedleLayer> SVGDeserial::AddRotateWidgetByBuf(const unsigned ch
     return widget;
 }
 
-std::shared_ptr<AnimationSequence> SVGDeserial::RotateAnimation(std::shared_ptr<NeedleLayer> widget, int min, int max,
-    std::chrono::seconds length, const EasingFunc& easein, const EasingFunc& easeout)
+std::shared_ptr<AnimationSequence> SVGDeserial::RotateAnimation(std::shared_ptr<NeedleLayer> widget,
+    std::chrono::milliseconds duration, const EasingFunc& easein, const EasingFunc& easeout)
 {
     auto animationup =
-        std::make_shared<PropertyAnimator>(min, max, length, easein);
+        std::make_shared<PropertyAnimator>(widget->min(), widget->max(), duration, easein);
     animationup->on_change([widget](PropertyAnimator::Value v)
     {
         widget->value(v);
     });
 
     auto animationdown =
-        std::make_shared<PropertyAnimator>(max, min, length, easeout);
+        std::make_shared<PropertyAnimator>(widget->max(), widget->min(), duration, easeout);
     animationdown->on_change([widget](PropertyAnimator::Value v)
     {
         widget->value(v);
@@ -190,15 +190,6 @@ void SVGDeserial::add_text_widget(const std::string& id, const std::string& txt,
     text->color(egt::Palette::ColorId::text, color);
     add(text);
     text->name(id);
-}
-
-void SVGDeserial::hide_all()
-{
-    for (auto& child : m_children)
-    {
-        if (child->name().rfind("#path", 0) == 0)
-            child->hide();
-    }
 }
 
 bool SVGDeserial::is_point_in_line(egt::DefaultDim point, egt::DefaultDim start, egt::DefaultDim end)

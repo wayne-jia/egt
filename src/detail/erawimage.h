@@ -211,26 +211,8 @@ public:
         return surface;
     }
 
-    static shared_cairo_surface_t load(const unsigned char* buf, size_t len)
+    static shared_cairo_surface_t read_surface_data(const unsigned char* buf, const unsigned char* buf_end, uint32_t width, uint32_t height)
     {
-        const auto buf_end = buf + len;
-        alignas(4) uint32_t magic = 0;
-        alignas(4) uint32_t width = 0;
-        alignas(4) uint32_t height = 0;
-
-        buf = readw(buf, magic, buf_end);
-        if (!buf)
-            return nullptr;
-        if (magic != egt_magic())
-            return nullptr;
-        buf = readw(buf, width, buf_end);
-        if (!buf)
-            return nullptr;
-        buf = readw(buf, height, buf_end);
-        if (!buf)
-            return nullptr;
-        buf += (sizeof(uint32_t) * 4);
-
         auto surface =
             shared_cairo_surface_t(cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
                                    width, height),
@@ -271,6 +253,29 @@ public:
         return surface;
     }
 
+    static shared_cairo_surface_t load(const unsigned char* buf, size_t len)
+    {
+        const auto buf_end = buf + len;
+        alignas(4) uint32_t magic = 0;
+        alignas(4) uint32_t width = 0;
+        alignas(4) uint32_t height = 0;
+
+        buf = readw(buf, magic, buf_end);
+        if (!buf)
+            return nullptr;
+        if (magic != egt_magic())
+            return nullptr;
+        buf = readw(buf, width, buf_end);
+        if (!buf)
+            return nullptr;
+        buf = readw(buf, height, buf_end);
+        if (!buf)
+            return nullptr;
+        buf += (sizeof(uint32_t) * 4);
+
+        return read_surface_data(buf, buf_end, width, height);
+    }
+
     static shared_cairo_surface_t load(const unsigned char* buf, size_t len, std::shared_ptr<egt::Rect>& rect)
     {
         const auto buf_end = buf + len;
@@ -304,47 +309,7 @@ public:
         rect->width(width);
         rect->height(height);
 
-        auto surface =
-            shared_cairo_surface_t(cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                                   width, height),
-                                   cairo_surface_destroy);
-        auto data =
-            reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(surface.get()));
-        auto end = data + (width * height);
-
-        // std::cout << "eraw buf: " << std::hex << static_cast<const void *>(buf) 
-        //         << " ,buf_end: " << std::hex << static_cast<const void *>(buf_end) << std::endl;
-
-        while (data < end)
-        {
-            alignas(4) uint16_t block = 0;
-            buf = readw(buf, block, buf_end);
-            if (!buf)
-                return nullptr;
-            if (block & 0x8000)
-            {
-                block &= 0x7fff;
-                alignas(4) uint32_t value = 0;
-                buf = readw(buf, value, buf_end);
-                if (!buf)
-                    return nullptr;
-                memset32(data, value, block);
-            }
-            else if (block)
-            {
-                if (buf + block * sizeof(uint32_t) > buf_end)
-                    return nullptr;
-
-                memcpy(data, buf, block * sizeof(uint32_t));
-                buf += (block * sizeof(uint32_t));
-            }
-            data += block;
-        }
-
-        // must mark surface dirty once we manually fill it in
-        cairo_surface_mark_dirty(surface.get());
-
-        return surface;
+        return read_surface_data(buf, buf_end, width, height);
     }
 
     static uint16_t next_diff_block(uint32_t* data, const uint32_t* end)
