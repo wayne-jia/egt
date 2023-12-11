@@ -5,6 +5,20 @@
 Here, you can find the API changes from the version 1.0. In addition, some hints
 are provided to help you update your code.
 
+@section v1_8 1.8
+
+@subsection progressbar ProgressBar
+
+@li Add style property to define the direction of the progress bar: left to right, right to left, bottom to top, or top to bottom.
+
+@subsection sound Sound
+
+@li Add enumarate_pcm_device() method to get a list of device names available.
+
+@li Add media() method to set another file to play.
+
+@li Add stop() method.
+
 @section v1_7 1.7
 
 @subsection detail Detail
