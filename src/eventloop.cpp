@@ -127,9 +127,10 @@ int EventLoop::poll()
 int EventLoop::step()
 {
     auto ret = poll();
-    if (ret)
-        draw();
+    if (!ret)
+        wait();
 
+    draw();
     return ret;
 }
 
