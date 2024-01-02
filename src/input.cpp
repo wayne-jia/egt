@@ -198,8 +198,9 @@ void mouse_grab(Widget* widget)
 
 void keyboard_focus(Widget* widget)
 {
-    if (keyboard_focus_widget == widget)
-        return;
+    // Close the keyboard, click the textbox again, the keyboard would not be popped up
+    // if (keyboard_focus_widget == widget)
+    //     return;
 
     if (keyboard_focus_widget)
     {
