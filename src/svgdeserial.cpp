@@ -16,7 +16,7 @@ inline namespace v1
 namespace experimental
 {
 
-SVGDeserial::SVGDeserial(Application& app, TopWindow& parent, int svg_cnt, const char** svg_files) noexcept
+SVGDeserial::SVGDeserial(Application& app, Frame& parent, int svg_cnt, const char** svg_files) noexcept
 {
     //Check if serialize indicator "/serialize_done" exist? If not, need serialization
     if (access("/root/serialize_done", F_OK))
@@ -75,7 +75,7 @@ SVGDeserial::SVGDeserial(Application& app, TopWindow& parent, int svg_cnt, const
     parent.add(*this);
 }
 
-SVGDeserial::SVGDeserial(TopWindow& parent) noexcept
+SVGDeserial::SVGDeserial(Frame& parent) noexcept
 {
     parent.add(*this);
 }

@@ -25,11 +25,11 @@ namespace experimental
 class EGT_API SVGDeserial : public Gauge
 {
 public:
-    SVGDeserial(Application& app, TopWindow& parent, int svg_cnt, const char** svg_files) noexcept;
+    SVGDeserial(Application& app, Frame& parent, int svg_cnt, const char** svg_files) noexcept;
 	/**
      * @param[in] parent The window to be added.
      */
-    SVGDeserial(TopWindow& parent) noexcept;
+    SVGDeserial(Frame& parent) noexcept;
     shared_cairo_surface_t DeSerialize(const std::string& filename, std::shared_ptr<Rect>& rect);
 	/**
      * @param[in] buf The buffer address of graphics data in eraw.bin.
