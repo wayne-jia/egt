@@ -19,10 +19,11 @@ namespace detail
 {
 
 PlaneWindow::PlaneWindow(Window* inter,
-                         PixelFormat format, WindowHint hint)
+                         PixelFormat format, WindowHint hint, uint32_t num_buffers)
     : BasicWindow(inter),
       m_format(format),
-      m_hint(hint)
+      m_hint(hint),
+      m_num_buffers(num_buffers)
 {
     // hack to force some size
     if (m_interface->m_box.size().empty())
@@ -112,7 +113,7 @@ void PlaneWindow::allocate_screen()
         if (!m_interface->box().size().empty())
         {
             m_overlay = std::make_unique<KMSOverlay>(m_interface->box().size(),
-                        m_format, m_hint);
+                        m_format, m_hint, m_num_buffers);
 
             m_screen = m_overlay.get();
         }

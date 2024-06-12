@@ -35,7 +35,8 @@ const PixelFormat Window::DEFAULT_FORMAT = PixelFormat::argb8888;
 
 Window::Window(const Rect& rect,
                PixelFormat format_hint,
-               WindowHint hint)
+               WindowHint hint,
+               uint32_t num_buffers)
 // by default, windows are hidden
     : Frame(rect, {Widget::Flag::window, Widget::Flag::invisible})
 {
@@ -45,7 +46,7 @@ Window::Window(const Rect& rect,
     fill_flags(Theme::FillFlag::solid);
 
     // create the window implementation
-    create_impl(box(), format_hint, hint);
+    create_impl(box(), format_hint, hint, num_buffers);
 
     // save off the new window to the window list
     Application::instance().m_windows.push_back(this);
@@ -58,6 +59,7 @@ Window::Window(Serializer::Properties& props, bool is_derived)
 
     PixelFormat format = DEFAULT_FORMAT;
     WindowHint hint = WindowHint::automatic;
+    uint32_t num_buffers = 3;
 
     props.erase(std::remove_if(props.begin(), props.end(), [&format, &hint](auto & p)
     {
@@ -75,7 +77,7 @@ Window::Window(Serializer::Properties& props, bool is_derived)
     }), props.end());
 
     // create the window implementation
-    create_impl(box(), format, hint);
+    create_impl(box(), format, hint, num_buffers);
 
     // save off the new window to the window list
     Application::instance().m_windows.push_back(this);
@@ -87,8 +89,9 @@ Window::Window(Serializer::Properties& props, bool is_derived)
 Window::Window(Frame& parent,
                const Rect& rect,
                PixelFormat format_hint,
-               WindowHint hint)
-    : Window(rect, format_hint, hint)
+               WindowHint hint,
+               uint32_t num_buffers)
+    : Window(rect, format_hint, hint, num_buffers)
 {
     parent.add(*this);
 }
@@ -223,7 +226,8 @@ void Window::scale(float hscale, float vscale)
 
 void Window::create_impl(const Rect& rect,
                          PixelFormat format_hint,
-                         WindowHint hint)
+                         WindowHint hint,
+                         uint32_t num_buffers)
 {
     m_format_hint = format_hint;
     m_hint = hint;
@@ -259,7 +263,7 @@ void Window::create_impl(const Rect& rect,
 #ifdef HAVE_LIBPLANES
                 if (Application::instance().screen()->have_planes())
                 {
-                    m_impl = std::make_unique<detail::PlaneWindow>(this, format_hint, hint);
+                    m_impl = std::make_unique<detail::PlaneWindow>(this, format_hint, hint, num_buffers);
                     flags().set(Widget::Flag::plane_window);
                 }
 #endif
@@ -280,7 +284,7 @@ void Window::create_impl(const Rect& rect,
             {
                 try
                 {
-                    m_impl = std::make_unique<detail::PlaneWindow>(this, format_hint, hint);
+                    m_impl = std::make_unique<detail::PlaneWindow>(this, format_hint, hint, num_buffers);
                     flags().set(Widget::Flag::plane_window);
                 }
                 catch (std::invalid_argument& e)

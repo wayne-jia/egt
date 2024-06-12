@@ -85,7 +85,7 @@ WindowHint check_windowhint(WindowHint& hint)
 } // End of detail.
 
 VideoWindow::VideoWindow(const Rect& rect, PixelFormat format, WindowHint hint)
-    : Window(rect, format, detail::check_windowhint(hint))
+    : Window(rect, format, detail::check_windowhint(hint), 3)
 {
     fill_flags().clear();
 

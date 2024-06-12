@@ -44,7 +44,7 @@ public:
      * @param format Requested format for the screen.
      * @param hint Hint for the type of plane to create.
      */
-    KMSOverlay(const Size& size, PixelFormat format, WindowHint hint);
+    KMSOverlay(const Size& size, PixelFormat format, WindowHint hint, uint32_t num_buffers);
 
     /**
      * Resize the hardware plane.

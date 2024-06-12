@@ -236,7 +236,7 @@ void Application::setup_backend(bool primary, const std::string& name)
     const std::pair<const char*, std::function<std::unique_ptr<egt::Screen>()>> backends[] =
     {
 #ifdef HAVE_LIBPLANES
-        {"kms", [&primary]() { return std::make_unique<detail::KMSScreen>(primary); }},
+        {"kms", [&primary]() { return std::make_unique<detail::KMSScreen>(primary, PixelFormat::rgb565, 1); }},
 #endif
 #ifdef HAVE_X11
         {"x11", [this, &size, &name]() { return std::make_unique<detail::X11Screen>(*this, size, name); }},

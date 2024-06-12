@@ -71,7 +71,8 @@ static KMSScreen* the_kms = nullptr;
 std::vector<planeid> KMSScreen::m_used;
 
 KMSScreen::KMSScreen(bool allocate_primary_plane,
-                     PixelFormat format)
+                     PixelFormat format,
+                     uint32_t num_buffers)
 {
     detail::info("DRM/KMS Screen ({} buffers)", max_buffers());
 
@@ -98,7 +99,7 @@ KMSScreen::KMSScreen(bool allocate_primary_plane,
                                  m_device->screens[0]->width,
                                  m_device->screens[0]->height,
                                  drmformat,
-                                 KMSScreen::max_buffers()));
+                                 num_buffers));
         if (!m_plane)
             throw std::runtime_error("unable to create primary plane");
 
@@ -110,7 +111,7 @@ KMSScreen::KMSScreen(bool allocate_primary_plane,
 
         if (!m_gfx2d)
         {
-            init(m_plane->bufs, KMSScreen::max_buffers(),
+            init(m_plane->bufs, num_buffers,
                  Size(plane_width(m_plane.get()), plane_height(m_plane.get())),
                  format);
         }
@@ -126,7 +127,7 @@ KMSScreen::KMSScreen(bool allocate_primary_plane,
 
             m_buffers.clear();
 
-            for (uint32_t x = 0; x < KMSScreen::max_buffers(); x++)
+            for (uint32_t x = 0; x < num_buffers; x++)
             {
                 m_buffers.emplace_back(
                     cairo_gfx2d_surface_create_from_name(
@@ -212,7 +213,8 @@ inline bool operator==(const planeid& lhs, const planeid& rhs)
 
 plane_data* KMSScreen::overlay_plane_create(const Size& size,
         PixelFormat format,
-        plane_type type)
+        plane_type type,
+        uint32_t num_buffers)
 {
     int drm_type = DRM_PLANE_TYPE_OVERLAY;
     switch (type)
@@ -254,7 +256,7 @@ plane_data* KMSScreen::overlay_plane_create(const Size& size,
                                       size.width(),
                                       size.height(),
                                       detail::drm_format(format),
-                                      KMSScreen::max_buffers());
+                                      num_buffers);
 
         if (plane)
         {
@@ -268,7 +270,8 @@ plane_data* KMSScreen::overlay_plane_create(const Size& size,
 
 unique_plane_t KMSScreen::allocate_overlay(const Size& size,
         PixelFormat format,
-        WindowHint hint)
+        WindowHint hint,
+        uint32_t num_buffers)
 {
     EGTLOG_TRACE("request to allocate overlay {} {} {}", size, format, hint);
     unique_plane_t plane;
@@ -278,7 +281,7 @@ unique_plane_t KMSScreen::allocate_overlay(const Size& size,
 
     if (hint == WindowHint::overlay)
     {
-        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::overlay));
+        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::overlay, num_buffers));
     }
     else if (hint == WindowHint::heo_overlay)
     {
@@ -286,17 +289,17 @@ unique_plane_t KMSScreen::allocate_overlay(const Size& size,
         /// requiring the HEO plane for now even though that is not the only
         /// thing different about an HEO plane.  For example, HEO planes are
         /// scale-able and normal planes are not.
-        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::overlay));
+        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::overlay, num_buffers));
     }
     else if (hint == WindowHint::cursor_overlay)
     {
-        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::cursor));
+        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::cursor, num_buffers));
     }
 
     if (!plane)
     {
         // fallback to overlay plane
-        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::overlay));
+        plane = unique_plane_t(overlay_plane_create(size, format, plane_type::overlay, num_buffers));
     }
 
     if (plane)

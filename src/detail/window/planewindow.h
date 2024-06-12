@@ -31,7 +31,8 @@ public:
 
     explicit PlaneWindow(Window* inter,
                          PixelFormat format = PixelFormat::argb8888,
-                         WindowHint hint = WindowHint::automatic);
+                         WindowHint hint = WindowHint::automatic,
+                         uint32_t num_buffers = 3);
 
     PlaneWindow(const PlaneWindow&) = delete;
     PlaneWindow& operator=(const PlaneWindow&) = delete;
@@ -59,6 +60,8 @@ public:
     ~PlaneWindow() noexcept override;
 
 protected:
+
+    uint32_t m_num_buffers;
 
     /**
      * The requested pixel format for the plane.

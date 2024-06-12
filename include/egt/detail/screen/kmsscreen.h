@@ -47,7 +47,8 @@ public:
      * @param format Requested format for the screen.
      */
     explicit KMSScreen(bool allocate_primary_plane = true,
-                       PixelFormat format = PixelFormat::rgb565);
+                       PixelFormat format = PixelFormat::rgb565,
+                       uint32_t num_buffers = KMSScreen::max_buffers());
 
     KMSScreen(const KMSScreen&) = delete;
     KMSScreen& operator=(const KMSScreen&) = delete;
@@ -91,7 +92,8 @@ public:
     /// Allocate an overlay plane.
     unique_plane_t allocate_overlay(const Size& size,
                                     PixelFormat format = PixelFormat::argb8888,
-                                    WindowHint hint = WindowHint::automatic);
+                                    WindowHint hint = WindowHint::automatic,
+                                    uint32_t num_buffers = KMSScreen::max_buffers());
 
     /// Deallocate an overlay plane.
     void deallocate_overlay(plane_data* plane);
@@ -102,7 +104,8 @@ protected:
     /// Allocate an overlay plane.
     plane_data* overlay_plane_create(const Size& size,
                                      PixelFormat format,
-                                     plane_type type);
+                                     plane_type type,
+                                     uint32_t num_buffers = KMSScreen::max_buffers());
 
     /// Internal DRM/KMS file descriptor.
     int m_fd{-1};

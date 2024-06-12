@@ -36,8 +36,8 @@ struct FlipJob
     bool m_async{false};
 };
 
-KMSOverlay::KMSOverlay(const Size& size, PixelFormat format, WindowHint hint)
-    : m_plane(KMSScreen::instance()->allocate_overlay(size, format, hint))
+KMSOverlay::KMSOverlay(const Size& size, PixelFormat format, WindowHint hint, uint32_t num_buffers)
+    : m_plane(KMSScreen::instance()->allocate_overlay(size, format, hint, num_buffers))
 {
     if (!m_plane)
         throw std::runtime_error("failed to allocate plane");

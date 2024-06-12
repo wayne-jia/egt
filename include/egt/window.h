@@ -64,8 +64,9 @@ public:
      *            only a hint.
      */
     explicit Window(PixelFormat format_hint = DEFAULT_FORMAT,
-                    WindowHint hint = WindowHint::automatic)
-        : Window({}, format_hint, hint)
+                    WindowHint hint = WindowHint::automatic,
+                    uint32_t num_buffers = 3)
+        : Window({}, format_hint, hint, num_buffers)
     {}
 
     /**
@@ -82,7 +83,8 @@ public:
      */
     explicit Window(const Rect& rect,
                     PixelFormat format_hint = DEFAULT_FORMAT,
-                    WindowHint hint = WindowHint::automatic);
+                    WindowHint hint = WindowHint::automatic,
+                    uint32_t num_buffers = 3);
 
     /**
      * Construct a window.
@@ -100,7 +102,8 @@ public:
     Window(Frame& parent,
            const Rect& rect,
            PixelFormat format_hint = DEFAULT_FORMAT,
-           WindowHint hint = WindowHint::automatic);
+           WindowHint hint = WindowHint::automatic,
+           uint32_t num_buffers = 3);
     /**
      * Construct a window.
      *
@@ -229,7 +232,8 @@ protected:
      */
     void create_impl(const Rect& rect,
                      PixelFormat format_hint,
-                     WindowHint hint);
+                     WindowHint hint,
+                     uint32_t num_buffers);
 
     /// @private
     virtual void default_damage(const Rect& rect)
