@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "detail/utf8text.h"
+#include "egt/app.h"
 #include "egt/button.h"
 #include "egt/embed.h"
 #include "egt/input.h"
@@ -318,26 +319,28 @@ void VirtualKeyboard::key_multichoice(const std::shared_ptr<Key>& k)
 
 static PopupVirtualKeyboard* the_popup_virtual_keyboard = nullptr;
 
-PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard>& keyboard) noexcept
+PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard>& keyboard, Size size) noexcept
 {
     // Make the keyboard partially transparent.
     fill_flags(Theme::FillFlag::blend);
     color(Palette::ColorId::bg, Color(Palette::transparent, 80));
 
-    auto popup_width = Application::instance().screen()->size().width();
-    auto popup_height = Application::instance().screen()->size().height() * 0.4;
+    const auto screen_size = Application::instance().screen()->size();
+    if (size.empty())
+        size = egt::Size(screen_size.width(), screen_size.height() * 0.4);
 
-    resize(Size(popup_width, popup_height));
-    auto y_keyboard_position = Application::instance().screen()->size().height() - popup_height;
+    resize(size);
+    auto y_keyboard_position = screen_size.height() - size.height();
     move(Point(0, y_keyboard_position));
 
     m_vsizer.align(AlignFlag::expand);
     add(m_vsizer);
 
     m_hsizer.align(AlignFlag::top | AlignFlag::right);
+    m_hsizer.resize(Size(size.width() * 0.2, size.height() * 0.15));
     m_vsizer.add(m_hsizer);
 
-    m_top_bottom_button.align(AlignFlag::top | AlignFlag::right);
+    m_top_bottom_button.margin(5);
     m_top_bottom_button.on_event([this, y_keyboard_position](Event&)
     {
         if (m_bottom_positionned)
@@ -353,9 +356,9 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
 
         m_bottom_positionned = !m_bottom_positionned;
     }, {EventId::pointer_click});
-    m_hsizer.add(m_top_bottom_button);
+    m_hsizer.add(expand(m_top_bottom_button));
 
-    m_close_button.align(AlignFlag::top | AlignFlag::right);
+    m_close_button.margin(5);
     m_close_button.on_event([this, y_keyboard_position](Event&)
     {
         hide();
@@ -364,7 +367,7 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
         m_top_bottom_button.image(Image("res:internal_arrow_up"));
         m_bottom_positionned = true;
     }, {EventId::pointer_click});
-    m_hsizer.add(m_close_button);
+    m_hsizer.add(expand(m_close_button));
 
     keyboard->align(AlignFlag::expand);
     m_vsizer.add(keyboard);

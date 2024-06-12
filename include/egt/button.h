@@ -210,9 +210,11 @@ using ImageButton = ImageHolder<Button, Palette::ColorId::button_bg, Palette::Co
  * Same as a normal Button, except it manipulates its checked state like a
  * RadioBox or CheckBox.
  */
-class CheckButton : public Button
+class EGT_API CheckButton : public Button
 {
     using Button::Button;
+
+public:
 
     void handle(Event& event) override
     {
@@ -226,6 +228,144 @@ class CheckButton : public Button
             break;
         }
     }
+};
+
+class EGT_API Switch : public Button
+{
+public:
+
+    /**
+     * @param[in] basename The base name for the widget.
+     * @param[in] text The text to display.
+     * @param[in] rect Initial rectangle of the widget.
+     */
+    explicit Switch(const std::string& text = {},
+                    const Rect& rect = {}) noexcept;
+
+    /**
+     * @param[in] props list of widget argument and its properties.
+     */
+    explicit Switch(Serializer::Properties& props) noexcept
+        : Switch(props, false)
+    {
+    }
+
+protected:
+
+    explicit Switch(Serializer::Properties& props, bool is_derived) noexcept;
+
+    void serialize(Serializer& serializer) const override;
+
+public:
+
+    void handle(Event& event) override;
+
+    void draw(Painter& painter, const Rect& rect) override;
+
+    /**
+     * Default draw method for the Switch.
+     */
+    static void default_draw(const Switch& widget, Painter& painter, const Rect& rect);
+
+    using Button::min_size_hint;
+
+    EGT_NODISCARD Size min_size_hint() const override;
+
+    using Button::text;
+    /**
+     * Set the text.
+     *
+     * It sets show_label to true if the string is not empty, to false
+     * otherwise.
+     *
+     * @param str The text string to set.
+     */
+    void text(const std::string& text) override;
+
+    /**
+     * Enable/disable showing the label text.
+     *
+     * @param[in] value When true, the label text is shown.
+     */
+    void show_label(bool value)
+    {
+        if (detail::change_if_diff<>(m_show_label, value))
+            damage();
+    }
+
+    /**
+     * Get the show label state.
+     */
+    EGT_NODISCARD bool show_label() const { return m_show_label; }
+
+    /**
+     * Set the alignement of the switch relative to the text.
+     *
+     * @param[in] align Only left, right, top, and bottom alignments are supported.
+     */
+    void switch_align(const AlignFlags& align)
+    {
+        if (detail::change_if_diff<>(m_switch_align, align))
+        {
+            damage();
+            layout();
+        }
+    }
+
+    /**
+     * Get the switch alignment.
+     */
+    EGT_NODISCARD AlignFlags switch_align() const { return m_switch_align; }
+
+    /**
+     * Get the image, if any, used to draw the widget's switch, based on
+     * the value of its 'checked' flag.
+     *
+     * @param checked The boolean to select the switch image to return:
+     *                - false: m_normal_switch.get() is returned
+     *                - true: m_checked_switch.get() is returned
+     * @return The image used to draw the switch, if any, nullptr otherwise.
+     */
+    EGT_NODISCARD Image* switch_image(bool checked) const;
+
+    /**
+     * Add an image to draw the widget's switch, based on the value of its
+     * 'checked' flag.
+     *
+     * @param image Image to set.
+     * @param checked The boolean to select the switch image to set:
+     *                 - false: 'image' is copied into m_normal_switch.
+     *                 - true: 'image' is copied into m_checked_switch.
+     */
+    void switch_image(const Image& image, bool checked);
+
+    /**
+     * Remove the image, if any, used to draw the widget's switch, based on
+     * the value of its 'checked' flag.
+     *
+     * @param checked The boolean to select which switch image is reset:
+     *                - false: m_normal_switch is reset.
+     *                - true: m_checked_switch is reset.
+     */
+    void reset_switch_image(bool checked);
+
+protected:
+
+    virtual void draw_switch(Painter& painter, const Rect& handle) const;
+
+private:
+
+    void deserialize(Serializer::Properties& props);
+
+    bool m_show_label{true};
+    /// Alignment of the switch relative to the text.
+    AlignFlags m_switch_align{AlignFlag::left};
+
+    /**
+     * Optional switch images.
+     */
+    mutable std::unique_ptr<Image> m_normal_switch;
+    mutable std::unique_ptr<Image> m_checked_switch;
 };
 
 /**

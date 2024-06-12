@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([libegt],[1.8])
+AC_INIT([libegt],[1.9])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_SRCDIR([Makefile.am])
@@ -770,6 +770,14 @@ AC_ARG_ENABLE([unittests],
   [AS_HELP_STRING([--enable-unittests], [build unit tests [default=no]])],
   [enable_unittests=$enableval], [enable_unittests=no])
 AM_CONDITIONAL([ENABLE_UNITTESTS], [test "x${enable_unittests}" = xyes])
+
+AC_ARG_ENABLE([svgdeserial],
+  [AS_HELP_STRING([--enable-svgdeserial], [build svgdeserial functionality [default=no]])],
+  [enable_svgdeserial=$enableval], [enable_svgdeserial=no])
+AM_CONDITIONAL([ENABLE_SVGDESERIAL], [test "x${enable_svgdeserial}" = xyes])
+if test "x${enable_svgdeserial}" = xyes; then
+   AC_SUBST(include_svgdeserial, ["#define EGT_HAS_SVGDESERIAL 1"])
+fi
 
 AC_CONFIG_FILES([Makefile
 	src/Makefile

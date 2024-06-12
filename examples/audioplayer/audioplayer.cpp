@@ -104,7 +104,8 @@ public:
         : m_colormap({egt::Color(76, 181, 253), egt::Color(34, 186, 133)})
 
     {
-        add_component(m_background);
+        fill_flags({egt::Theme::FillFlag::solid});
+        background(egt::Image("file:background.png"));
 
         auto range0 = std::make_shared<egt::RangeValue<int>>(0, 100, 100);
         auto range1 = std::make_shared<egt::RangeValue<int>>(0, 100, 100);
@@ -142,16 +143,20 @@ public:
 
         m_logo.align(egt::AlignFlag::left | egt::AlignFlag::top);
         m_logo.margin(10);
+        // The size needs to be set again since the margin has been modified.
+        const auto m = m_logo.moat();
+        m_logo.resize(m_logo.image().size_orig() + egt::Size(2 * m, 2 * m));
         add_component(m_logo);
 
-        m_message_dialog.resize(this->size() * 0.75);
+        m_message_dialog.ratio(75);
         m_message_dialog.title("Audio Player Example");
         std::string dialog_text("This is an Ensemble Graphics "
                                 "Toolkit audio player example that "
                                 "uses egt::AudioPlayer to play mp3, "
                                 "wav, ogg, and more audio formats "
                                 "seamlessly.");
-        auto text = std::make_shared<egt::TextBox>(dialog_text);
+        auto text = std::make_shared<egt::TextBox>(dialog_text,
+                    egt::TextBox::TextFlags({egt::TextBox::TextFlag::multiline, egt::TextBox::TextFlag::word_wrap}));
         text->readonly(true);
         m_message_dialog.widget(expand(text));
         m_message_dialog.button(egt::Dialog::ButtonId::button1, "");
@@ -238,7 +243,6 @@ protected:
     egt::AudioPlayer m_player;
     egt::AnimationSequence m_animation{true};
     egt::experimental::ColorMap m_colormap;
-    egt::ImageLabel m_background{egt::Image{"file:background.png"}};
     egt::ImageLabel m_logo{(egt::Image("icon:egt_logo_white.png;128"))};
     egt::Dialog m_message_dialog;
     egt::ImageButton note{egt::Image("file:note.png")};

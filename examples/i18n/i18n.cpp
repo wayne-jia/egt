@@ -13,6 +13,48 @@
 
 #define _(String) gettext(String)
 
+class Language : public egt::StringItem
+{
+public:
+    Language(egt::ListBox& list,
+             const std::string& text = {})
+        : StringItem(text),
+          m_list(list)
+    {
+        m_list.add_item(*this);
+    }
+
+    egt::Signal<> on_checked_changed;
+
+    EGT_NODISCARD egt::Size min_size_hint() const override
+    {
+        if (!m_min_size.empty())
+            return m_min_size;
+
+        const auto carea = m_list.content_area();
+        const auto item_count = std::max<egt::DefaultDim>(1, m_list.item_count());
+        const auto height = carea.height() / item_count;
+        const auto width = carea.width();
+        return egt::Size(width, height);
+    }
+
+    void resize(const egt::Size& size) override
+    {
+        if (this->size() != size)
+        {
+            auto f = font();
+            // 45 is the height of each of the 6 Languages in 'm_list' for a
+            // 800x480 screen.
+            f.size(24 * size.height() / 45);
+            font(f);
+            StringItem::resize(size);
+        }
+    }
+
+protected:
+    egt::ListBox& m_list;
+};
+
 static std::string get_translated_string(const std::locale& loc)
 {
     std::string ts;
@@ -40,6 +82,9 @@ int main(int argc, char** argv)
 #ifdef EXAMPLEDATA
     egt::add_search_path(EXAMPLEDATA);
 #endif
+
+    const auto screen_size = app.screen()->size();
+    const auto landscape = screen_size.width() >= screen_size.height();
 
     egt::Drawer<egt::Label>::draw([](egt::Label & widget, egt::Painter & painter, const egt::Rect & rect)
     {
@@ -74,14 +119,22 @@ int main(int argc, char** argv)
     egt::VerticalBoxSizer vsizer;
     vsizer.margin(10);
 
+    auto scaled_font_size = [&window](egt::Font::Size value)
+    {
+        return (value * window.width()) / 800.f;
+    };
+
     auto logo = std::make_shared<egt::ImageLabel>(egt::Image("icon:egt_logo_black.png;128"));
     logo->margin(10);
+    // The size needs to be set again since the margin has been modified.
+    const auto m = logo->moat();
+    logo->resize(logo->image().size_orig() + egt::Size(2 * m, 2 * m));
     logo->align(egt::AlignFlag::center_horizontal | egt::AlignFlag::bottom);
     window.add(logo);
 
     auto next = std::make_shared<egt::ImageButton>(egt::Image("icon:arrow_right.png;64"));
     next->fill_flags().clear();
-    next->align(egt::AlignFlag::right | egt::AlignFlag::center_vertical);
+    next->align(egt::AlignFlag::right | egt::AlignFlag::bottom);
     window.add(next);
 
     std::vector<std::string> variations =
@@ -101,45 +154,72 @@ int main(int argc, char** argv)
     utf8::append(0x0001f6b2, std::back_inserter(variations.back()));
     utf8::append(0x0001f3a3, std::back_inserter(variations.back()));
 
+    const auto text_font_size = scaled_font_size(30);
+    const auto emoji_font_size = scaled_font_size(16);
     int index = 0;
     for (auto& str : variations)
     {
         auto label = std::make_shared<egt::Label>(str);
         std::string face;
         if (index == static_cast<int>(variations.size()) - 1)
-            label->font(egt::Font("Noto Color Emoji", 16));
+            label->font(egt::Font("Noto Color Emoji", emoji_font_size));
         else if (index == 4)
-            label->font(egt::Font("Lohit Devanagari", 30));
+            label->font(egt::Font("Lohit Devanagari", text_font_size));
         else if (index == 1)
-            label->font(egt::Font("Noto Sans CJK SC", 30));
+            label->font(egt::Font("Noto Sans CJK SC", text_font_size));
         else
-            label->font(egt::Font("Free Sans", 30));
+            label->font(egt::Font("Free Sans", text_font_size));
 
         vsizer.add(label);
         index++;
     }
 
+    // If align flags are not empty(), Widget::layout() and egt::detail_algorithm()
+    // prevents vsizer.point() from being lower than its parent content_area()),
+    // which breaks the animation.
+    // Therefore, vsizer is centered manually instead of using something like
+    // 'vsizer.align(egt::AlignFlag::center*)'.
+    if (landscape)
+        vsizer.y((window.height() - vsizer.height()) / 2);
+    else
+        vsizer.x((window.width() - vsizer.width()) / 2);
     window.add(vsizer);
 
-    int minx = 0 - vsizer.width();
-    int maxx = window.width();
-    int half = (window.width() - vsizer.width()) / 2;
+    int min, max, half;
+    if (landscape)
+    {
+        min = 0 - vsizer.width();
+        max = window.width();
+        half = (window.width() - vsizer.width()) / 2;
+    }
+    else
+    {
+        min = 0 - vsizer.height();
+        max = window.height();
+        half = (window.height() - vsizer.height()) / 2;
+    }
 
-    auto in = std::make_shared<egt::PropertyAnimator>(maxx, half,
+    auto in = std::make_shared<egt::PropertyAnimator>(max, half,
               std::chrono::seconds(3),
               egt::easing_exponential_easeout);
-    in->on_change([&vsizer](int value)
+    in->on_change([&vsizer, landscape](int value)
     {
-        vsizer.x(value);
+        if (landscape)
+            vsizer.x(value);
+        else
+            vsizer.y(value);
     });
 
-    auto out = std::make_shared<egt::PropertyAnimator>(half + 1, minx,
+    auto out = std::make_shared<egt::PropertyAnimator>(half + 1, min,
                std::chrono::seconds(3),
                egt::easing_exponential_easeout);
     out->reverse(true);
-    out->on_change([&vsizer](int value)
+    out->on_change([&vsizer, landscape](int value)
     {
-        vsizer.x(value);
+        if (landscape)
+            vsizer.x(value);
+        else
+            vsizer.y(value);
     });
 
     auto delay = std::make_shared<egt::AnimationDelay>(std::chrono::seconds(1));
@@ -150,19 +230,28 @@ int main(int argc, char** argv)
     sequence.add(delay);
     sequence.start();
 
-    egt::HorizontalBoxSizer hsizer;
-    hsizer.hide();
-    window.add(egt::expand(hsizer));
+    egt::Frame page2;
+    page2.hide();
+    window.add(egt::expand(page2));
 
     auto label = std::make_shared<egt::Label>(_("Hello World"));
-    label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
-    hsizer.add(egt::expand(label));
+    const auto label_font_size = scaled_font_size(40);
+    label->font(egt::Font("Free Sans", label_font_size, egt::Font::Weight::bold));
+    egt::Rect label_box;
+    label_box.width(window.width());
+    label_box.height(window.height() * 30 / 100);
+    label->box(label_box);
+    page2.add(label);
 
-    egt::VerticalBoxSizer ts_sizer;
-    hsizer.add(ts_sizer);
+    egt::ListBox languages;
+    languages.on_selected([&languages](size_t index)
+    {
+        auto language = std::static_pointer_cast<Language>(languages.item_at(index));
+        language->on_checked_changed.invoke();
+    });
+    page2.add(languages);
 
-    auto english = std::make_shared<egt::RadioBox>(ts_sizer, "English");
-    egt::left(english);
+    auto english = std::make_shared<Language>(languages, "English");
     english->on_checked_changed([&]()
     {
         if (english->checked())
@@ -170,7 +259,7 @@ int main(int argc, char** argv)
             try
             {
                 std::locale loc_en("en_US.utf8");
-                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->font(egt::Font("Free Sans", label_font_size, egt::Font::Weight::bold));
                 label->text(get_translated_string(loc_en));
             }
             catch (std::runtime_error&)
@@ -180,8 +269,7 @@ int main(int argc, char** argv)
         }
     });
 
-    auto french = std::make_shared<egt::RadioBox>(ts_sizer, "French");
-    egt::left(french);
+    auto french = std::make_shared<Language>(languages, "French");
     french->on_checked_changed([&]()
     {
         if (french->checked())
@@ -189,7 +277,7 @@ int main(int argc, char** argv)
             try
             {
                 std::locale loc_fr("fr_FR.utf8");
-                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->font(egt::Font("Free Sans", label_font_size, egt::Font::Weight::bold));
                 label->text(get_translated_string(loc_fr));
             }
             catch (std::runtime_error&)
@@ -199,8 +287,7 @@ int main(int argc, char** argv)
         }
     });
 
-    auto german = std::make_shared<egt::RadioBox>(ts_sizer, "German");
-    egt::left(german);
+    auto german = std::make_shared<Language>(languages, "German");
     german->on_checked_changed([&]()
     {
         if (german->checked())
@@ -208,7 +295,7 @@ int main(int argc, char** argv)
             try
             {
                 std::locale loc_de("de_DE.utf8");
-                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->font(egt::Font("Free Sans", label_font_size, egt::Font::Weight::bold));
                 label->text(get_translated_string(loc_de));
             }
             catch (std::runtime_error&)
@@ -218,8 +305,7 @@ int main(int argc, char** argv)
         }
     });
 
-    auto spanish = std::make_shared<egt::RadioBox>(ts_sizer, "Spanish");
-    egt::left(spanish);
+    auto spanish = std::make_shared<Language>(languages, "Spanish");
     spanish->on_checked_changed([&]()
     {
         if (spanish->checked())
@@ -227,7 +313,7 @@ int main(int argc, char** argv)
             try
             {
                 std::locale loc_es("es_ES.utf8");
-                label->font(egt::Font("Free Sans", 40, egt::Font::Weight::bold));
+                label->font(egt::Font("Free Sans", label_font_size, egt::Font::Weight::bold));
                 label->text(get_translated_string(loc_es));
             }
             catch (std::runtime_error&)
@@ -237,8 +323,7 @@ int main(int argc, char** argv)
         }
     });
 
-    auto hindi = std::make_shared<egt::RadioBox>(ts_sizer, "Hindi");
-    egt::left(hindi);
+    auto hindi = std::make_shared<Language>(languages, "Hindi");
     hindi->on_checked_changed([&]()
     {
         if (hindi->checked())
@@ -246,7 +331,7 @@ int main(int argc, char** argv)
             try
             {
                 std::locale loc_hi("hi_IN.utf8");
-                label->font(egt::Font("Lohit Devanagari", 40, egt::Font::Weight::bold));
+                label->font(egt::Font("Lohit Devanagari", label_font_size, egt::Font::Weight::bold));
                 label->text(get_translated_string(loc_hi));
             }
             catch (std::runtime_error&)
@@ -256,8 +341,7 @@ int main(int argc, char** argv)
         }
     });
 
-    auto chinese = std::make_shared<egt::RadioBox>(ts_sizer, "Chinese");
-    egt::left(chinese);
+    auto chinese = std::make_shared<Language>(languages, "Chinese");
     chinese->on_checked_changed([&]()
     {
         if (chinese->checked())
@@ -265,23 +349,26 @@ int main(int argc, char** argv)
             try
             {
                 std::locale loc_zh("zh_CN.utf8");
-                label->font(egt::Font("Noto Sans CJK SC", 40, egt::Font::Weight::bold));
+                label->font(egt::Font("Noto Sans CJK SC", label_font_size, egt::Font::Weight::bold));
                 label->text(get_translated_string(loc_zh));
             }
             catch (std::runtime_error&)
             {
-                std::cout << "can't create locale for es_ES.utf8" << std::endl;
+                std::cout << "can't create locale for zh_CN.utf8" << std::endl;
             }
         }
     });
 
-    auto radiobox_group = std::make_unique<egt::ButtonGroup>(true);
-    radiobox_group->add(english);
-    radiobox_group->add(french);
-    radiobox_group->add(german);
-    radiobox_group->add(spanish);
-    radiobox_group->add(hindi);
-    radiobox_group->add(chinese);
+    egt::Rect languages_boundaries;
+    languages_boundaries.y(window.height() * 30 / 100);
+    languages_boundaries.width(window.width());
+    languages_boundaries.height((window.height() * 70 / 100) - logo->height());
+    languages.width(languages_boundaries.width() * 60 / 100);
+    languages.height(languages_boundaries.height());
+    auto languages_box = egt::detail::align_algorithm(languages.box(),
+                                                      languages_boundaries,
+                                                      {egt::AlignFlag::center});
+    languages.box(languages_box);
 
     static bool flag = true;
     next->on_click([&](egt::Event&)
@@ -290,9 +377,9 @@ int main(int argc, char** argv)
         {
             sequence.stop();
             vsizer.hide();
-            hsizer.show();
+            page2.show();
             next->image(egt::Image(egt::Image("icon:arrow_left.png;64")));
-            next->align(egt::AlignFlag::left | egt::AlignFlag::center_vertical);
+            next->align(egt::AlignFlag::left | egt::AlignFlag::bottom);
             flag = false;
             auto env = std::getenv("LANG");
             std::string lang = env ? env : "";
@@ -300,43 +387,43 @@ int main(int argc, char** argv)
             {
                 if (lang.compare(0, 3, "fr_") == 0)
                 {
-                    french->checked(true);
+                    languages.selected(1);
                 }
                 else if (lang.compare(0, 3, "de_") == 0)
                 {
-                    german->checked(true);
+                    languages.selected(2);
                 }
                 else if (lang.compare(0, 3, "es_") == 0)
                 {
-                    spanish->checked(true);
+                    languages.selected(3);
                 }
                 else if (lang.compare(0, 5, "hi_IN") == 0)
                 {
-                    hindi->checked(true);
+                    languages.selected(4);
                 }
                 else if (lang.compare(0, 3, "zh_") == 0)
                 {
-                    chinese->checked(true);
+                    languages.selected(5);
                 }
                 else
                 {
-                    english->checked(true);
+                    languages.selected(0);
                 }
             }
 
         }
         else
         {
-            hsizer.hide();
+            page2.hide();
             next->image(egt::Image(egt::Image("icon:arrow_right.png;64")));
-            next->align(egt::AlignFlag::right | egt::AlignFlag::center_vertical);
+            next->align(egt::AlignFlag::right | egt::AlignFlag::bottom);
             flag = true;
             vsizer.show();
             sequence.start();
         }
-        next->zorder_top();
     });
 
+    next->zorder_top();
     window.show();
 
     return app.run();

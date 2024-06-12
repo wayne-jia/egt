@@ -12,6 +12,7 @@
  */
 
 #include <egt/app.h>
+#include <egt/canvas.h>
 #include <egt/detail/alignment.h>
 #include <egt/detail/enum.h>
 #include <egt/detail/math.h>
@@ -19,6 +20,7 @@
 #include <egt/detail/screen/composerscreen.h>
 #include <egt/flags.h>
 #include <egt/frame.h>
+#include <egt/imagegroup.h>
 #include <egt/painter.h>
 #include <egt/serialize.h>
 #include <egt/textwidget.h>
@@ -193,6 +195,32 @@ public:
 
     void draw(Painter& painter, const Rect& rect) override;
 
+    /**
+     * Get the image, if any, to draw the slider's handle for the given group.
+     *
+     * @param[in] group Palette::GroupId to get.
+     * @param[in] allow_fallback If true, return the 'normal' image if no image
+     *                           is set for the requested group.
+     */
+    EGT_NODISCARD Image* handle_image(Palette::GroupId group,
+                                      bool allow_fallback = false) const;
+
+    /**
+     * Set the image used to draw the slider's handle.
+     *
+     * @param[in] image The image used to draw the handle.
+     * @param[in] group Palette::GroupId to set.
+     */
+    void handle_image(const Image& image,
+                      Palette::GroupId group = Palette::GroupId::normal);
+
+    /**
+     * Remove the image, if any, used to draw the slider's handle.
+     *
+     * @param[in] group Palette::GroupId to set.
+     */
+    void reset_handle_image(Palette::GroupId group = Palette::GroupId::normal);
+
     using ValueRangeWidget<T>::value;
 
     T value(T value) override
@@ -269,9 +297,15 @@ public:
 
 protected:
 
+    bool internal_drag() const override { return true; }
+    bool internal_track_drag() const override { return true; }
+
     /// Convert a value to an offset.
-    EGT_NODISCARD int to_offset(int value) const
+    EGT_NODISCARD int to_offset(T value) const
     {
+        if (detail::float_equal(static_cast<float>(this->m_start), static_cast<float>(this->m_end)))
+            return 0;
+
         const auto b = this->content_area();
         if (m_orient == Orientation::horizontal)
             return egt::detail::normalize<float>(value, this->m_start, this->m_end,
@@ -296,14 +330,25 @@ protected:
     /// Update the value without notifying the handlers.
     void update_value(T value)
     {
-        if (this->m_start < this->m_end)
-            value = detail::clamp<T>(value, this->m_start, this->m_end);
-        else
-            value = detail::clamp<T>(value, this->m_end, this->m_start);
-
-        if (detail::change_if_diff<>(this->m_value, value))
+        T prev_value = this->m_value;
+        if (this->set_value(value))
         {
-            this->damage();
+            auto r = Rect::merge(handle_box(prev_value), handle_box());
+            this->damage(r);
+
+            if (slider_flags().is_set(SliderFlag::show_label))
+            {
+                std::string text;
+                Canvas canvas(Size(100, 100));
+                Painter painter(canvas.context());
+
+                auto label_rect = label_box(painter, prev_value, text);
+                this->damage(label_rect);
+
+                label_rect = label_box(painter, this->m_value, text);
+                this->damage(label_rect);
+            }
+
             if (m_live_update)
             {
                 this->on_value_changed.invoke();
@@ -328,8 +373,8 @@ protected:
     /// Get the handle box for the specified value.
     EGT_NODISCARD Rect handle_box(T value) const;
 
-    /// Draw the value label.
-    void draw_label(Painter& painter, T value)
+    /// Get the label box and text for the specified value.
+    EGT_NODISCARD Rect label_box(Painter& painter, T value, std::string& text) const
     {
         const auto b = this->content_area();
         auto handle_rect = handle_box(value);
@@ -339,17 +384,44 @@ protected:
         else
             handle_rect -= Point(b.width() / 2., 0);
 
-        const auto text = std::to_string(value);
-        const auto f = TextWidget::scale_font(handle_rect.size(), text, this->font());
+        text = format_label(value);
 
         painter.set(this->color(Palette::ColorId::label_text));
-        painter.set(f);
+        painter.set(this->font());
 
         const auto text_size = painter.text_size(text);
-        const auto target = detail::align_algorithm(text_size,
-                            handle_rect,
-                            AlignFlag::center,
-                            5);
+        auto target = detail::align_algorithm(text_size,
+                                              handle_rect,
+                                              AlignFlag::center,
+                                              5);
+
+        /// When possible, force the label box within the content area.
+        if (target.width() <= b.width())
+        {
+            if (target.x() < b.x())
+                target.x(b.x());
+
+            if (target.x() + target.width() > b.x() + b.width())
+                target.x(b.x() + b.width() - target.width());
+        }
+
+        if (target.height() <= b.height())
+        {
+            if (target.y() < b.y())
+                target.y(b.y());
+
+            if (target.y() + target.height() > b.y() + b.height())
+                target.y(b.y() + b.height() - target.height());
+        }
+
+        return target;
+    }
+
+    /// Draw the value label.
+    void draw_label(Painter& painter, T value)
+    {
+        std::string text;
+        const auto target = label_box(painter, value, text);
         painter.draw(target.point());
         painter.draw(text);
     }
@@ -359,6 +431,12 @@ protected:
 
     /// Draw the line.
     void draw_line(Painter& painter, float xp, float yp);
+
+    /// Format the label text.
+    static std::string format_label(T value)
+    {
+        return std::to_string(value);
+    }
 
     /// Orientation of the slider.
     Orientation m_orient{Orientation::horizontal};
@@ -381,6 +459,9 @@ private:
     static Signal<>::RegisterHandle m_default_size_handle;
     static void register_handler();
     static void unregister_handler();
+
+    /// Optional handle images.
+    ImageGroup m_handles{"handle"};
 
     void deserialize(Serializer::Properties& props);
 };
@@ -495,44 +576,24 @@ void SliderType<T>::draw(Painter& painter, const Rect& /*rect*/)
     auto yp = b.y() + b.height() / 2.;
     auto xp = b.x() + b.width() / 2.;
 
-    if (m_orient == Orientation::horizontal)
+    if (slider_flags().is_set(SliderFlag::show_labels) ||
+        slider_flags().is_set(SliderFlag::show_label))
     {
-        if (slider_flags().is_set(SliderFlag::show_labels) ||
-            slider_flags().is_set(SliderFlag::show_label))
-        {
+        if (m_orient == Orientation::horizontal)
             yp += b.height() / 4.;
-
-            if (slider_flags().is_set(SliderFlag::show_label))
-            {
-                draw_label(painter, this->value());
-            }
-            else
-            {
-                draw_label(painter, this->starting());
-                draw_label(painter, this->starting() + ((this->ending() - this->starting()) / 2));
-                draw_label(painter, this->ending());
-            }
-        }
-    }
-    else
-    {
-        if (slider_flags().is_set(SliderFlag::show_labels) ||
-            slider_flags().is_set(SliderFlag::show_label))
-        {
+        else
             xp += b.width() / 4.;
 
-            if (slider_flags().is_set(SliderFlag::show_label))
-            {
-                draw_label(painter, this->value());
-            }
-            else
-            {
-                draw_label(painter, this->starting());
-                draw_label(painter, this->starting() + ((this->ending() - this->starting()) / 2));
-                draw_label(painter, this->ending());
-            }
+        if (slider_flags().is_set(SliderFlag::show_label))
+        {
+            draw_label(painter, this->value());
         }
-
+        else
+        {
+            draw_label(painter, this->starting());
+            draw_label(painter, this->starting() + ((this->ending() - this->starting()) / 2));
+            draw_label(painter, this->ending());
+        }
     }
 
     // line
@@ -666,7 +727,18 @@ void SliderType<T>::draw_handle(Painter& painter)
 {
     const auto handle_rect = handle_box();
 
-    if (slider_flags().is_set(SliderFlag::round_handle))
+    auto* image = handle_image(this->group(), true);
+    if (image)
+    {
+        this->theme().draw_box(painter,
+                               Theme::FillFlag::blend,
+                               handle_rect,
+                               Palette::transparent,
+                               Palette::transparent,
+                               0, 0, 0, {},
+                               image);
+    }
+    else if (slider_flags().is_set(SliderFlag::round_handle))
     {
         this->theme().draw_circle(painter,
                                   Theme::FillFlag::blend,
@@ -740,13 +812,13 @@ void SliderType<T>::draw_line(Painter& painter, float xp, float yp)
     }
 }
 
-/// Draw the value label specialized for float.
+/// Format the value label specialized for float.
 template<>
-EGT_API void SliderType<float>::draw_label(Painter& painter, float value);
+EGT_API std::string SliderType<float>::format_label(float value);
 
-/// Draw the value label specialized for double.
+/// Format the value label specialized for double.
 template<>
-EGT_API void SliderType<double>::draw_label(Painter& painter, double value);
+EGT_API std::string SliderType<double>::format_label(double value);
 
 template <class T>
 void SliderType<T>::serialize(Serializer& serializer) const
@@ -755,6 +827,7 @@ void SliderType<T>::serialize(Serializer& serializer) const
 
     serializer.add_property("sliderflags", m_slider_flags.to_string());
     serializer.add_property("orient", detail::enum_to_string(orient()));
+    m_handles.serialize(serializer);
 }
 
 template <class T>
@@ -772,8 +845,34 @@ void SliderType<T>::deserialize(Serializer::Properties& props)
             orient(detail::enum_from_string<Orientation>(std::get<1>(p)));
             return true;
         }
+        else if (m_handles.deserialize(std::get<0>(p), std::get<1>(p)))
+        {
+            return true;
+        }
         return false;
     }), props.end());
+}
+
+template <class T>
+Image* SliderType<T>::handle_image(Palette::GroupId group, bool allow_fallback) const
+{
+    return m_handles.get(group, allow_fallback);
+}
+
+template <class T>
+void SliderType<T>::handle_image(const Image& image, Palette::GroupId group)
+{
+    m_handles.set(group, image);
+    if (group == this->group())
+        this->damage(handle_box());
+}
+
+template <class T>
+void SliderType<T>::reset_handle_image(Palette::GroupId group)
+{
+    auto changed = m_handles.reset(group);
+    if (changed && group == this->group())
+        this->damage(handle_box());
 }
 
 /// Enum string conversion map

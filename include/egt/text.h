@@ -467,6 +467,8 @@ public:
 
 protected:
 
+    bool internal_drag() const override { return true; }
+
     /// Get the rectangle of the text boundaries.
     EGT_NODISCARD Rect text_boundaries() const;
 
@@ -658,24 +660,6 @@ protected:
     /// Draw sliders.
     void draw_sliders(Painter& painter, const Rect& rect);
 
-    /// Damage a component.
-    void damage_component(Widget& component)
-    {
-        damage(component.box() + point());
-    }
-
-    /// Damage the horizontal slider.
-    void damage_hslider()
-    {
-        return damage_component(m_hslider);
-    }
-
-    /// Damage the vertical slider.
-    void damage_vslider()
-    {
-        return damage_component(m_vslider);
-    }
-
     /// Damage the text but only if visible.
     void damage_text(const Rect& rect)
     {
@@ -823,9 +807,6 @@ private:
 
     /// Width/height of the slider when shown.
     DefaultDim m_slider_dim{8};
-
-    /// Widget components.
-    std::list<Widget*> m_components;
 
     /// Gain focus registration.
     Signal<>::RegisterHandle m_gain_focus_reg{};

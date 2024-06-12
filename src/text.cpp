@@ -273,7 +273,7 @@ void TextBox::set_selection(TextRects& rects)
             else if (select_end < end)
             {
                 // Split it and select the head
-                TextRect tail(std::move(it->split(select_end - start, cr)));
+                TextRect tail(it->split(select_end - start, cr));
                 it->select();
                 it = rects.insert(std::next(it), std::move(tail));
             }
@@ -291,8 +291,8 @@ void TextBox::set_selection(TextRects& rects)
                 size_t head_len = select_start - start;
                 size_t mid_len = select_len;
 
-                TextRect mid(std::move(it->split(head_len, cr)));
-                TextRect tail(std::move(mid.split(mid_len, cr)));
+                TextRect mid(it->split(head_len, cr));
+                TextRect tail(mid.split(mid_len, cr));
                 mid.select();
                 it = rects.insert(std::next(it), std::move(mid));
                 it = rects.insert(std::next(it), std::move(tail));
@@ -300,7 +300,7 @@ void TextBox::set_selection(TextRects& rects)
             else
             {
                 // Split it and select the tail
-                TextRect tail(std::move(it->split(select_start - start, cr)));
+                TextRect tail(it->split(select_start - start, cr));
                 tail.select();
                 it = rects.insert(std::next(it), std::move(tail));
             }
@@ -450,7 +450,7 @@ void TextBox::tag_left_aligned_line(TextRects& prev,
 
     if (len && len < next_it->length())
     {
-        TextRect tail(std::move(next_it->split(len, context())));
+        TextRect tail(next_it->split(len, context()));
         prefix_rect.width(prefix_rect.width() + next_it->rect().width());
         next.insert(std::next(next_it), std::move(tail));
     }
@@ -820,7 +820,7 @@ void TextBox::init_sliders()
     m_hslider.on_value_changed.on_event(redraw);
     m_hslider.live_update(true);
     m_hslider.hide();
-    m_components.push_back(&m_hslider);
+    add_component(m_hslider);
 
     m_vslider.orient(Orientation::vertical);
     m_vslider.slider_flags().set({Slider::SliderFlag::rectangle_handle,
@@ -829,7 +829,7 @@ void TextBox::init_sliders()
     m_vslider.on_value_changed.on_event(redraw);
     m_vslider.live_update(true);
     m_vslider.hide();
-    m_components.push_back(&m_vslider);
+    add_component(m_vslider);
 
     resize_sliders();
 }
@@ -902,8 +902,6 @@ void TextBox::update_hslider()
             m_hslider.hide();
             if (m_hslider.value())
                 m_hslider.value(0);
-            else
-                damage_hslider();
         }
         return;
     }
@@ -916,21 +914,17 @@ void TextBox::update_hslider()
     if (visible && m_hslider.ending() != delta)
     {
         m_hslider.ending(delta);
-        damage_hslider();
     }
 
     if (visible && !m_hslider.visible())
     {
         m_hslider.show();
-        damage_hslider();
     }
     else if (!visible && m_hslider.visible())
     {
         m_hslider.hide();
         if (m_hslider.value())
             m_hslider.value(0);
-        else
-            damage_hslider();
     }
 }
 
@@ -943,8 +937,6 @@ void TextBox::update_vslider()
             m_vslider.hide();
             if (m_vslider.value())
                 m_vslider.value(0);
-            else
-                damage_vslider();
         }
         return;
     }
@@ -957,21 +949,17 @@ void TextBox::update_vslider()
     if (visible && m_vslider.ending() != delta)
     {
         m_vslider.ending(delta);
-        damage_vslider();
     }
 
     if (visible && !m_vslider.visible())
     {
         m_vslider.show();
-        damage_vslider();
     }
     else if (!visible && m_vslider.visible())
     {
         m_vslider.hide();
         if (m_vslider.value())
             m_vslider.value(0);
-        else
-            damage_vslider();
     }
 }
 
@@ -1037,13 +1025,7 @@ void TextBox::draw_sliders(Painter& painter, const Rect& rect)
     Painter::AutoSaveRestore sr(painter);
 
     const auto& origin = point();
-    if (origin.x() || origin.y())
-    {
-        auto cr = painter.context();
-        cairo_translate(cr.get(),
-                        origin.x(),
-                        origin.y());
-    }
+    painter.translate(origin);
 
     // Component rect
     const auto crect = rect - origin;
@@ -1179,42 +1161,6 @@ void TextBox::handle(Event& event)
     default:
         break;
     }
-
-    switch (event.id())
-    {
-    case EventId::raw_pointer_down:
-    case EventId::raw_pointer_up:
-    case EventId::raw_pointer_move:
-    case EventId::pointer_click:
-    case EventId::pointer_dblclick:
-    case EventId::pointer_hold:
-    case EventId::pointer_drag_start:
-    case EventId::pointer_drag:
-    case EventId::pointer_drag_stop:
-    {
-        auto pos = display_to_local(event.pointer().point);
-
-        for (auto& component : m_components)
-        {
-            if (!component->can_handle_event())
-                continue;
-
-            if (component->box().intersect(pos))
-            {
-                component->handle(event);
-                break;
-            }
-        }
-
-        break;
-    }
-
-    default:
-        break;
-    }
-
-    if (event.quit())
-        return;
 
     switch (event.id())
     {

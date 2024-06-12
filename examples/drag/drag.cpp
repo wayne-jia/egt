@@ -62,6 +62,9 @@ public:
     }
 
 protected:
+    bool internal_drag() const override { return true; }
+    bool internal_track_drag() const override { return true; }
+
     egt::ImageLabel m_grip;
     egt::ImageLabel m_arrows;
     egt::Point m_start_point;

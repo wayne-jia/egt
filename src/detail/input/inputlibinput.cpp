@@ -15,6 +15,7 @@
 #include "egt/keycode.h"
 #include "egt/screen.h"
 #include <cstdarg>
+#include <filesystem>
 #include <libinput.h>
 #include <libudev.h>
 #include <linux/input.h>
@@ -81,57 +82,93 @@ static void log_handler(struct libinput*,
     detail::info(buffer);
 }
 
-static struct libinput* tools_open_udev(const char* seat, bool grab)
+static bool tools_open_udev(const char* seat, struct libinput** libinput_handle)
 {
-    struct libinput* li;
     struct udev* udev = udev_new();
 
     if (!udev)
     {
         detail::warn("Failed to initialize udev");
-        return nullptr;
+        return false;
     }
 
-    li = libinput_udev_create_context(&interface, &grab, udev);
-    if (!li)
+    *libinput_handle = libinput_udev_create_context(&interface, nullptr, udev);
+    if (!*libinput_handle)
     {
         detail::warn("Failed to initialize context from udev");
         udev_unref(udev);
-        return nullptr;
+        return false;
     }
 
     if (libinput_verbose())
     {
-        libinput_log_set_handler(li, log_handler);
-        libinput_log_set_priority(li, LIBINPUT_LOG_PRIORITY_DEBUG);
+        libinput_log_set_handler(*libinput_handle, log_handler);
+        libinput_log_set_priority(*libinput_handle, LIBINPUT_LOG_PRIORITY_DEBUG);
     }
 
-    if (libinput_udev_assign_seat(li, seat))
+    if (libinput_udev_assign_seat(*libinput_handle, seat))
     {
         detail::warn("failed to set seat");
-        libinput_unref(li);
+        libinput_unref(*libinput_handle);
         udev_unref(udev);
-        return nullptr;
+        return false;
     }
 
     udev_unref(udev);
-    return li;
+    return true;
 }
 
-InputLibInput::InputLibInput(Application& app)
+static bool tools_open_device(const std::filesystem::path& device,
+                              struct libinput** libinput_handle)
+{
+    if (!std::filesystem::exists(device))
+    {
+        detail::warn("{} doesn't exist", device);
+        return false;
+    }
+
+    /*
+     * No need to create several handles if there are several devices
+     * specified, just add the devices.
+     */
+    if (!*libinput_handle)
+        *libinput_handle =  libinput_path_create_context(&interface, nullptr);
+
+    detail::debug("inputlibinput: adding {}", device);
+    auto libinput_device = libinput_path_add_device(*libinput_handle, device.c_str());
+    if (!libinput_device)
+    {
+        detail::warn("can't add {}", device);
+        return false;
+    }
+
+    return true;
+}
+
+InputLibInput::InputLibInput(Application& app, const std::filesystem::path& device)
     : m_app(app),
       m_input(app.event().io()),
       m_impl(std::make_unique<LibInputImpl>())
 {
-    const char* seat_or_device = "seat0";
-    li = tools_open_udev(seat_or_device, false);
-    if (!li)
+    if (device.empty())
     {
-        detail::warn("could not open libinput device: {}", seat_or_device);
-        return;
+        const char* seat = "seat0";
+        if (!tools_open_udev(seat, &m_libinput_handle))
+        {
+            detail::warn("could not open libinput device: {}", seat);
+            return;
+        }
+    }
+    else
+    {
+        if (!tools_open_device(device, &m_libinput_handle))
+        {
+            detail::warn("could not open libinput device: {}", device);
+            return;
+        }
     }
 
-    m_input.assign(libinput_get_fd(li));
+    m_input.assign(libinput_get_fd(m_libinput_handle));
 
     // go ahead and enumerate devices and start the first async_read
 #ifdef USE_PRIORITY_QUEUE
@@ -161,7 +198,7 @@ void InputLibInput::handle_event_device_notify(struct libinput_event* ev)
     else
         type = "removed";
 
-    li = libinput_event_get_context(ev);
+    m_libinput_handle = libinput_event_get_context(ev);
 
     // if the device is handled by another backend, disable libinput events
     for (auto& device : m_app.get_input_devices())
@@ -343,9 +380,9 @@ void InputLibInput::handle_read(const asio::error_code& error)
     {
         struct libinput_event* ev;
 
-        libinput_dispatch(li);
+        libinput_dispatch(m_libinput_handle);
 
-        while ((ev = libinput_get_event(li)))
+        while ((ev = libinput_get_event(m_libinput_handle)))
         {
             switch (libinput_event_get_type(ev))
             {
@@ -416,7 +453,7 @@ void InputLibInput::handle_read(const asio::error_code& error)
 
 InputLibInput::~InputLibInput() noexcept
 {
-    libinput_unref(li);
+    libinput_unref(m_libinput_handle);
 }
 
 }

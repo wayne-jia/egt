@@ -11,6 +11,7 @@
 #include "egt/detail/string.h"
 #include "egt/frame.h"
 #include "egt/geometry.h"
+#include "egt/image.h"
 #include "egt/input.h"
 #include "egt/painter.h"
 #include "egt/screen.h"
@@ -44,6 +45,8 @@ const std::pair<Widget::Flag, char const*> detail::EnumStrings<Widget::Flag>::da
     {Widget::Flag::no_autoresize, "no_autoresize"},
     {Widget::Flag::checked, "checked"},
     {Widget::Flag::component, "component"},
+    {Widget::Flag::user_drag, "user_drag"},
+    {Widget::Flag::user_track_drag, "user_track_drag"},
 };
 
 std::ostream& operator<<(std::ostream& os, const Widget::Flags& flags)
@@ -65,24 +68,7 @@ Widget::Widget(const Rect& rect, const Widget::Flags& flags) noexcept
       m_widgetid(global_widget_id++),
       m_widget_flags(flags)
 {
-    m_components_begin = m_subordinates.begin();
-    m_children.begin(m_subordinates.begin());
-    m_children.end(m_components_begin);
-
-    m_align.on_change([this]()
-    {
-        parent_layout();
-    });
-
-    on_gain_focus([this]()
-    {
-        m_focus = true;
-    });
-
-    on_lost_focus([this]()
-    {
-        m_focus = false;
-    });
+    init();
 }
 
 Widget::Widget(Serializer::Properties& props, bool is_derived) noexcept
@@ -92,24 +78,7 @@ Widget::Widget(Serializer::Properties& props, bool is_derived) noexcept
 
     m_user_requested_box = m_box;
 
-    m_components_begin = m_subordinates.begin();
-    m_children.begin(m_subordinates.begin());
-    m_children.end(m_components_begin);
-
-    m_align.on_change([this]()
-    {
-        parent_layout();
-    });
-
-    on_gain_focus([this]()
-    {
-        m_focus = true;
-    });
-
-    on_lost_focus([this]()
-    {
-        m_focus = false;
-    });
+    init();
 
     if (!is_derived)
         deserialize_leaf(props);
@@ -157,19 +126,20 @@ void Widget::handle(Event& event)
         case EventId::pointer_dblclick:
         case EventId::pointer_hold:
         case EventId::pointer_drag_start:
-        case EventId::pointer_drag:
-        case EventId::pointer_drag_stop:
         {
-            auto pos = display_to_local(event.pointer().point);
+            const auto p = display_to_local(event.pointer().point) + point();
 
             for (auto& subordinate : detail::reverse_iterate(m_subordinates))
             {
                 if (!subordinate->can_handle_event())
                     continue;
 
-                if (subordinate->box().intersect(pos))
+                const auto p2 = p - point_from_subordinate(*subordinate);
+                if (subordinate->box().intersect(p2))
                 {
                     subordinate->handle(event);
+                    if (event.postponed_quit())
+                        event.stop();
                     break;
                 }
             }
@@ -187,8 +157,10 @@ void Widget::handle(Event& event)
                     continue;
 
                 subordinate->handle(event);
+                if (event.postponed_quit())
+                    event.stop();
                 if (event.quit())
-                    return;
+                    break;
             }
 
             break;
@@ -198,6 +170,59 @@ void Widget::handle(Event& event)
             break;
         }
     }
+
+    if (event.quit())
+        return;
+
+    /*
+     * start_drag() must be executed only now to give a chance to subordinates
+     * catch the 'pointer_drag_start' event.
+     */
+    if (event.id() == EventId::pointer_drag_start)
+        start_drag(event);
+}
+
+void Widget::start_drag(Event& event)
+{
+    /* Do nothing if this widget doesn't accept drag events anyway. */
+    if (!accept_drag())
+        return;
+
+    /* Accept this event only it hits our widget box. */
+    if (!hit(event.pointer().drag_start))
+        return;
+
+    /*
+     * Don't stop the event immediately if an overridden handle() method still
+     * needs to process it, but reschedule the stop() for when this
+     * overridden handle() method completes.
+     */
+    event.postpone_stop();
+    detail::dragged(this);
+}
+
+void Widget::continue_drag(Event& event)
+{
+    auto pos = display_to_local(event.pointer().point);
+    const auto b = local_box();
+
+    if (track_drag() || b.intersect(pos))
+    {
+        if (event.id() == EventId::pointer_drag_stop)
+            detail::dragged(nullptr);
+    }
+    else
+    {
+        /* Make sure the pointer is within the box. */
+        pos.x(detail::clamp(pos.x(), 0, b.width()));
+        pos.y(detail::clamp(pos.y(), 0, b.height()));
+
+        event.id(EventId::pointer_drag_stop);
+        event.pointer().point = local_to_display(pos);
+        detail::dragged(nullptr);
+    }
+
+    handle(event);
 }
 
 void Widget::move_to_center(const Point& point)
@@ -479,6 +504,19 @@ void Widget::add_damage(const Rect& rect)
     Screen::damage_algorithm(m_damage, r);
 }
 
+Palette::GroupId Widget::group() const
+{
+    Palette::GroupId group = Palette::GroupId::normal;
+    if (disabled())
+        group = Palette::GroupId::disabled;
+    else if (active())
+        group = Palette::GroupId::active;
+    else if (checked())
+        group = Palette::GroupId::checked;
+
+    return group;
+}
+
 void Widget::palette(const Palette& palette)
 {
     m_palette = std::make_unique<Palette>(palette);
@@ -496,15 +534,7 @@ void Widget::reset_palette()
 
 const Pattern& Widget::color(Palette::ColorId id) const
 {
-    Palette::GroupId group = Palette::GroupId::normal;
-    if (disabled())
-        group = Palette::GroupId::disabled;
-    else if (active())
-        group = Palette::GroupId::active;
-    else if (checked())
-        group = Palette::GroupId::checked;
-
-    return color(id, group);
+    return color(id, group());
 }
 
 const Pattern& Widget::color(Palette::ColorId id, Palette::GroupId group) const
@@ -542,6 +572,31 @@ void Widget::color(Palette::ColorId id,
         m_palette->set(id, group, color);
         damage();
     }
+}
+
+Image* Widget::background(bool allow_fallback) const
+{
+    return background(group(), allow_fallback);
+}
+
+Image* Widget::background(Palette::GroupId group, bool allow_fallback) const
+{
+    return m_backgrounds.get(group, allow_fallback);
+}
+
+void Widget::background(const Image& image,
+                        Palette::GroupId group)
+{
+    m_backgrounds.set(group, image);
+    if (group == this->group())
+        damage();
+}
+
+void Widget::reset_background(Palette::GroupId group)
+{
+    auto changed = m_backgrounds.reset(group);
+    if (changed && group == this->group())
+        damage();
 }
 
 const Palette& Widget::palette() const
@@ -615,9 +670,7 @@ void Widget::paint(Painter& painter)
     Painter::AutoSaveRestore sr(painter);
 
     // move origin
-    cairo_translate(painter.context().get(),
-                    -x(),
-                    -y());
+    painter.translate(-point());
 
     draw(painter, box());
 }
@@ -707,8 +760,9 @@ void Widget::zorder(size_t rank)
 
 void Widget::zorder_down(const Widget* widget)
 {
-    auto begin = widget->component() ? m_components_begin : children().begin();
-    auto end = widget->component() ? m_subordinates.end() : children().end();
+    auto& range = range_from_widget(*widget);
+    auto begin = range.begin();
+    auto end = range.end();
 
     auto i = std::find_if(begin, end,
                           [widget](const auto & ptr)
@@ -724,12 +778,8 @@ void Widget::zorder_down(const Widget* widget)
         if (to == begin)
         {
             if (widget->component())
-            {
                 m_components_begin = to;
-                children().end(m_components_begin);
-            }
-            else
-                children().begin(m_subordinates.begin());
+            update_subordinates_ranges();
         }
         layout();
     }
@@ -737,8 +787,9 @@ void Widget::zorder_down(const Widget* widget)
 
 void Widget::zorder_up(const Widget* widget)
 {
-    auto begin = widget->component() ? m_components_begin : children().begin();
-    auto end = widget->component() ? m_subordinates.end() : children().end();
+    auto& range = range_from_widget(*widget);
+    auto begin = range.begin();
+    auto end = range.end();
 
     auto i = std::find_if(begin, end,
                           [widget](const auto & ptr)
@@ -756,12 +807,8 @@ void Widget::zorder_up(const Widget* widget)
             if (i == begin)
             {
                 if (widget->component())
-                {
                     m_components_begin = i;
-                    children().end(m_components_begin);
-                }
-                else
-                    children().begin(m_subordinates.begin());
+                update_subordinates_ranges();
             }
             layout();
         }
@@ -770,8 +817,9 @@ void Widget::zorder_up(const Widget* widget)
 
 void Widget::zorder_bottom(const Widget* widget)
 {
-    auto begin = widget->component() ? m_components_begin : children().begin();
-    auto end = widget->component() ? m_subordinates.end() : children().end();
+    auto& range = range_from_widget(*widget);
+    auto begin = range.begin();
+    auto end = range.end();
 
     if (std::distance(begin, end) <= 1)
         return;
@@ -786,20 +834,17 @@ void Widget::zorder_bottom(const Widget* widget)
     {
         m_subordinates.splice(begin, m_subordinates, i, std::next(i));
         if (widget->component())
-        {
             m_components_begin = i;
-            children().end(m_components_begin);
-        }
-        else
-            children().begin(m_subordinates.begin());
+        update_subordinates_ranges();
         layout();
     }
 }
 
 void Widget::zorder_top(const Widget* widget)
 {
-    auto begin = widget->component() ? m_components_begin : children().begin();
-    auto end = widget->component() ? m_subordinates.end() : children().end();
+    auto& range = range_from_widget(*widget);
+    auto begin = range.begin();
+    auto end = range.end();
 
     if (std::distance(begin, end) <= 1)
         return;
@@ -815,12 +860,8 @@ void Widget::zorder_top(const Widget* widget)
         if (i == begin)
         {
             if (widget->component())
-            {
                 m_components_begin = std::next(i);
-                children().end(m_components_begin);
-            }
-            else
-                children().begin(m_subordinates.begin());
+            update_subordinates_ranges();
         }
         layout();
     }
@@ -843,8 +884,9 @@ size_t Widget::zorder(const Widget* widget) const
 
 void Widget::zorder(const Widget* widget, size_t rank)
 {
-    auto begin = widget->component() ? m_components_begin : children().begin();
-    auto end = widget->component() ? m_subordinates.end() : children().end();
+    auto& range = range_from_widget(*widget);
+    auto begin = range.begin();
+    auto end = range.end();
 
     auto i = std::find_if(begin, end,
                           [widget](const auto & ptr)
@@ -865,12 +907,8 @@ void Widget::zorder(const Widget* widget, size_t rank)
             if (i == begin || j == begin)
             {
                 if (widget->component())
-                {
                     m_components_begin = i;
-                    children().end(m_components_begin);
-                }
-                else
-                    children().begin(m_subordinates.begin());
+                update_subordinates_ranges();
             }
             layout();
         }
@@ -995,6 +1033,27 @@ std::string Widget::type() const
     return detail::replace_all(t, "egt::v1::", {});
 }
 
+void Widget::init(void)
+{
+    m_components_begin = m_subordinates.begin();
+    update_subordinates_ranges();
+
+    m_align.on_change([this]()
+    {
+        parent_layout();
+    });
+
+    on_gain_focus([this]()
+    {
+        m_focus = true;
+    });
+
+    on_lost_focus([this]()
+    {
+        m_focus = false;
+    });
+}
+
 void Widget::serialize(Serializer& serializer) const
 {
     serializer.add_property("show", visible());
@@ -1049,6 +1108,7 @@ void Widget::serialize(Serializer& serializer) const
     {
         m_palette->serialize("color", serializer);
     }
+    m_backgrounds.serialize(serializer);
 }
 
 void Widget::deserialize_leaf(Serializer::Properties& props)
@@ -1073,8 +1133,13 @@ void Widget::deserialize(Serializer::Properties& props)
     props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
     {
         bool ret = true;
+        auto name = std::get<0>(p);
         auto value = std::get<1>(p);
-        switch (detail::hash(std::get<0>(p)))
+
+        if (m_backgrounds.deserialize(name, value))
+            return true;
+
+        switch (detail::hash(name))
         {
         case detail::hash("width"):
             width(std::stoi(value));
@@ -1168,8 +1233,8 @@ void Widget::deserialize(Serializer::Properties& props)
 
 Widget::~Widget() noexcept
 {
-    for (auto i = m_components_begin; i != m_subordinates.end(); i++)
-        remove_component((*i).get());
+    for (auto& i : components())
+        remove_component(i.get());
     detach();
 
     if (detail::mouse_grab() == this)
@@ -1177,6 +1242,9 @@ Widget::~Widget() noexcept
 
     if (detail::keyboard_focus() == this)
         detail::keyboard_focus(nullptr);
+
+    if (detail::dragged() == this)
+        detail::dragged(nullptr);
 }
 
 void Widget::set_parent(Widget* parent)
@@ -1213,28 +1281,33 @@ void Widget::parent_layout()
         parent()->layout();
 }
 
-DisplayPoint Widget::local_to_display(const Point& p)
+DisplayPoint Widget::local_to_display(const Point& p) const
 {
     DisplayPoint p2(p.x(), p.y());
 
+    auto sub = this;
     auto par = parent();
     while (par)
     {
-        p2 += DisplayPoint(par->point().x(), par->point().y());
+        auto par_point = par->point_from_subordinate(*sub);
+        p2 += DisplayPoint(par_point.x(), par_point.y());
+        sub = par;
         par = par->parent();
     }
 
     return p2 + DisplayPoint(x(), y());
 }
 
-Point Widget::display_to_local(const DisplayPoint& p)
+Point Widget::display_to_local(const DisplayPoint& p) const
 {
     Point p2(p.x(), p.y());
 
+    auto sub = this;
     auto par = parent();
     while (par)
     {
-        p2 -= par->point();
+        p2 -= par->point_from_subordinate(*sub);
+        sub = par;
         par = par->parent();
     }
 
@@ -1272,37 +1345,12 @@ void Widget::draw(Painter& painter, const Rect& rect)
 
     Painter::AutoSaveRestore sr(painter);
 
-    // child rect
-    auto crect = rect;
-
-    // if this widget does not have a screen, it means the damage rect is in
-    // coordinates of some parent widget, so we have to adjust the physical origin
-    // and take it into account when looking at children, who's coordinates are
-    // respective of this widget
-    if (!has_screen())
-    {
-        const auto& origin = point();
-        if (origin.x() || origin.y())
-        {
-            //
-            // Origin about to change
-            //
-            auto cr = painter.context();
-            cairo_translate(cr.get(),
-                            origin.x(),
-                            origin.y());
-        }
-
-        // adjust our child rect for comparison's below
-        crect -= origin;
-    }
-
     if (clip())
     {
         // clip the damage rectangle, otherwise we will draw this whole widget
         // and then only draw the children inside the actual damage rect, which
         // will cover them
-        painter.draw(crect);
+        painter.draw(rect);
         painter.clip();
     }
 
@@ -1311,21 +1359,7 @@ void Widget::draw(Painter& painter, const Rect& rect)
     // origin
     if (!fill_flags().empty() || border())
     {
-        Palette::GroupId group = Palette::GroupId::normal;
-        if (disabled())
-            group = Palette::GroupId::disabled;
-        else if (active())
-            group = Palette::GroupId::active;
-
-        theme().draw_box(painter,
-                         fill_flags(),
-                         to_subordinate(box()),
-                         color(Palette::ColorId::border, group),
-                         color(Palette::ColorId::bg, group),
-                         border(),
-                         margin(),
-                         border_radius(),
-                         border_flags());
+        draw_box(painter, Palette::ColorId::bg, Palette::ColorId::border);
     }
     else if (Application::instance().is_composer())
     {
@@ -1334,7 +1368,7 @@ void Widget::draw(Painter& painter, const Rect& rect)
 
         theme().draw_box(painter,
         {Theme::FillFlag::blend},
-        to_subordinate(box()),
+        box(),
         composer_border,
         composer_bg,
         1,
@@ -1345,6 +1379,22 @@ void Widget::draw(Painter& painter, const Rect& rect)
 
     if (m_subordinates.empty())
         return;
+
+    // child rect
+    auto crect = rect;
+
+    // if this widget does not have a screen, it means the damage rect is in
+    // coordinates of some parent widget, so we have to adjust the physical origin
+    // and take it into account when looking at children, who's coordinates are
+    // respective of this widget
+    if (!has_screen())
+    {
+        const auto& origin = point();
+        painter.translate(origin);
+
+        // adjust our child rect for comparison's below
+        crect -= origin;
+    }
 
     // keep the crect inside our content area
     crect = Rect::intersection(crect, to_subordinate(content_area()));
@@ -1446,25 +1496,21 @@ void Widget::remove_component(Widget* widget)
     if (!widget)
         return;
 
-    auto i = std::find_if(m_components_begin, m_subordinates.end(),
+    auto i = std::find_if(components().begin(), components().end(),
                           [widget](const auto & ptr)
     {
         return ptr.get() == widget;
     });
-    if (i != m_subordinates.end())
+    if (i != components().end())
     {
         // note order here - damage and then unset parent
         (*i)->damage();
         (*i)->m_parent = nullptr;
         (*i)->component(false);
         if (i == m_components_begin)
-        {
             m_components_begin = std::next(m_components_begin);
-            if (!children().size())
-                children().begin(m_components_begin);
-            children().end(m_components_begin);
-        }
         m_subordinates.erase(i);
+        update_subordinates_ranges();
     }
     else if (widget->m_parent == this)
     {
@@ -1479,24 +1525,15 @@ void Widget::add_component(Widget& widget)
     // will not delete it.
     auto w = std::shared_ptr<Widget>(&widget, [](Widget*) {});
 
-    bool first_subordinate = m_subordinates.empty();
-    bool first_component = (m_components_begin == m_subordinates.end());
+    bool first_component = components().empty();
 
     w->set_parent(this);
     w->component(true);
     m_subordinates.emplace_back(w);
 
-    if (first_subordinate)
-    {
-        m_components_begin = m_subordinates.begin();
-        m_children.begin(m_subordinates.begin());
-        m_children.end(m_components_begin);
-    }
-    else if (first_component)
-    {
-        std::advance(m_components_begin, -1);
-        m_children.end(m_components_begin);
-    }
+    if (first_component)
+        m_components_begin = std::prev(m_subordinates.end());
+    update_subordinates_ranges();
 }
 
 void Widget::component(bool value)

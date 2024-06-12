@@ -132,9 +132,6 @@ void ComboBoxPopup::handle(Event& event)
     {
     case EventId::pointer_click:
     {
-        /// Force a redraw to avoid a glitch in some circumstances when showing
-        /// the popup again.
-        begin_draw();
         // if any mouse click happens, hide
         hide();
         break;
@@ -269,8 +266,7 @@ void ComboBox::handle(Event& event)
     {
     case EventId::pointer_click:
     {
-        const auto mouse = display_to_local(event.pointer().point);
-        if (local_box().intersect(mouse))
+        if (hit(event.pointer().point))
         {
             m_popup->show_modal();
         }

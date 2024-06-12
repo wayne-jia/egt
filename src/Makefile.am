@@ -90,6 +90,7 @@ gauge.cpp \
 geometry.cpp \
 grid.cpp \
 image.cpp \
+imagegroup.cpp \
 images/bmp/cairo_bmp.c \
 images/bmp/cairo_bmp.h \
 input.cpp \
@@ -204,6 +205,7 @@ $(top_builddir)/include/egt/version.h \
 ../include/egt/grid.h \
 ../include/egt/image.h \
 ../include/egt/input.h \
+../include/egt/imagegroup.h \
 ../include/egt/imageholder.h \
 ../include/egt/keycode.h \
 ../include/egt/label.h \
@@ -395,11 +397,19 @@ nobase_libegtinclude_HEADERS += \
 ../include/egt/virtualkeyboard.h
 endif
 
+if ENABLE_SVGDESERIAL
+libegt_la_SOURCES += \
+svgdeserial.cpp
+
+nobase_libegtinclude_HEADERS += \
+../include/egt/svgdeserial.h
+endif
+
 if OS_WIN32
 libegt_la_LIBADD += -lws2_32 -lintl
 endif
 
-libegt_la_LDFLAGS = $(AM_LDFLAGS) @LIBEGT_EXTRA_LDFLAGS@ -version-info 8:0:1 -no-undefined
+libegt_la_LDFLAGS = $(AM_LDFLAGS) @LIBEGT_EXTRA_LDFLAGS@ -version-info 8:0:0 -no-undefined
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = $(top_builddir)/libegt.pc

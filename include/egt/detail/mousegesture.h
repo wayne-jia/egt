@@ -75,6 +75,22 @@ public:
      */
     void stop();
 
+    /**
+     * Get the distance to travel to enable the drag mode.
+     */
+    EGT_NODISCARD static DefaultDim drag_enable_distance()
+    {
+        return m_drag_enable_distance;
+    }
+
+    /**
+     * Set the distance to travel to enable the drag mode.
+     */
+    static void drag_enable_distance(DefaultDim distance)
+    {
+        m_drag_enable_distance = distance;
+    }
+
 protected:
 
     /// Invoke an event on each of the handlers.
@@ -85,6 +101,9 @@ protected:
 
     /// Currently in the dragging state.
     bool m_dragging{false};
+
+    /// Currently in the holding state.
+    bool m_holding{false};
 
     /// The starting position of the mouse.
     DisplayPoint m_mouse_start_pos;
@@ -97,6 +116,9 @@ protected:
 
     /// Async timer for detecting long clicks.
     PeriodicTimer m_long_click_timer;
+
+    /// Cursor distance to enable the drag mode.
+    static DefaultDim m_drag_enable_distance;
 };
 
 }

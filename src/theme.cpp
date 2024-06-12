@@ -169,23 +169,21 @@ void Theme::draw_box(Painter& painter, const Widget& widget,
     if (type.empty() && !widget.border())
         return;
 
-    Palette::GroupId group = Palette::GroupId::normal;
-    if (widget.disabled())
-        group = Palette::GroupId::disabled;
-    else if (widget.active())
-        group = Palette::GroupId::active;
-    else if (widget.checked())
-        group = Palette::GroupId::checked;
+    Palette::GroupId group = widget.group();
 
+    auto box = widget.box();
+    if (widget.has_screen())
+        box -= widget.point();
     draw_box(painter,
              type,
-             widget.box(),
+             box,
              widget.color(border, group),
              widget.color(bg, group),
              widget.border(),
              widget.margin(),
              widget.border_radius(),
-             widget.border_flags());
+             widget.border_flags(),
+             widget.background(group, true));
 }
 
 void Theme::draw_box(Painter& painter,
@@ -196,7 +194,8 @@ void Theme::draw_box(Painter& painter,
                      DefaultDim border_width,
                      DefaultDim margin_width,
                      float border_radius,
-                     const BorderFlags& border_flags) const
+                     const BorderFlags& border_flags,
+                     Image* background) const
 {
     if (type.empty() && !border_width)
         return;
@@ -228,6 +227,15 @@ void Theme::draw_box(Painter& painter,
         cairo_set_operator(painter.context().get(), CAIRO_OPERATOR_SOURCE);
     }
 
+    auto fill_bg = true;
+    if (background && !type.empty())
+    {
+        fill_bg = false;
+        background->resize(box.size());
+        painter.draw(box.point());
+        painter.draw(*background);
+    }
+
     if (border_width && border_flags.is_set(BorderFlag::drop_shadow))
     {
         auto sbox = box;
@@ -243,9 +251,12 @@ void Theme::draw_box(Painter& painter,
         box -= Size(border_width, border_width);
     }
 
+    if (!fill_bg && !border_width)
+        return;
+
     rounded_box(painter, box, border_radius);
 
-    if (type.is_set(FillFlag::blend) || type.is_set(FillFlag::solid))
+    if (fill_bg && (type.is_set(FillFlag::blend) || type.is_set(FillFlag::solid)))
     {
         // force the pattern on the center of the widget box vertically
         if (bg.type() == Pattern::Type::linear)

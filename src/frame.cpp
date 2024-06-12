@@ -49,15 +49,9 @@ void Frame::add(const std::shared_ptr<Widget>& widget)
     if (!widget)
         return;
 
-    bool first_subordinate = m_subordinates.empty();
-
     widget->set_parent(this);
     m_subordinates.emplace(m_components_begin, widget);
-
-    if (first_subordinate || children().empty())
-    {
-        children().begin(m_subordinates.begin());
-    }
+    update_subordinates_ranges();
 
     layout();
 }
@@ -113,8 +107,7 @@ void Frame::remove_all_basic()
 
     m_subordinates.erase(children().begin(), children().end());
     m_components_begin = m_subordinates.begin();
-    children().begin(m_components_begin);
-    children().end(m_components_begin);
+    update_subordinates_ranges();
 }
 
 void Frame::remove_all()
@@ -125,11 +118,9 @@ void Frame::remove_all()
 
 Widget* Frame::hit_test(const DisplayPoint& point)
 {
-    Point pos = display_to_local(point);
-
     for (auto& child : detail::reverse_iterate(m_subordinates))
     {
-        if (child->box().intersect(pos))
+        if (child->hit(point))
         {
             if (child->frame())
             {
@@ -144,7 +135,7 @@ Widget* Frame::hit_test(const DisplayPoint& point)
         }
     }
 
-    if (local_box().intersect(pos))
+    if (hit(point))
         return this;
 
     return nullptr;

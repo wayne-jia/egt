@@ -112,16 +112,14 @@ public:
      * @param[in] value Current value in the range.
      */
     ValueRangeWidget(const Rect& rect, T start, T end,
-                     T value = T()) noexcept
+                     T value = T(), T step = T()) noexcept
         : Widget(rect),
           m_start(start),
           m_end(end),
-          m_value(value)
+          m_value(value),
+          m_step(step)
     {
-        if (m_start < m_end)
-            value = detail::clamp<T>(value, m_start, m_end);
-        else
-            value = detail::clamp<T>(value, m_end, m_start);
+        set_value(m_value);
     }
 
     /**
@@ -160,12 +158,7 @@ public:
     {
         T orig = m_value;
 
-        if (m_start < m_end)
-            value = detail::clamp<T>(value, m_start, m_end);
-        else
-            value = detail::clamp<T>(value, m_end, m_start);
-
-        if (detail::change_if_diff<T>(m_value, value))
+        if (set_value(value))
         {
             damage();
             on_value_changed.invoke();
@@ -185,26 +178,21 @@ public:
     EGT_NODISCARD T ending() const { return m_end; }
 
     /**
+     * Get the step value.
+     */
+    EGT_NODISCARD T stepping() const { return m_step; }
+
+    /**
      * Set the start value.
-     *
-     * start value cannot be the same as end value.
      *
      * @param[in] v The start value.
      */
     void starting(T v)
     {
-        if (!detail::float_equal(static_cast<float>(v), static_cast<float>(m_end))
-            && detail::change_if_diff<>(m_start, v))
+        if (detail::change_if_diff<>(m_start, v))
         {
-            T value = m_value;
-            if (m_start < m_end)
-                value = detail::clamp<T>(value, m_start, m_end);
-            else
-                value = detail::clamp<T>(value, m_end, m_start);
-
-            bool ret = detail::change_if_diff<T>(m_value, value);
             damage();
-            if (ret)
+            if (set_value(m_value))
                 on_value_changed.invoke();
         }
     }
@@ -212,24 +200,29 @@ public:
     /**
      * Set the end value.
      *
-     * end value cannot be the same as start value.
-     *
      * @param[in] v The end value.
      */
     void ending(T v)
     {
-        if (!detail::float_equal(static_cast<float>(v), static_cast<float>(m_end))
-            && detail::change_if_diff<>(m_end, v))
+        if (detail::change_if_diff<>(m_end, v))
         {
-            T value = m_value;
-            if (m_start < m_end)
-                value = detail::clamp<T>(value, m_start, m_end);
-            else
-                value = detail::clamp<T>(value, m_end, m_start);
-
-            bool ret = detail::change_if_diff<T>(m_value, value);
             damage();
-            if (ret)
+            if (set_value(m_value))
+                on_value_changed.invoke();
+        }
+    }
+
+    /**
+     * Set the step value.
+     *
+     * @param[in] v the step value.
+     */
+    void stepping(T v)
+    {
+        if (detail::change_if_diff<>(m_step, v))
+        {
+            damage();
+            if (set_value(m_value))
                 on_value_changed.invoke();
         }
     }
@@ -246,6 +239,21 @@ public:
 
 protected:
 
+    bool set_value(T v)
+    {
+        T value = v;
+
+        if (!detail::float_equal(static_cast<float>(m_step), 0.f))
+            value = std::round(static_cast<float>(value) / m_step) * m_step;
+
+        if (m_start < m_end)
+            value = detail::clamp<T>(value, m_start, m_end);
+        else
+            value = detail::clamp<T>(value, m_end, m_start);
+
+        return detail::change_if_diff<>(m_value, value);
+    }
+
     /// The start value.
     T m_start;
 
@@ -254,6 +262,9 @@ protected:
 
     /// The current value.
     T m_value;
+
+    /// The rounding step, if any.
+    T m_step;
 
 private:
 
@@ -265,11 +276,14 @@ void ValueRangeWidget<T>::serialize(Serializer& serializer) const
 {
     Widget::serialize(serializer);
 
-    const Serializer::Attributes attrs =
+    Serializer::Attributes attrs =
     {
         {"starting", detail::to_string(starting())},
         {"ending", detail::to_string(ending())},
     };
+
+    if (!detail::float_equal(static_cast<float>(m_step), 0.f))
+        attrs.emplace_back("stepping", detail::to_string(stepping()));
 
     serializer.add_property("value", this->value(), attrs);
 }
@@ -281,7 +295,7 @@ void ValueRangeWidget<T>::deserialize(Serializer::Properties& props)
     {
         if (std::get<0>(p) == "value")
         {
-            float starting_value = 0, ending_value = 100;
+            float starting_value = 0, ending_value = 100, stepping_value = 0;
             auto attrs = std::get<2>(p);
             for (auto& a : attrs)
             {
@@ -293,9 +307,13 @@ void ValueRangeWidget<T>::deserialize(Serializer::Properties& props)
                 case detail::hash("ending"):
                     ending_value = std::stof(a.second);
                     break;
+                case detail::hash("stepping"):
+                    stepping_value = std::stof(a.second);
+                    break;
                 }
             }
 
+            this->stepping(stepping_value);
             this->ending(ending_value);
             this->starting(starting_value);
             this->value(std::stof(std::get<1>(p)));

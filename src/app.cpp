@@ -341,6 +341,8 @@ void Application::setup_inputs()
         {
 #ifndef HAVE_LIBINPUT
             detail::warn("libinput requested but no support compiled in");
+#else
+            m_inputs.push_back(std::make_unique<detail::InputLibInput>(*this, device.second));
 #endif
         }
         else
@@ -350,7 +352,8 @@ void Application::setup_inputs()
     }
 
 #ifdef HAVE_LIBINPUT
-    m_inputs.push_back(std::make_unique<detail::InputLibInput>(*this));
+    if (m_inputs.empty())
+        m_inputs.push_back(std::make_unique<detail::InputLibInput>(*this));
 #endif
 }
 

@@ -5,8 +5,6 @@
  */
 #include "egt/button.h"
 #include "egt/checkbox.h"
-#include "egt/detail/alignment.h"
-#include "egt/detail/layout.h"
 #include "egt/frame.h"
 #include "egt/painter.h"
 #include "egt/serialize.h"
@@ -19,15 +17,9 @@ inline namespace v1
 
 CheckBox::CheckBox(const std::string& text,
                    const Rect& rect) noexcept
-    : Button(text, rect)
+    : Switch(text, rect)
 {
     name("CheckBox" + std::to_string(m_widgetid));
-
-    fill_flags().clear();
-    padding(5);
-    text_align(AlignFlag::left | AlignFlag::center_vertical);
-
-    grab_mouse(true);
 }
 
 CheckBox::CheckBox(Frame& parent,
@@ -38,173 +30,32 @@ CheckBox::CheckBox(Frame& parent,
     parent.add(*this);
 }
 
-CheckBox::CheckBox(Serializer::Properties& props, bool is_derived) noexcept
-    : Button(props, true)
-{
-    deserialize(props);
-
-    if (!is_derived)
-        deserialize_leaf(props);
-}
-
-void CheckBox::handle(Event& event)
-{
-    // NOLINTNEXTLINE(bugprone-parent-virtual-call)
-    Widget::handle(event);
-
-    switch (event.id())
-    {
-    case EventId::pointer_click:
-        checked(!checked());
-    default:
-        break;
-    }
-}
-
-void CheckBox::text(const std::string& text)
-{
-    if (m_text != text)
-    {
-        if (text.empty())
-            show_label(false);
-        else
-            show_label(true);
-    }
-
-    Button::text(text);
-}
-
 void CheckBox::draw(Painter& painter, const Rect& rect)
 {
     Drawer<CheckBox>::draw(*this, painter, rect);
 }
 
-void CheckBox::default_draw(const CheckBox& widget, Painter& painter, const Rect& /*rect*/)
+void CheckBox::draw_switch(Painter& painter, const Rect& handle) const
 {
-    widget.draw_box(painter, Palette::ColorId::label_bg, Palette::ColorId::border);
-
-    auto b = widget.content_area();
-    auto border = widget.theme().default_border();
-    Rect handle;
-    std::vector<detail::LayoutRect> rects;
-
-    if (widget.show_label())
+    if (switch_image(checked()))
     {
-        painter.set(widget.font());
-        auto text_size = painter.text_size(widget.text());
-
-        Rect text;
-        if (widget.checkbox_align().is_set(AlignFlag::bottom) ||
-            widget.checkbox_align().is_set(AlignFlag::top))
-        {
-            auto w = std::min<DefaultDim>(b.height() - text_size.height(), b.width());
-            if (w < 0)
-                w = b.height() * 0.15;
-
-            if (widget.checkbox_align().is_set(AlignFlag::bottom))
-            {
-                rects.emplace_back(0,
-                                   Rect(0, 0, b.width(), text_size.height()),
-                                   widget.padding() / 2);
-                rects.emplace_back(0,
-                                   Rect(0, 0, w, w),
-                                   0, 0, widget.padding() / 2);
-
-                detail::flex_layout(b, rects, Justification::start, Orientation::vertical);
-
-                text = rects[0].rect + b.point();
-                handle = rects[1].rect + b.point();
-            }
-            else
-            {
-                rects.emplace_back(0,
-                                   Rect(0, 0, w, w),
-                                   0, 0, widget.padding() / 2);
-                rects.emplace_back(0,
-                                   Rect(0, 0, b.width(), text_size.height()),
-                                   widget.padding() / 2);
-
-                detail::flex_layout(b, rects, Justification::start, Orientation::vertical);
-
-                handle = rects[0].rect + b.point();
-                text = rects[1].rect + b.point();
-            }
-        }
-        else
-        {
-            auto w = std::min<DefaultDim>(b.width() - text_size.width(), b.height());
-            if (w < 0)
-                w = b.width() * 0.15;
-
-            if (widget.checkbox_align().is_set(AlignFlag::left))
-            {
-                rects.emplace_back(0,
-                                   Rect(0, 0, w, w),
-                                   0, 0, widget.padding() / 2);
-                rects.emplace_back(0,
-                                   Rect(0, 0, b.width() - w, b.height()),
-                                   widget.padding() / 2);
-
-                detail::flex_layout(b, rects, Justification::start, Orientation::horizontal);
-
-                handle = rects[0].rect + b.point();
-                text = rects[1].rect + b.point();
-            }
-            else
-            {
-                rects.emplace_back(0,
-                                   Rect(0, 0, b.width() - w, b.height()),
-                                   widget.padding() / 2);
-                rects.emplace_back(0,
-                                   Rect(0, 0, w, w),
-                                   0, 0, widget.padding() / 2);
-
-                detail::flex_layout(b, rects, Justification::start, Orientation::horizontal);
-
-                text = rects[0].rect + b.point();
-                handle = rects[1].rect + b.point();
-            }
-        }
-
-        widget.theme().draw_box(painter, Theme::FillFlag::blend, handle,
-                                widget.color(Palette::ColorId::button_fg),
-                                Palette::transparent,
-                                border);
-        // text
-        painter.set(widget.color(Palette::ColorId::label_text));
-        auto size = painter.text_size(widget.text());
-        Rect target = detail::align_algorithm(size,
-                                              text,
-                                              widget.text_align());
-        painter.draw(target.point());
-        painter.draw(widget.text());
-    }
-    else
-    {
-        auto w = std::min<DefaultDim>(b.width(), b.height());
-        if (w < 0)
-            w = b.width() * 0.15;
-
-        rects.emplace_back(0,
-                           Rect(0, 0, w, w),
-                           0, 0, widget.padding() / 2);
-
-        detail::flex_layout(b, rects, Justification::middle, Orientation::horizontal);
-
-        handle = rects[0].rect + b.point();
-
-        widget.theme().draw_box(painter, Theme::FillFlag::blend, handle,
-                                widget.color(Palette::ColorId::button_fg),
-                                Palette::transparent,
-                                border);
+        Switch::draw_switch(painter, handle);
+        return;
     }
 
-    if (widget.checked())
+    auto border = theme().default_border();
+
+    theme().draw_box(painter, Theme::FillFlag::blend, handle,
+                     color(Palette::ColorId::button_fg),
+                     Palette::transparent,
+                     border);
+
+    if (checked())
     {
         // draw an "X"
         auto cr = painter.context().get();
         cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
-        painter.set(widget.color(Palette::ColorId::button_fg));
+        painter.set(color(Palette::ColorId::button_fg));
         painter.draw(handle.top_left() + Point(border, border),
                      handle.bottom_right() - Point(border, border));
         painter.draw(handle.top_right() + Point(-border, border),
@@ -212,61 +63,6 @@ void CheckBox::default_draw(const CheckBox& widget, Painter& painter, const Rect
         painter.line_width(border);
         painter.stroke();
     }
-}
-
-Size CheckBox::min_size_hint() const
-{
-    if (!m_min_size.empty())
-        return m_min_size;
-
-    // NOLINTNEXTLINE(bugprone-parent-virtual-call)
-    const auto min_size = default_size() + Widget::min_size_hint();
-
-    if (!m_text.empty())
-    {
-        auto s = text_size(m_text);
-        s += Size(s.width() / 2 + 5, 0);
-        // NOLINTNEXTLINE(bugprone-parent-virtual-call)
-        s += Widget::min_size_hint();
-        if (s.width() < min_size.width())
-            s.width(min_size.width());
-        if (s.height() < min_size.height())
-            s.height(min_size.height());
-        return s;
-    }
-
-    /* if text is empty, use only 10% of min_size to
-     * draw checkbox alone.
-     */
-    return min_size * 0.10;
-}
-
-void CheckBox::serialize(Serializer& serializer) const
-{
-    Button::serialize(serializer);
-
-    serializer.add_property("show_label", show_label());
-    if (!checkbox_align().empty())
-        serializer.add_property("checkbox_align", checkbox_align());
-}
-
-void CheckBox::deserialize(Serializer::Properties& props)
-{
-    props.erase(std::remove_if(props.begin(), props.end(), [&](auto & p)
-    {
-        switch (detail::hash(std::get<0>(p)))
-        {
-        case detail::hash("show_label"):
-            show_label(egt::detail::from_string(std::get<1>(p)));
-            break;
-        case detail::hash("checkbox_align"):
-            checkbox_align(AlignFlags(std::get<1>(p)));
-            break;
-        default:
-            return false;
-        }
-        return true;
-    }), props.end());
 }
 
 ToggleBox::ToggleBox(const Rect& rect) noexcept

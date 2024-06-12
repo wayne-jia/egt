@@ -19,6 +19,7 @@
 #include <egt/flags.h>
 #include <egt/font.h>
 #include <egt/geometry.h>
+#include <egt/imagegroup.h>
 #include <egt/object.h>
 #include <egt/palette.h>
 #include <egt/screen.h>
@@ -138,6 +139,18 @@ public:
          * Is the widget a component.
          */
         component = detail::bit(12),
+
+        /**
+         * Has the user enabled 'pointer_drag*' events (if not internally
+         * enabled by the widget itself).
+         */
+        user_drag = detail::bit(13),
+
+        /**
+         * has the user enabled 'pointer_drag*' events to be tracked when they
+         * cross the widget boundaries.
+         */
+        user_track_drag = detail::bit(14),
     };
 
     /// Widget flags
@@ -243,6 +256,14 @@ public:
      * @param event The Event that occurred.
      */
     virtual void handle(Event& event);
+
+    /**
+     * Handle 'pointer_drag' and 'pointer_drag_stop' events.
+     * Called from Input::dispatch().
+     *
+     * @param event The drag event that occured.
+     */
+    void continue_drag(Event& event);
 
     /**
      * Resize the widget.
@@ -524,6 +545,38 @@ public:
             enable();
     }
 
+    EGT_NODISCARD bool user_drag() const
+    {
+        return flags().is_set(Widget::Flag::user_drag);
+    }
+
+    void user_drag(bool value)
+    {
+        if (flags().is_set(Widget::Flag::user_drag) != value)
+        {
+            if (value)
+                flags().set(Widget::Flag::user_drag);
+            else
+                flags().clear(Widget::Flag::user_drag);
+        }
+    }
+
+    EGT_NODISCARD bool user_track_drag() const
+    {
+        return flags().is_set(Widget::Flag::user_track_drag);
+    }
+
+    void user_track_drag(bool value)
+    {
+        if (flags().is_set(Widget::Flag::user_track_drag) != value)
+        {
+            if (value)
+                flags().set(Widget::Flag::user_track_drag);
+            else
+                flags().clear(Widget::Flag::user_track_drag);
+        }
+    }
+
     /**
      * Returns true if the widget is capable of handling an event.
      */
@@ -532,6 +585,15 @@ public:
         return !m_widget_flags.is_set(Flag::readonly) &&
                !m_widget_flags.is_set(Flag::invisible) &&
                !m_widget_flags.is_set(Flag::disabled);
+    }
+
+    /**
+     * Returns true if the DisplayPoint is within the widget box.
+     */
+    EGT_NODISCARD bool hit(const DisplayPoint& point) const
+    {
+        auto pos = display_to_local(point);
+        return local_box().intersect(pos);
     }
 
     /**
@@ -713,6 +775,11 @@ public:
     EGT_NODISCARD Point center() const { return box().center(); }
 
     /**
+     * Get the current Palette::GroupId depending on the widget's state.
+     */
+    EGT_NODISCARD Palette::GroupId group() const;
+
+    /**
      * Set the widget instance Palette.
      *
      * This will replace any Palette instance currently owned by the Widget.
@@ -786,6 +853,40 @@ public:
                Palette::GroupId group = Palette::GroupId::normal);
 
     /**
+     * Get the background image, if any, for the current group.
+     *
+     * @param allow_fallback If true, return the 'normal' image if no image
+     *                       is set for the current Palette::GroupId.
+     */
+    EGT_NODISCARD Image* background(bool allow_fallback = false) const;
+
+    /**
+     * Get the background image, if any, for the given group.
+     *
+     * @param group Palette::GroupId to get.
+     * @param allow_fallback If true, return the 'normal' image if no image
+     *                       is set for the requested group.
+     */
+    EGT_NODISCARD Image* background(Palette::GroupId group,
+                                    bool allow_fallback = false) const;
+
+    /**
+     * Add an image background to the widget's box.
+     *
+     * @param image Image to set.
+     * @param group Palette::GroupId to set.
+     */
+    void background(const Image& image,
+                    Palette::GroupId group = Palette::GroupId::normal);
+
+    /**
+     * Remove an image background from the widget's box.
+     *
+     * @param group Palette::GroupId to set.
+     */
+    void reset_background(Palette::GroupId group = Palette::GroupId::normal);
+
+    /**
      * Get a pointer to the parent Widget, or nullptr if none exists.
      */
     Widget* parent();
@@ -802,6 +903,11 @@ public:
      * @return An Screen if available, or nullptr.
      */
     EGT_NODISCARD virtual Screen* screen() const;
+
+    /**
+     * Does this Widget have a screen?
+     */
+    EGT_NODISCARD virtual bool has_screen() const { return false; }
 
     /**
      * Align the widget.
@@ -1265,7 +1371,7 @@ public:
      *
      * @see @ref geometry_coord
      */
-    DisplayPoint local_to_display(const Point& p);
+    DisplayPoint local_to_display(const Point& p) const;
 
     /**
      * Convert a display point to a local point.
@@ -1275,7 +1381,7 @@ public:
      *
      * @see @ref geometry_coord
      */
-    virtual Point display_to_local(const DisplayPoint& p);
+    virtual Point display_to_local(const DisplayPoint& p) const;
 
     /**
      * Get the widget Font.
@@ -1414,6 +1520,12 @@ protected:
     virtual void damage_from_subordinate(const Rect& rect)
     {
         damage(rect);
+    }
+
+    virtual Point point_from_subordinate(const Widget& subordinate) const
+    {
+        detail::ignoreparam(subordinate);
+        return point();
     }
 
     /**
@@ -1570,11 +1682,6 @@ protected:
     }
 
     /**
-     * Does this Widget have a screen?
-     */
-    EGT_NODISCARD virtual bool has_screen() const { return false; }
-
-    /**
      * Starting from this Widget, find the Widget that has a Screen.
      *
      * This searches up the widget hierarchy from here.
@@ -1638,6 +1745,37 @@ protected:
     {
         return size();
     }
+
+    /**
+     * Handle 'pointer_drag_start' events and decide whether they are caught
+     * by this widget.
+     * Called from handle().
+     *
+     * @param event The drag event that occured.
+     */
+    void start_drag(Event& event);
+
+    /**
+     * Tell the start_drag() method whether the widget accepts
+     * 'pointer_drag*' events.
+     *
+     * @return true if and only if the widget accepts 'pointer_drag*' events.
+     */
+    bool accept_drag() const { return internal_drag() || user_drag(); }
+
+    virtual bool internal_drag() const { return false; }
+
+    /**
+     * Tell the continue_drag() method whether the widget tracks
+     * 'pointer_drag*' events once they have crossed out the widget boundaries.
+     * If not, a 'pointer_drag_stop' event is inserted wihtin the widget
+     * boundaries.
+     *
+     * @return true if and only if the widget tracks 'pointer_drag*' events.
+     */
+    bool track_drag() const { return internal_track_drag() || user_track_drag(); }
+
+    virtual bool internal_track_drag() const { return false; }
 
     /**
      * Bounding box.
@@ -1706,7 +1844,7 @@ protected:
     SubordinatesArray m_subordinates;
 
     /// Return the array of child widgets.
-    EGT_NODISCARD const detail::Range<SubordinatesArray> children() const
+    EGT_NODISCARD const detail::Range<SubordinatesArray>& children() const
     {
         return m_children;
     }
@@ -1719,6 +1857,47 @@ protected:
 
     /// Array of child widgets in the order they were added.
     detail::Range<SubordinatesArray> m_children;
+
+    /// Return the array of components widgets.
+    EGT_NODISCARD const detail::Range<SubordinatesArray>& components() const
+    {
+        return m_components;
+    }
+
+    /// Return the array of components widgets.
+    EGT_NODISCARD detail::Range<SubordinatesArray>& components()
+    {
+        return m_components;
+    }
+
+    /// Array of component widgets in the order they were added.
+    detail::Range<SubordinatesArray> m_components;
+
+    /**
+     * Update the 'm_children' and 'm_components' members.
+     *
+     * @note Should be called any time 'm_components_begin',
+     * m_subordonates.begin() or m_subordinates.end() have changed.
+     */
+    void update_subordinates_ranges()
+    {
+        m_children.begin(m_subordinates.begin());
+        m_children.end(m_components_begin);
+        m_components.begin(m_components_begin);
+        m_components.end(m_subordinates.end());
+    }
+
+    /// Return either components() or children() depending on widget.component()
+    EGT_NODISCARD detail::Range<SubordinatesArray>& range_from_widget(const Widget& widget)
+    {
+        return widget.component() ? components() : children();
+    }
+
+    /// Return either components() or children() depending on widget.component()
+    EGT_NODISCARD const detail::Range<SubordinatesArray>& range_from_widget(const Widget& widget) const
+    {
+        return widget.component() ? components() : children();
+    }
 
     /// Add a component.
     void add_component(Widget& widget);
@@ -1757,6 +1936,11 @@ private:
      * functions because this may not be a complete Palette.
      */
     std::unique_ptr<Palette> m_palette;
+
+    /**
+     * Optional background images.
+     */
+    ImageGroup m_backgrounds{"bg"};
 
     /**
      * Flags for the widget.
@@ -1829,6 +2013,11 @@ private:
     Theme::FillFlags m_fill_flags{};
 
     /**
+     * Common initializations done by all constructors.
+     */
+    void init(void);
+
+    /**
      * Font instance for the widget.
      *
      * @note This should not be accessed directly.  Always use the access
@@ -1846,7 +2035,7 @@ private:
 
 /// Enum string conversion map
 template<>
-EGT_API const std::pair<Widget::Flag, char const*> detail::EnumStrings<Widget::Flag>::data[13];
+EGT_API const std::pair<Widget::Flag, char const*> detail::EnumStrings<Widget::Flag>::data[15];
 
 /// Overloaded std::ostream insertion operator
 EGT_API std::ostream& operator<<(std::ostream& os, const Widget::Flag& flag);

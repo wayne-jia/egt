@@ -103,33 +103,40 @@ public:
 
     void layout() override;
 
-    using Frame::damage;
-
-    void damage(const Rect& /*rect*/) override
-    {
-        Frame::damage(box());
-    }
-
     /**
      * Get the current offset.
      *
-     * @note The offset moves in the negative direction from zero.
+     * @note The offset moves in the negative direction.
      */
     EGT_NODISCARD Point offset() const { return m_offset; }
 
     /**
      * Set the position.
      *
-     * @note The offset moves in the negative direction from zero.
+     * @note The offset moves in the negative direction.
      */
     void offset(Point offset);
 
     /**
+     * Get the offset range currently possible.
+     *
+     * @note The offset moves in the negative direction.
+     */
+    EGT_NODISCARD const Rect& offset_range() const { return m_offset_range; };
+
+    /**
+     * Get the minimum offset currently possible.
+     *
+     * @note The offset moves in the negative direction.
+     */
+    EGT_NODISCARD Point offset_min() const { return offset_range().bottom_right(); }
+
+    /**
      * Get the maximum offset currently possible.
      *
-     * @note The offset moves in the negative direction from zero.
+     * @note The offset moves in the negative direction.
      */
-    EGT_NODISCARD Point offset_max() const;
+    EGT_NODISCARD Point offset_max() const { return offset_range().top_left(); }
 
     /**
      * Get the horizontal offset.
@@ -218,10 +225,14 @@ public:
 
 protected:
 
+    bool internal_drag() const override { return true; }
+
     void damage_from_subordinate(const Rect& rect) override
     {
         damage(rect + m_offset);
     }
+
+    Point point_from_subordinate(const Widget& subordinate) const override;
 
     /// Horizontal scrollable
     EGT_NODISCARD bool hscrollable() const
@@ -238,19 +249,16 @@ protected:
     /// Update scrollable settings based on current size
     void update_scrollable()
     {
-        auto super = super_rect();
+        const auto& r = offset_range();
 
         m_hscrollable = (m_horizontal_policy == Policy::always) ||
-                        (m_horizontal_policy == Policy::as_needed && super.width() > content_area().width());
+                        (m_horizontal_policy == Policy::as_needed && r.width() > 0);
         m_vscrollable = (m_vertical_policy == Policy::always) ||
-                        (m_vertical_policy == Policy::as_needed && super.height() > content_area().height());
-
-        if (super.width() <= content_area().width())
-            m_offset.x(0);
-
-        if (super.height() <= content_area().height())
-            m_offset.y(0);
+                        (m_vertical_policy == Policy::as_needed && r.height() > 0);
     }
+
+    /// Initialize the sliders properties.
+    void init_sliders();
 
     /// Update properties of the sliders.
     void update_sliders();
@@ -258,8 +266,8 @@ protected:
     /// Return the super rectangle that includes all of the child widgets.
     EGT_NODISCARD Rect super_rect() const;
 
-    /// Resize the slider whenever the size of this changes.
-    void resize_slider();
+    /// Resize the sliders whenever the size of these changes.
+    void resize_sliders();
 
     /// Deserialize ScrolledView properties.
     void deserialize(Serializer::Properties& props);
@@ -272,6 +280,9 @@ protected:
 
     /// Current offset of the view.
     Point m_offset;
+
+    /// Current offset range.
+    Rect m_offset_range;
 
     /// Horizontal slider shown when scrollable.
     Slider m_hslider;
@@ -287,9 +298,6 @@ protected:
 
     /// Vertical scrollbar policy
     Policy m_vertical_policy{Policy::as_needed};
-
-    /// @private
-    std::unique_ptr<Canvas> m_canvas;
 
     /// Width/height of the slider when shown.
     DefaultDim m_slider_dim{8};

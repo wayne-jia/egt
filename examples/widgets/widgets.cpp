@@ -15,15 +15,29 @@
 #include <string>
 #include <vector>
 
+static egt::Size content_size_small(bool landscape, const egt::Size& tab_size)
+{
+    const auto side_min = std::min<egt::DefaultDim>(tab_size.width(), tab_size.height());
+    const auto ratio = static_cast<double>(tab_size.width()) / tab_size.height();
+    const auto size = landscape ? tab_size : egt::Size(side_min, side_min * ratio);
+
+    return size * 0.9;
+}
+
+static egt::Size content_size_wide(bool landscape, const egt::Size& tab_size)
+{
+    return landscape ? tab_size * 0.9 : egt::Size(tab_size.width() * 0.9, tab_size.height() * 0.7);
+}
+
 struct ButtonPage : public egt::NotebookTab
 {
-    ButtonPage()
+    ButtonPage(bool landscape, const egt::Size& tab_size)
     {
-        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 6));
-        grid0->margin(5);
+        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 3));
+        grid0->resize(content_size_small(landscape, tab_size));
         grid0->horizontal_space(5);
         grid0->vertical_space(5);
-        add(expand(grid0));
+        add(egt::center(grid0));
 
         grid0->add(egt::expand(std::make_shared<egt::Button>("Button", egt::Size(100, 40))));
 
@@ -60,13 +74,13 @@ struct ButtonPage : public egt::NotebookTab
 
 struct CheckBoxPage : public egt::NotebookTab
 {
-    CheckBoxPage()
+    CheckBoxPage(bool landscape, const egt::Size& tab_size)
     {
-        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 10));
-        grid0->margin(5);
+        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 4));
+        grid0->resize(content_size_small(landscape, tab_size));
         grid0->horizontal_space(5);
         grid0->vertical_space(5);
-        add(egt::expand(grid0));
+        add(egt::center(grid0));
 
         auto toggle1 = std::make_shared<egt::ToggleBox>();
         toggle1->toggle_text("Off", "On");
@@ -123,13 +137,13 @@ struct CheckBoxPage : public egt::NotebookTab
 
 struct LabelPage : public egt::NotebookTab
 {
-    LabelPage()
+    LabelPage(bool landscape, const egt::Size& tab_size)
     {
-        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 5));
-        grid0->margin(5);
+        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 4));
+        grid0->resize(content_size_small(landscape, tab_size));
         grid0->horizontal_space(5);
         grid0->vertical_space(5);
-        add(egt::expand(grid0));
+        add(egt::center(grid0));
 
         auto label1 = std::make_shared<egt::Label>("left align",
                       egt::AlignFlag::left | egt::AlignFlag::center_vertical);
@@ -184,19 +198,21 @@ struct LabelPage : public egt::NotebookTab
 
 struct TextPage : public egt::NotebookTab
 {
-    TextPage()
+    TextPage(bool landscape, const egt::Size& tab_size)
     {
-        auto grid1 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(2, 1));
-        grid1->margin(5);
-        grid1->horizontal_space(5);
-        grid1->vertical_space(5);
-        add(egt::expand(grid1));
+        auto sizer = std::make_shared<egt::BoxSizer>();
+        egt::Size content_size;
+        if (!landscape)
+            sizer->orient(egt::Orientation::vertical);
+        sizer->resize(content_size_wide(landscape, tab_size));
+        add(egt::center(sizer));
 
-        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(1, 10));
+        const auto grid_size_cell = landscape ? egt::StaticGrid::GridSize(1, 6) : egt::StaticGrid::GridSize(2, 3);
+        auto grid0 = std::make_shared<egt::StaticGrid>(grid_size_cell);
         grid0->margin(5);
         grid0->horizontal_space(5);
         grid0->vertical_space(5);
-        grid1->add(egt::expand(grid0));
+        sizer->add(egt::expand(grid0));
 
         auto text1 = std::make_shared<egt::TextBox>("text 1", egt::TextBox::TextFlag::fit_to_width);
         grid0->add(egt::expand(text1));
@@ -238,7 +254,8 @@ struct TextPage : public egt::NotebookTab
                          " supports UTF-8 encoding.  See: \u2190\u2191\u2192\u2193",
                          egt::TextBox::TextFlags({egt::TextBox::TextFlag::multiline, egt::TextBox::TextFlag::word_wrap}));
         text7->selection(4, 25);
-        grid1->add(egt::expand(text7));
+        text7->margin(5);
+        sizer->add(egt::expand(text7));
     }
 };
 
@@ -272,16 +289,16 @@ static std::unique_ptr<egt::AnimationSequence> demo_up_down_animator(std::shared
 
 struct ProgressPage : public egt::NotebookTab
 {
-    ProgressPage()
+    ProgressPage(bool landscape, const egt::Size& tab_size)
     {
         auto vsizer = std::make_shared<egt::VerticalBoxSizer>();
         add(egt::expand(vsizer));
 
-        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(2, 8));
-        grid0->margin(5);
-        grid0->horizontal_space(5);
+        const auto grid_size_cell = landscape ? egt::StaticGrid::GridSize(2, 3) : egt::StaticGrid::GridSize(1, 6);
+        auto grid0 = std::make_shared<egt::StaticGrid>(grid_size_cell);
+        grid0->horizontal_space(20);
         grid0->vertical_space(5);
-        vsizer->add(egt::expand(grid0));
+        vsizer->add(egt::center(grid0));
 
         auto spinprogress = std::make_shared<egt::SpinProgress>();
         grid0->add(egt::expand(spinprogress));
@@ -307,9 +324,11 @@ struct ProgressPage : public egt::NotebookTab
         grid0->add(egt::expand(progressbar4));
 
         auto hsizer = std::make_shared<egt::HorizontalBoxSizer>();
+        hsizer->margin(20);
         vsizer->add(egt::expand_horizontal(hsizer));
 
         auto start = std::make_shared<egt::Button>("Start");
+        start->margin(5);
         hsizer->add(start);
         start->on_click([this](egt::Event&)
         {
@@ -318,6 +337,7 @@ struct ProgressPage : public egt::NotebookTab
         });
 
         auto stop = std::make_shared<egt::Button>("Stop");
+        stop->margin(5);
         hsizer->add(stop);
         stop->on_click([this](egt::Event&)
         {
@@ -326,6 +346,7 @@ struct ProgressPage : public egt::NotebookTab
         });
 
         auto resume = std::make_shared<egt::Button>("Resume");
+        resume->margin(5);
         hsizer->add(resume);
         resume->on_click([this](egt::Event&)
         {
@@ -339,6 +360,9 @@ struct ProgressPage : public egt::NotebookTab
         m_animators.push_back(demo_up_down_animator(progressbar2));
         m_animators.push_back(demo_up_down_animator(progressbar3));
         m_animators.push_back(demo_up_down_animator(progressbar4));
+
+        const auto content_size = content_size_wide(landscape, tab_size);
+        grid0->resize(content_size - egt::Size(0, hsizer->height()));
     }
 
     std::vector<std::unique_ptr<egt::AnimationSequence>> m_animators;
@@ -346,13 +370,14 @@ struct ProgressPage : public egt::NotebookTab
 
 struct SliderPage : public egt::NotebookTab
 {
-    SliderPage()
+    SliderPage(bool landscape, const egt::Size& tab_size)
     {
-        auto grid = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(3, 3));
-        grid->margin(5);
-        grid->horizontal_space(5);
-        grid->vertical_space(5);
-        add(egt::expand(grid));
+        const auto grid_size_cell = landscape ? egt::StaticGrid::GridSize(3, 3) : egt::StaticGrid::GridSize(2, 5);
+        auto grid = std::make_shared<egt::StaticGrid>(grid_size_cell);
+        grid->resize(content_size_wide(landscape, tab_size));
+        grid->horizontal_space(10);
+        grid->vertical_space(10);
+        add(egt::center(grid));
 
         auto slider1 = std::make_shared<egt::Slider>();
         slider1->value(50);
@@ -415,19 +440,21 @@ struct SliderPage : public egt::NotebookTab
 
 struct MeterPage : public egt::NotebookTab
 {
-    MeterPage()
+    MeterPage(bool landscape, const egt::Size& tab_size)
     {
-        auto grid0 = std::make_shared<egt::StaticGrid>(egt::StaticGrid::GridSize(2, 2));
-        grid0->margin(10);
-        grid0->horizontal_space(10);
+        const auto grid_size_cell = landscape ? egt::StaticGrid::GridSize(2, 2) : egt::StaticGrid::GridSize(1, 3);
+        auto grid0 = std::make_shared<egt::StaticGrid>(grid_size_cell);
+        grid0->resize(content_size_wide(landscape, tab_size));
+        grid0->horizontal_space(20);
         grid0->vertical_space(10);
-        add(egt::expand(grid0));
+        add(egt::center(grid0));
 
         auto lp1 = std::make_shared<egt::LevelMeter>();
         lp1->num_bars(10);
         grid0->add(egt::expand(lp1));
 
         auto am1 = std::make_shared<egt::AnalogMeter>();
+        am1->margin(10);
         grid0->add(egt::expand(am1));
 
         auto r1 = std::make_shared<egt::experimental::Radial>();
@@ -486,29 +513,35 @@ struct ComboPage : public egt::NotebookTab
 
 struct ListPage : public egt::NotebookTab
 {
-    ListPage()
+    ListPage(bool landscape, const egt::Size& tab_size)
     {
+        egt::Size content_size = content_size_wide(landscape, tab_size);
         auto hsizer1 = std::make_shared<egt::BoxSizer>(egt::Orientation::horizontal,
                        egt::Justification::justify);
-        hsizer1->padding(20);
-        add(egt::expand(hsizer1));
+        hsizer1->resize(content_size);
+        add(egt::center(hsizer1));
 
-        auto list0 = std::make_shared<egt::ListBox>(egt::Rect(0, 0, 200, 0));
+        auto list0 = std::make_shared<egt::ListBox>();
         for (auto x = 0; x < 25; x++)
             list0->add_item(std::make_shared<egt::StringItem>("item " + std::to_string(x)));
-        list0->align(egt::AlignFlag::expand_vertical);
+        list0->resize({content_size.width() / 3, content_size.height() });
+        list0->margin(5);
         hsizer1->add(list0);
 
-        auto list1 = std::make_shared<egt::ListBox>(egt::Rect(0, 0, 200, 300));
+        auto list1 = std::make_shared<egt::ListBox>(egt::Rect(0, 0, 0, 300));
         for (auto x = 0; x < 5; x++)
             list1->add_item(std::make_shared<egt::StringItem>("item " + std::to_string(x), egt::Image("icon:ok.png")));
+        list1->width(content_size.width() / 3);
+        list1->margin(5);
         hsizer1->add(list1);
 
-        auto list2 = std::make_shared<egt::ListBox>(egt::Rect(0, 0, 200, 0));
+        auto list2 = std::make_shared<egt::ListBox>(egt::Rect(0, 0, 0, 0));
         list2->add_item(std::make_shared<egt::StringItem>("Help", egt::Image("icon:help.png")));
         list2->add_item(std::make_shared<egt::StringItem>("Info", egt::Image("icon:info.png")));
         list2->add_item(std::make_shared<egt::StringItem>("Warning", egt::Image("icon:warning.png")));
-        list2->height((list2->border() * 2) + (40 * list2->item_count()));
+        list2->margin(5);
+        list2->height((list2->moat() * 2) + (40 * list2->item_count()));
+        list2->width(content_size.width() / 3);
         hsizer1->add(list2);
     }
 };
@@ -597,67 +630,63 @@ struct ScrollwheelPage : public egt::NotebookTab
     }
 };
 
-struct FormPage : public egt::NotebookTab
-{
-    FormPage()
-    {
-        auto form = std::make_shared<egt::experimental::Form>("Information");
-        form->align(egt::AlignFlag::expand_vertical);
-        form->horizontal_ratio(50);
-        add(form);
-
-        form->add_group("Name");
-        form->add_option("First Name", std::make_shared<egt::TextBox>());
-        form->add_option("Last Name", std::make_shared<egt::TextBox>());
-        form->add_group("Settings");
-        form->add_option("Admin", std::make_shared<egt::CheckBox>());
-        auto toggle1 = std::make_shared<egt::ToggleBox>();
-        toggle1->toggle_text("On", "Off");
-        form->add_option("Active", toggle1);
-        form->add_option(std::make_shared<egt::Button>("Save"));
-    }
-};
-
 struct ShapesPage : public egt::NotebookTab
 {
-    ShapesPage()
+    ShapesPage(bool landscape)
     {
-        auto hsizer1 = std::make_shared<egt::BoxSizer>(egt::Orientation::flex);
-        add(egt::expand(hsizer1));
+        auto sizer = std::make_shared<egt::BoxSizer>(egt::Orientation::flex);
+        if (landscape)
+            sizer->orient(egt::Orientation::horizontal);
+        else
+            sizer->orient(egt::Orientation::vertical);
+
+        add(egt::center(sizer));
 
         auto circle = std::make_shared<egt::CircleWidget>(egt::Circle(egt::Point(), 50));
         circle->margin(10);
-        hsizer1->add(circle);
+        sizer->add(circle);
 
         auto hline = std::make_shared<egt::LineWidget>(egt::Size(100, 100));
         hline->margin(10);
-        hsizer1->add(hline);
+        sizer->add(hline);
 
         auto vline = std::make_shared<egt::LineWidget>(egt::Size(100, 100));
         vline->margin(10);
         vline->horizontal(false);
-        hsizer1->add(vline);
+        sizer->add(vline);
 
         auto rect = std::make_shared<egt::RectangleWidget>(egt::Size(100, 100));
         rect->margin(10);
-        hsizer1->add(rect);
+        sizer->add(rect);
     }
 };
 
 int main(int argc, char** argv)
 {
     egt::Application app(argc, argv);
+
+    const auto screen_size = app.screen()->size();
+    const auto landscape = screen_size.width() >= screen_size.height();
+    auto tab_size = screen_size;
+
     egt::TopWindow win;
 
     egt::VerticalBoxSizer vsizer(win);
     egt::expand(vsizer);
 
-    egt::Frame frame(egt::Size(0, 60));
-    vsizer.add(egt::expand_horizontal(frame));
+    const auto header_height = screen_size.height() * 0.2;
+    tab_size -= egt::Size(0, header_height);
+    egt::HorizontalBoxSizer header;
+    header.resize(egt::Size(0, header_height));
+    vsizer.add(egt::expand_horizontal(header));
 
-    egt::ImageLabel logo(egt::Image("icon:egt_logo_black.png;128"));
+    egt::ImageLabel logo(egt::Image("icon:egt_logo_black.svg;svg"));
+    if (landscape)
+        logo.height(header_height * 0.8);
+    else
+        logo.height(header_height * 0.5);
     logo.align(egt::AlignFlag::center);
-    frame.add(logo);
+    header.add(egt::expand_horizontal(logo));
 
     const std::pair<std::string, std::function<std::unique_ptr<egt::Theme>()>> combo_items[] =
     {
@@ -670,12 +699,12 @@ int main(int argc, char** argv)
         {"Ultra Violet", []{ return std::make_unique<egt::UltraVioletTheme>(); }}
     };
 
-    egt::ComboBox combo;
+    egt::ComboBox combo(egt::Rect(egt::Size(screen_size.width() / 4, 25)));
     for (const auto& i : combo_items)
         combo.add_item(std::make_shared<egt::StringItem>(i.first));
     combo.align(egt::AlignFlag::center_vertical | egt::AlignFlag::right);
     combo.margin(5);
-    frame.add(combo);
+    header.add(combo);
 
     combo.on_selected_changed([&combo_items, &combo, &win]()
     {
@@ -692,28 +721,41 @@ int main(int argc, char** argv)
         win.damage();
     });
 
-    egt::BoxSizer hsizer(egt::Orientation::horizontal);
-    vsizer.add(egt::expand(hsizer));
+    egt::BoxSizer content_sizer;
+    if (!landscape)
+        content_sizer.orient(egt::Orientation::vertical);
+    vsizer.add(egt::expand(content_sizer));
 
     egt::ListBox list;
-    list.resize(egt::Size(150, 0));
+    if (!landscape)
+    {
+        auto const list_height = std::max<egt::DefaultDim>(50, screen_size.height() * 0.05);
+        tab_size -= egt::Size(0, list_height);
+        list.resize(egt::Size(0, list_height));
+        list.orient(egt::Orientation::horizontal);
+    }
+    else
+    {
+        auto const list_width = std::max<egt::DefaultDim>(150, screen_size.width() * 0.2);
+        tab_size -= egt::Size(list_width, 0);
+        list.resize(egt::Size(list_width, 0));
+    }
 
     egt::Notebook notebook;
 
     const std::pair<std::string, std::shared_ptr<egt::NotebookTab>> pages[] =
     {
-        {"Buttons", std::make_shared<ButtonPage>()},
-        {"Text", std::make_shared<TextPage>()},
-        {"CheckBox", std::make_shared<CheckBoxPage>()},
-        {"Label", std::make_shared<LabelPage>()},
-        {"Progress", std::make_shared<ProgressPage>()},
-        {"Sliders", std::make_shared<SliderPage>()},
-        {"Meters", std::make_shared<MeterPage>()},
+        {"Buttons", std::make_shared<ButtonPage>(landscape, tab_size)},
+        {"Text", std::make_shared<TextPage>(landscape, tab_size)},
+        {"CheckBox", std::make_shared<CheckBoxPage>(landscape, tab_size)},
+        {"Label", std::make_shared<LabelPage>(landscape, tab_size)},
+        {"Progress", std::make_shared<ProgressPage>(landscape, tab_size)},
+        {"Sliders", std::make_shared<SliderPage>(landscape, tab_size)},
+        {"Meters", std::make_shared<MeterPage>(landscape, tab_size)},
         {"ComboBox", std::make_shared<ComboPage>()},
-        {"ListBox", std::make_shared<ListPage>()},
+        {"ListBox", std::make_shared<ListPage>(landscape, tab_size)},
         {"Scrollwheel", std::make_shared<ScrollwheelPage>()},
-        {"Form", std::make_shared<FormPage>()},
-        {"Shapes", std::make_shared<ShapesPage>()},
+        {"Shapes", std::make_shared<ShapesPage>(landscape)},
     };
 
     for (const auto& i : pages)
@@ -722,8 +764,12 @@ int main(int argc, char** argv)
         notebook.add(i.second);
     }
 
-    hsizer.add(egt::expand_vertical(list));
-    hsizer.add(egt::expand(notebook));
+    if (landscape)
+        egt::expand_vertical(list);
+    else
+        egt::expand_horizontal(list);
+    content_sizer.add(list);
+    content_sizer.add(egt::expand(notebook));
 
     list.on_selected_changed([&notebook, &list]()
     {
@@ -732,7 +778,10 @@ int main(int argc, char** argv)
 
 #ifdef EGT_HAS_VIRTUALKEYBOARD
     auto default_keyboard = std::make_shared<egt::VirtualKeyboard>();
-    egt::PopupVirtualKeyboard popup_keyboard {default_keyboard};
+    egt::Size keyboard_size;
+    if (!landscape)
+        keyboard_size = egt::Size(screen_size.width(), screen_size.height() * 0.25);
+    egt::PopupVirtualKeyboard popup_keyboard {default_keyboard, keyboard_size};
     win.add(popup_keyboard);
 #endif
 
