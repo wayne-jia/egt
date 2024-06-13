@@ -52,8 +52,12 @@ space/space \
 sprite/sprite \
 squares/squares \
 whiteboard/whiteboard \
-widgets/widgets \
+widgets/widgets
+
+if HAVE_LIBPLANES
+bin_PROGRAMS += \
 rounddash/rounddash
+endif
 
 if HAVE_LUA
 bin_PROGRAMS += \
@@ -109,7 +113,7 @@ endif
 EXTRA_DIST =
 CLEANFILES =
 
-rounddash_rounddash_SOURCES = rounddash/rounddash.cpp animescene.cpp lcdcoverlay.cpp
+rounddash_rounddash_SOURCES = rounddash/rounddash.cpp rounddash/animescene.cpp rounddash/lcdcoverlay.cpp
 rounddash_rounddash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
 	-DEXAMPLEDATA=\"$(datadir)/egt/examples/rounddash\"
 rounddash_rounddash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
