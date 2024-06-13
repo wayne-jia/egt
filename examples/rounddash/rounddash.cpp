@@ -6,11 +6,64 @@
 
 
 #include "rounddash.h"
+#include "../../../src/detail/erawimage.h"
+#include "erawimg.h"
+
+class ImageParse
+{
+public:
+    ImageParse(const char* filename) noexcept
+    {
+        size_t buff_size = getFileSize(filename);
+        void* buff_ptr = NULL;
+        if (buff_size) 
+        {
+            buff_ptr = malloc(buff_size);
+        } 
+        else 
+        {
+            std::cerr << filename << " is blank!" << std::endl;
+            return;
+        }
+
+        std::ifstream f(filename, std::ios::binary);
+        if(!f)
+        {
+            std::cerr << "read " << filename << " failed!" << std::endl;
+            free(buff_ptr);
+            return;
+        }
+        
+        f.read((char*)buff_ptr, buff_size);
+
+        for (auto x = 0; x < 9; x++)
+            m_Images.push_back(egt::detail::ErawImage::load((const unsigned char*)buff_ptr+offset_table[x].offset, offset_table[x].len));
+
+        free(buff_ptr);
+    }
+
+    egt::shared_cairo_surface_t GetImageObj(uint32_t index)
+    {
+        assert(index < m_Images.size());
+        return m_Images[index];
+    }
+
+private:
+    std::vector<egt::shared_cairo_surface_t> m_Images;
+    size_t getFileSize(const char* fileName) 
+    {
+        if (fileName == NULL)
+            return 0;
+
+        struct stat statbuf;
+        stat(fileName, &statbuf);
+        return statbuf.st_size;
+    }
+};
 
 
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
-
 
 APP_DATA appData;
 static uint32_t prev_tick = 0, tick = 0;
@@ -21,25 +74,23 @@ static bool needles_cp_done = false;
 static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
 
-const std::string navImgs[] =
-{
-    "file:StA.png",
-    "file:RtA.png",
-    "file:LtA.png",
-    "file:destinationIcon.png",
-};
-
 
 int main(int argc, char** argv)
 {
+    std::cout << "EGT start" << std::endl; 
+
     std::vector<std::shared_ptr<OverlayWindow>> OverlayWinVector;
 
     egt::Application app(argc, argv);
-    egt::add_search_path("./images");
     egt::TopWindow window;
-    window.background(egt::Image("file:Speedo.png"));
-    window.fill_flags(egt::Theme::FillFlag::blend);
 
+    ImageParse imgs("eraw.bin");
+
+    window.background(egt::Image(imgs.GetImageObj(0)));
+    window.on_show([]()    
+    {        
+        std::cout << "EGT show" << std::endl;    
+    });
 
     ///============ Needle layer =============
     OverlayWinVector.push_back(std::make_shared<OverlayWindow>(egt::Rect(157, 422, 188, 14065),
@@ -57,15 +108,15 @@ int main(int argc, char** argv)
     OverlayWinVector[1]->fill_flags().clear();
     window.add(OverlayWinVector[1]);
 
-    auto imgLblLogobg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image("file:logobg.png"));
+    auto imgLblLogobg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(1)));
     imgLblLogobg->image_align(egt::AlignFlag::center);
     imgLblLogobg->move(egt::Point(76, 48));
 
-    auto imgLblLogo = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image("file:MicrochipLogo.png"));
+    auto imgLblLogo = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(2)));
     imgLblLogo->image_align(egt::AlignFlag::center);
     imgLblLogo->move(egt::Point(78, 49));
 
-    auto imgLblInfobg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image("file:infobg.png"));
+    auto imgLblInfobg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(3)));
     imgLblInfobg->image_align(egt::AlignFlag::center);
     imgLblInfobg->move(egt::Point(53, 237));
 
@@ -87,7 +138,7 @@ int main(int argc, char** argv)
     window.add(OverlayWinVector[2]);
     OverlayWinVector[2]->fill_flags().clear();
 
-    auto imgLblBlur = std::make_shared<egt::ImageLabel>(*OverlayWinVector[2], egt::Image("file:Speedo-blue-blur.png"));
+    auto imgLblBlur = std::make_shared<egt::ImageLabel>(*OverlayWinVector[2], egt::Image(imgs.GetImageObj(4)));
     imgLblBlur->fill_flags().clear();
     imgLblBlur->image_align(egt::AlignFlag::center);
     ///============ Blue  layer end =============
@@ -103,7 +154,7 @@ int main(int argc, char** argv)
     fade.add("ovrheo_fade_out_lit_10", OVERLAY_TYPE::LCDC_OVR_HEO, 255, 100, 10);
     fade.add("ovrheo_fade_in_lit_50", OVERLAY_TYPE::LCDC_OVR_HEO, 100, 255, 50);
 
-    auto initGPSwgt = [&OverlayWinVector]()
+    auto initGPSwgt = [&OverlayWinVector, &imgs]()
     {
         auto lblSpdUnit = std::make_shared<egt::Label>(*OverlayWinVector[1], "km/h");
         lblSpdUnit->color(egt::Palette::ColorId::label_text, egt::Palette::white);
@@ -137,9 +188,9 @@ int main(int argc, char** argv)
         lblRTime->hide();
         GPSLabels.push_back(lblRTime);   //[4]
 
-        for (auto i=0; i<4; i++)
+        for (auto i=5; i<9; i++)
         {
-            auto navImg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(navImgs[i]));
+            auto navImg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(i)));
             navImg->fill_flags().clear();
             navImg->image_align(egt::AlignFlag::center);
             navImg->move(egt::Point(56, 264));

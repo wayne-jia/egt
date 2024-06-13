@@ -197,37 +197,37 @@ void cpNeedles2Fb(char* fb)
     if (called)
         return;
 
-    struct timeval time1, time2;
-    uint32_t timediff = 0;
+    // struct timeval time1, time2;
+    // uint32_t timediff = 0;
 
     char* ptr = fb + *needles[0].len;
 
-    gettimeofday(&time1, NULL);
-    for (auto i = 1; i < sizeof(needles) / sizeof(pic_desc); i++) 
+    //gettimeofday(&time1, NULL);
+    for (size_t i = 1; i < sizeof(needles) / sizeof(pic_desc); i++) 
     {
         memcpy(ptr, needles[i].pic, *needles[i].len);
         ptr += *needles[i].len;
     }
-    gettimeofday(&time2, NULL);
-    if (time1.tv_sec < time2.tv_sec)
-    {
-        timediff = time2.tv_usec + 1000000 - time1.tv_usec;
-    }
-    else if (time1.tv_sec > time2.tv_sec)
-    {
-        std::cerr << "abnormal!!!time1.sec:" << time1.tv_sec << "time1.usec:" << time1.tv_usec << std::endl;
-    }
-    else
-    {
-        timediff = time2.tv_usec - time1.tv_usec;
-    }
+    // gettimeofday(&time2, NULL);
+    // if (time1.tv_sec < time2.tv_sec)
+    // {
+    //     timediff = time2.tv_usec + 1000000 - time1.tv_usec;
+    // }
+    // else if (time1.tv_sec > time2.tv_sec)
+    // {
+    //     std::cerr << "abnormal!!!time1.sec:" << time1.tv_sec << "time1.usec:" << time1.tv_usec << std::endl;
+    // }
+    // else
+    // {
+    //     timediff = time2.tv_usec - time1.tv_usec;
+    // }
     //std::cout << "before cp sec:" << time1.tv_sec << " usec:" << time1.tv_usec << std::endl;
     //std::cout << "after cp sec:" << time2.tv_sec << " usec:" << time2.tv_usec << std::endl;
-    std::cout << "needles buffer copy time cost: " << timediff << "us" << std::endl;
+    //std::cout << "needles buffer copy time cost: " << timediff << "us" << std::endl;
     called = true;
 }
 
-void APP_InitMap( void )
+void APP_InitMap(void)
 {
     currentLocation = maplocations[0];
     mapIndex = 0;

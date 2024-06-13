@@ -7,6 +7,7 @@
 #define ROUNDDASH_H
 
 
+#include <cairo.h>
 #include <iostream>
 #include <fstream>
 #include <cstdlib>
@@ -122,5 +123,6 @@ extern void APP_ProcessMap(void);
 extern void checkNeedleAnime(void);
 extern void showNavImg(uint32_t idx);
 extern void handle_touch(egt::Event & event);
+
 
 #endif
