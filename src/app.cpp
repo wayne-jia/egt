@@ -110,7 +110,7 @@ Application::Application(int argc, char** argv,
 
     setup_backend(primary, name);
 
-    setup_inputs();
+    //setup_inputs();
 
     setup_events();
 }

@@ -184,6 +184,8 @@ public:
     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-const-cast)
     EGT_NODISCARD inline const char** argv() const { return const_cast<const char**>(m_argv); }
 
+    void setup_inputs();
+    
     virtual ~Application() noexcept;
 
 protected:
@@ -197,7 +199,7 @@ protected:
     /// @private
     void setup_backend(bool primary, const std::string& name);
     /// @private
-    void setup_inputs();
+    
     /// @private
     void setup_events();
 

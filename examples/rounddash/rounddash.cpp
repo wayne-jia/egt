@@ -26,8 +26,6 @@ static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
 
 
-
-
 int main(int argc, char** argv)
 {
     std::cout << std::endl << "EGT start" << std::endl; 
@@ -197,6 +195,12 @@ int main(int argc, char** argv)
         }
     };
 
+    auto initLibInput = [&app]()
+    {
+        std::cout << std::endl << "Enable libinput in app" << std::endl;
+        app.setup_inputs();
+    };
+
     auto sec_timer = std::make_shared<egt::PeriodicTimer>(std::chrono::milliseconds(1000));
     sec_timer->on_timeout([](){ sec_tick++; });
 
@@ -298,8 +302,14 @@ int main(int argc, char** argv)
                 if(sec_tick > 1)
                 {
                     appData.nstate = DRIVE_START;
-                    appData.state = APP_STATE_DRIVE;
+                    appData.state = APP_STATE_INIT_INPUT;
                 }
+                break;
+            }
+            case APP_STATE_INIT_INPUT:
+            {
+                initLibInput();
+                appData.state = APP_STATE_DRIVE;
                 break;
             }
             case APP_STATE_DRIVE:
