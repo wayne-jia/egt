@@ -6,60 +6,10 @@
 
 
 #include "rounddash.h"
-#include "../../../src/detail/erawimage.h"
-#include "erawimg.h"
-
-class ImageParse
-{
-public:
-    ImageParse(const char* filename) noexcept
-    {
-        size_t buff_size = getFileSize(filename);
-        void* buff_ptr = NULL;
-        if (buff_size) 
-        {
-            buff_ptr = malloc(buff_size);
-        } 
-        else 
-        {
-            std::cerr << filename << " is blank!" << std::endl;
-            return;
-        }
-
-        std::ifstream f(filename, std::ios::binary);
-        if(!f)
-        {
-            std::cerr << "read " << filename << " failed!" << std::endl;
-            free(buff_ptr);
-            return;
-        }
-        
-        f.read((char*)buff_ptr, buff_size);
-
-        for (auto x = 0; x < 9; x++)
-            m_Images.push_back(egt::detail::ErawImage::load((const unsigned char*)buff_ptr+offset_table[x].offset, offset_table[x].len));
-
-        free(buff_ptr);
-    }
-
-    egt::shared_cairo_surface_t GetImageObj(uint32_t index)
-    {
-        assert(index < m_Images.size());
-        return m_Images[index];
-    }
-
-private:
-    std::vector<egt::shared_cairo_surface_t> m_Images;
-    size_t getFileSize(const char* fileName) 
-    {
-        if (fileName == NULL)
-            return 0;
-
-        struct stat statbuf;
-        stat(fileName, &statbuf);
-        return statbuf.st_size;
-    }
-};
+#include "erawparse.h"
+#include "stage1_eraw.h"
+#include "stage2_eraw.h"
+#include "stage3_eraw.h"
 
 
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
@@ -70,41 +20,48 @@ static uint32_t prev_tick = 0, tick = 0;
 static uint32_t prev_sec_tick = 0, sec_tick = 0;
 static bool tick_start = false;
 static uint32_t sec2 = 0;
-static bool needles_cp_done = false;
+static bool needles_stage2_cp_done = false;
+static bool needles_stage3_cp_done = false;
 static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
 
 
+
+
 int main(int argc, char** argv)
 {
-    std::cout << "EGT start" << std::endl; 
+    std::cout << std::endl << "EGT start" << std::endl; 
 
     std::vector<std::shared_ptr<OverlayWindow>> OverlayWinVector;
+    std::vector<std::shared_ptr<egt::ImageLabel>> ImgNeedlesVector;
 
     egt::Application app(argc, argv);
     egt::TopWindow window;
 
-    ImageParse imgs("eraw.bin");
+    ImageParse imgs("stage1_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
 
     window.background(egt::Image(imgs.GetImageObj(0)));
     window.on_show([]()    
     {        
-        std::cout << "EGT show" << std::endl;    
+        std::cout << std::endl << "EGT show" << std::endl;    
     });
 
     ///============ Needle layer =============
-    OverlayWinVector.push_back(std::make_shared<OverlayWindow>(egt::Rect(157, 422, 188, 14065),
+    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(157, 422, 188, 14065),
                                                                egt::PixelFormat::argb8888,
                                                                egt::WindowHint::overlay,
                                                                1));
 
     OverlayWinVector[0]->fill_flags().clear();
+    auto imgN0 = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs.GetImageObj(9)));
+    imgN0->image_align(egt::AlignFlag::center);
+    imgN0->move(egt::Point(0, 0));
     window.add(OverlayWinVector[0]);
     ///============ Needle  layer end =============
 
 
     ///============ GPS layer =============
-    OverlayWinVector.push_back(std::make_shared<OverlayWindow>(egt::Rect(GPS_X, GPS_Y, GPS_WIDTH, GPS_HEIGHT)));
+    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(GPS_X, GPS_Y, GPS_WIDTH, GPS_HEIGHT)));
     OverlayWinVector[1]->fill_flags().clear();
     window.add(OverlayWinVector[1]);
 
@@ -124,13 +81,13 @@ int main(int argc, char** argv)
     lblInstru->color(egt::Palette::ColorId::label_text, egt::Palette::white);
     lblInstru->font(egt::Font("Noto Sans", 21, egt::Font::Weight::normal));
     lblInstru->move(egt::Point(103, 278));
-    GPSLabels.push_back(lblInstru);  //[0]
+    GPSLabels.emplace_back(lblInstru);  //[0]
 
     ///============ GPS  layer end =============
 
 
     ///============ Blue layer =============
-    OverlayWinVector.push_back(std::make_shared<OverlayWindow>(egt::Rect(0, 0, MAX_WIDTH, MAX_HEIGHT),
+    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(0, 0, MAX_WIDTH, MAX_HEIGHT),
                                                                egt::PixelFormat::argb8888,
                                                                egt::WindowHint::overlay,
                                                                1));
@@ -161,7 +118,7 @@ int main(int argc, char** argv)
         lblSpdUnit->font(egt::Font("Noto Sans", 23, egt::Font::Weight::bold, egt::Font::Slant::italic));
         lblSpdUnit->move(egt::Point(136, 120));
         lblSpdUnit->hide();
-        GPSLabels.push_back(lblSpdUnit);   //[1]
+        GPSLabels.emplace_back(lblSpdUnit);   //[1]
 
         auto lblSpd = std::make_shared<egt::Label>(*OverlayWinVector[1], "0");
         lblSpd->color(egt::Palette::ColorId::label_text, egt::Palette::white);
@@ -170,7 +127,7 @@ int main(int argc, char** argv)
         lblSpd->text_align(egt::AlignFlag::center);
         lblSpd->move(egt::Point(114, 49));
         lblSpd->hide();
-        GPSLabels.push_back(lblSpd);   //[2]
+        GPSLabels.emplace_back(lblSpd);   //[2]
 
         auto lblDist = std::make_shared<egt::Label>(*OverlayWinVector[1], "20 km");
         lblDist->color(egt::Palette::ColorId::label_text, egt::Palette::white);
@@ -179,14 +136,14 @@ int main(int argc, char** argv)
         lblDist->font(egt::Font("Noto Sans", 18, egt::Font::Weight::bold));
         lblDist->move(egt::Point(116, 248));
         lblDist->hide();
-        GPSLabels.push_back(lblDist);   //[3]
+        GPSLabels.emplace_back(lblDist);   //[3]
 
         auto lblRTime = std::make_shared<egt::Label>(*OverlayWinVector[1], "Time Left:         mins");
         lblRTime->color(egt::Palette::ColorId::label_text, egt::Palette::white);
         lblRTime->font(egt::Font("Noto Sans", 18, egt::Font::Weight::normal));
         lblRTime->move(egt::Point(81, 313));
         lblRTime->hide();
-        GPSLabels.push_back(lblRTime);   //[4]
+        GPSLabels.emplace_back(lblRTime);   //[4]
 
         for (auto i=5; i<9; i++)
         {
@@ -195,7 +152,7 @@ int main(int argc, char** argv)
             navImg->image_align(egt::AlignFlag::center);
             navImg->move(egt::Point(56, 264));
             navImg->hide();
-            GPSImgIndicators.push_back(navImg);
+            GPSImgIndicators.emplace_back(navImg);
         }
     };
 
@@ -211,6 +168,32 @@ int main(int argc, char** argv)
         {
             blur_alpha_high = true;
             fade.request("ovrheo_fade_in_lit_10");
+        }
+    };
+
+    auto initStage2Needles = [&OverlayWinVector, &ImgNeedlesVector]()
+    {
+        auto needle_num = sizeof(N002_151_420_188x146_table)/sizeof(eraw_st);
+        auto imgs = std::make_shared<ImageParse>("stage2_eraw.bin", N002_151_420_188x146_table, needle_num);
+        for (uint32_t i=0; i<needle_num; i++)
+        {
+            auto imgNeedle = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs->GetImageObj(i)));
+            imgNeedle->image_align(egt::AlignFlag::center);
+            imgNeedle->move(egt::Point(0, needles[i+1].frame_attr.pan_y));
+            ImgNeedlesVector.emplace_back(imgNeedle);
+        }
+    };
+
+    auto initStage3Needles = [&OverlayWinVector, &ImgNeedlesVector]()
+    {
+        auto needle_num = sizeof(N078_144_170_table)/sizeof(eraw_st);
+        auto imgs = std::make_shared<ImageParse>("stage3_eraw.bin", N078_144_170_table, needle_num);
+        for (uint32_t i=0; i<needle_num; i++)
+        {
+            auto imgNeedle = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs->GetImageObj(i)));
+            imgNeedle->image_align(egt::AlignFlag::center);
+            imgNeedle->move(egt::Point(0, needles[i+39].frame_attr.pan_y));
+            ImgNeedlesVector.emplace_back(imgNeedle);
         }
     };
 
@@ -242,10 +225,8 @@ int main(int argc, char** argv)
             } 
             case APP_STATE_INIT_NEEDLE_SHOW:
             {
-                cp1stNeedle2Fb((char*)OverlayWinVector[0]->GetOverlay()->raw()); 
-                updateNeedle(OverlayWinVector[0]->GetOverlay(), 0);
-                OverlayWinVector[1]->show();
-                OverlayWinVector[2]->show();
+                for (auto i=0; i<3; i++)
+                    OverlayWinVector[i]->show();
                 tick_start = true;
                 appData.state = APP_STATE_NEEDLE_TWIRL;   
                 appData.nstate = TWIRL_ACCELERATE_START;
@@ -253,10 +234,10 @@ int main(int argc, char** argv)
             }
             case APP_STATE_NEEDLE_TWIRL:
             {
-                if (!needles_cp_done)
+                if (!needles_stage2_cp_done)
                 {
-                    cpNeedles2Fb((char*)OverlayWinVector[0]->GetOverlay()->raw());
-                    needles_cp_done = true;
+                    initStage2Needles();
+                    needles_stage2_cp_done = true;
                 }
                 
                 if (tick != prev_tick)
@@ -308,6 +289,12 @@ int main(int argc, char** argv)
             }
             case APP_STATE_SPEED_INIT3:
             {
+                if (!needles_stage3_cp_done)
+                {
+                    initStage3Needles();
+                    needles_stage3_cp_done = true;
+                }
+
                 if(sec_tick > 1)
                 {
                     appData.nstate = DRIVE_START;

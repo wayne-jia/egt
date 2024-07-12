@@ -103,8 +103,6 @@ typedef struct {
 
 typedef struct
 {
-  const char *pic;
-  unsigned int *len;
   frame_st frame_attr;
   int angle;
 } pic_desc;
@@ -114,6 +112,7 @@ typedef struct
 extern std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
 extern std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 extern APP_DATA appData;
+extern pic_desc needles[121];
 
 extern void updateNeedle(egt::detail::KMSOverlay* s, int index);
 extern void cp1stNeedle2Fb(char* fb);
