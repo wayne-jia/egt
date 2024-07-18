@@ -24,6 +24,8 @@
 #define GPS_Y       265
 
 
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 
 typedef struct
 {
@@ -61,6 +63,7 @@ typedef enum
     APP_STATE_PAUSE,
     APP_STATE_REACHED,
     APP_STATE_LOOPBACK,
+    APP_STATE_IDLE
 
 } APP_STATES;
 
@@ -123,6 +126,8 @@ extern void APP_ProcessMap(void);
 extern void checkNeedleAnime(void);
 extern void showNavImg(uint32_t idx);
 extern void handle_touch(egt::Event & event);
-
+extern void renderNeedles(float val, 
+                   std::shared_ptr<egt::experimental::NeedleLayer> needleWidget, 
+                   std::shared_ptr<OverlayWindow> needleLayer);
 
 #endif

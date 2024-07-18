@@ -7,13 +7,13 @@
 
 #include "rounddash.h"
 #include "erawparse.h"
-#include "stage1_eraw.h"
-#include "stage2_eraw.h"
-#include "stage3_eraw.h"
+#include "multiple_eraw.h"
+
 
 
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
+
 
 APP_DATA appData;
 static uint32_t prev_tick = 0, tick = 0;
@@ -26,17 +26,26 @@ static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
 
 
+
 int main(int argc, char** argv)
 {
     std::cout << std::endl << "EGT start" << std::endl; 
 
     std::vector<std::shared_ptr<OverlayWindow>> OverlayWinVector;
-    std::vector<std::shared_ptr<egt::ImageLabel>> ImgNeedlesVector;
+    
 
     egt::Application app(argc, argv);
     egt::TopWindow window;
 
-    ImageParse imgs("stage1_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
+    ImageParse imgs("multiple_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
+
+    egt::Point centerCircle = egt::Point(180, 180);
+    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(9)), 0, 240, -40, 200, true);
+    needleWidget->move(egt::Point(0, 167));
+    needleWidget->needle_center(centerCircle - needleWidget->box().point());
+    needleWidget->needle_point(centerCircle);
+    needleWidget->hide();
+    window.add(needleWidget);
 
     window.background(egt::Image(imgs.GetImageObj(0)));
     window.on_show([]()    
@@ -51,11 +60,9 @@ int main(int argc, char** argv)
                                                                1));
 
     OverlayWinVector[0]->fill_flags().clear();
-    auto imgN0 = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs.GetImageObj(9)));
-    imgN0->image_align(egt::AlignFlag::center);
-    imgN0->move(egt::Point(0, 0));
     window.add(OverlayWinVector[0]);
     ///============ Needle  layer end =============
+
 
 
     ///============ GPS layer =============
@@ -154,7 +161,6 @@ int main(int argc, char** argv)
         }
     };
 
-
     auto pulseBlur = [&fade]()
     {
         if(blur_alpha_high == true)
@@ -169,37 +175,46 @@ int main(int argc, char** argv)
         }
     };
 
-    auto initStage2Needles = [&OverlayWinVector, &ImgNeedlesVector]()
-    {
-        auto needle_num = sizeof(N002_151_420_188x146_table)/sizeof(eraw_st);
-        auto imgs = std::make_shared<ImageParse>("stage2_eraw.bin", N002_151_420_188x146_table, needle_num);
-        for (uint32_t i=0; i<needle_num; i++)
-        {
-            auto imgNeedle = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs->GetImageObj(i)));
-            imgNeedle->image_align(egt::AlignFlag::center);
-            imgNeedle->move(egt::Point(0, needles[i+1].frame_attr.pan_y));
-            ImgNeedlesVector.emplace_back(imgNeedle);
-        }
-    };
-
-    auto initStage3Needles = [&OverlayWinVector, &ImgNeedlesVector]()
-    {
-        auto needle_num = sizeof(N078_144_170_table)/sizeof(eraw_st);
-        auto imgs = std::make_shared<ImageParse>("stage3_eraw.bin", N078_144_170_table, needle_num);
-        for (uint32_t i=0; i<needle_num; i++)
-        {
-            auto imgNeedle = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs->GetImageObj(i)));
-            imgNeedle->image_align(egt::AlignFlag::center);
-            imgNeedle->move(egt::Point(0, needles[i+39].frame_attr.pan_y));
-            ImgNeedlesVector.emplace_back(imgNeedle);
-        }
-    };
-
     auto initLibInput = [&app]()
     {
         std::cout << std::endl << "Enable libinput in app" << std::endl;
         app.setup_inputs();
     };
+
+    
+#if 0
+    egt::Button btn("Test rotation");
+    btn.move(egt::Point(500, 350));
+    window.add(btn);
+
+    int idx = 0;
+    int xx = 50;
+    int yy = 50;
+    btn.on_click([&](egt::Event&)
+    {
+        std::cout << "idx:" << idx <<  std::endl;
+        updateNeedle(OverlayWinVector[0]->GetOverlay(), idx++);
+        // plane_set_pos(OverlayWinVector[0]->GetOverlay()->s(), 100+xx, 200);
+        // plane_set_pan_pos(OverlayWinVector[0]->GetOverlay()->s(), 0, 1004);
+        // plane_set_pan_size(OverlayWinVector[0]->GetOverlay()->s(), 188, 104);
+        // plane_apply(OverlayWinVector[0]->GetOverlay()->s());
+        // OverlayWinVector[0]->GetOverlay()->schedule_flip();
+  
+        xx += 5;
+        // yy++;
+    });
+
+
+    egt::Button btn2("Test generate");
+    btn2.move(egt::Point(500, 200));
+    window.add(btn2);
+
+    btn2.on_click([&](egt::Event&)
+    {
+        for (auto i=0; i<241; i+=2)
+            renderNeedles(i, needleWidget, OverlayWinVector[0]);
+    });
+#endif
 
     auto sec_timer = std::make_shared<egt::PeriodicTimer>(std::chrono::milliseconds(1000));
     sec_timer->on_timeout([](){ sec_tick++; });
@@ -224,6 +239,7 @@ int main(int argc, char** argv)
             {
                 //fade.request("ovr2_fade_in_10");
                 //fade.request("ovrheo_fade_in_10");
+                renderNeedles(0, needleWidget, OverlayWinVector[0]);
                 appData.state = APP_STATE_INIT_NEEDLE_SHOW;
                 break;
             } 
@@ -240,12 +256,13 @@ int main(int argc, char** argv)
             {
                 if (!needles_stage2_cp_done)
                 {
-                    initStage2Needles();
                     needles_stage2_cp_done = true;
+                    for (auto i=2; i<77; i+=2)
+                        renderNeedles(i, needleWidget, OverlayWinVector[0]);
                 }
-                
+
                 if (tick != prev_tick)
-                {               
+                {
                     prev_tick = tick; 
                     APP_ProcessNeedle(OverlayWinVector[0]->GetOverlay());
                 }
@@ -293,12 +310,6 @@ int main(int argc, char** argv)
             }
             case APP_STATE_SPEED_INIT3:
             {
-                if (!needles_stage3_cp_done)
-                {
-                    initStage3Needles();
-                    needles_stage3_cp_done = true;
-                }
-
                 if(sec_tick > 1)
                 {
                     appData.nstate = DRIVE_START;
@@ -367,6 +378,10 @@ int main(int argc, char** argv)
                     sec_timer->stop();
                     tick_start = false;
                 }
+                break;
+            }
+            case APP_STATE_IDLE:
+            {
                 break;
             }
             default:

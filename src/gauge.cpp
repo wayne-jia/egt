@@ -95,8 +95,31 @@ void NeedleLayer::draw(Painter& painter, const Rect&)
                                             m_angle_start, m_angle_stop,
                                             m_clockwise);
 
+void NeedleLayer::drawbuf(Painter& painter)
+{
+    auto angle = detail::normalize_to_angle(m_value, m_min, m_max,
+                                            m_angle_start, m_angle_stop,
+                                            m_clockwise);
+//std::cout << "drawbuf angle: " << angle << std::endl;
     draw_image(painter, m_point,
                m_center, m_image, detail::to_radians<float>(0, angle));
+
+}
+
+Rect NeedleLayer::rot_rect(float value)
+{
+    value = std::round(detail::clamp<float>(value, m_min, m_max));
+
+    if (!detail::float_equal(m_value, value))
+    {
+        m_rect_orig = rectangle_of_rotated();
+        //std::cout << std::endl << "r1 rot: " << m_rect_orig << std::endl;
+        m_value = value;
+        m_rect_rot = rectangle_of_rotated();
+        //std::cout << "r2 rot: " << m_rect_rot << std::endl << std::endl;
+    }
+
+    return m_rect_rot;
 }
 
 void NeedleLayer::gauge(Gauge* gauge)

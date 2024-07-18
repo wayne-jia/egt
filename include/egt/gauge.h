@@ -308,9 +308,17 @@ public:
             damage();
     }
 
+    Rect rot_rect(float value);
+    Rect get_rect_orig() { return m_rect_orig; }
+    void drawbuf(Painter& painter);
+
 protected:
 
     Rect rectangle_of_rotated();
+
+    Rect m_rect_orig;
+
+    Rect m_rect_rot;
 
     /// @private
     void gauge(Gauge* gauge) override;
