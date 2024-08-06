@@ -19,7 +19,7 @@
 
 
 
-#define GFXCVT_VER "gfxconvert v1.2.0"
+#define GFXCVT_VER "gfxconvert v1.2.1"
 
 
 using namespace std;
@@ -104,12 +104,18 @@ void SVG_CVT::saveErawById(const string& filename, const string& id)
     }
 
     if (!header_init) {
-        erawmap << "#include \"eraw_define.h\"";
-        erawmap << "\t\n";
-        erawmap << "\t\n";
-        erawmap << "\t\n";
+        erawmap << "/*\n";
+        erawmap << " * Copyright (C) 2018 Microchip Technology Inc.  All rights reserved.\n";
+        erawmap << " *\n";
+        erawmap << " * SPDX-License-Identifier: Apache-2.0\n";
+        erawmap << " */\n";
+        erawmap << "#ifndef __" + GetStringB4Dot(m_svgname) + "_H__\n";
+        erawmap << "#define __" + GetStringB4Dot(m_svgname) + "_H__\n";
+        erawmap << "\n";
+        erawmap << "#include \"eraw_define.h\"\n";
+        erawmap << "\n";
         erawmap << "eraw_st " + GetStringB4Dot(m_svgname) + "_table[] = {";
-        erawmap << "\t\n";
+        erawmap << "\n";
         header_init = 1;
         WriteHeaderIndicationFile();
     }
@@ -124,7 +130,7 @@ void SVG_CVT::saveErawById(const string& filename, const string& id)
     erawmap << len;
     erawmap << "},    //";
     erawmap << table_index++;
-    erawmap << "\t\n";
+    erawmap << "\n";
     erawmap.close();
     WriteTableIndexFile();
     offset += len;
@@ -278,12 +284,18 @@ void IMG_CVT::serializeIMG(void)
     }
 
     if (!header_init) {
-        erawmap << "#include \"eraw_define.h\"";
-        erawmap << "\t\n";
-        erawmap << "\t\n";
-        erawmap << "\t\n";
+        erawmap << "/*\n";
+        erawmap << " * Copyright (C) 2018 Microchip Technology Inc.  All rights reserved.\n";
+        erawmap << " *\n";
+        erawmap << " * SPDX-License-Identifier: Apache-2.0\n";
+        erawmap << " */\n";
+        erawmap << "#ifndef __" + GetStringB4Dot(m_imgname) + "_H__\n";
+        erawmap << "#define __" + GetStringB4Dot(m_imgname) + "_H__\n";
+        erawmap << "\n";
+        erawmap << "#include \"eraw_define.h\"\n";
+        erawmap << "\n";
         erawmap << "eraw_st " + GetStringB4Dot(m_imgname) + "_table[] = {";
-        erawmap << "\t\n";
+        erawmap << "\n";
         header_init = 1;
         WriteHeaderIndicationFile();
     }
@@ -298,7 +310,7 @@ void IMG_CVT::serializeIMG(void)
     erawmap << len;
     erawmap << "},    //";
     erawmap << table_index++;
-    erawmap << "\t\n";
+    erawmap << "\n";
     erawmap.close();
     offset += len;
     WriteTableIndexFile();
@@ -312,22 +324,23 @@ static void WritePulicHeadFile(void)
         cerr << "eraw_def_file open ERROR!" << endl;
         return;
     }
-    
-    eraw_def_file << "#ifndef __ERAW_DEFINE_H__\t\n";
-    eraw_def_file << "#define __ERAW_DEFINE_H__\t\n";
-    eraw_def_file << "\t\n";
-    eraw_def_file << "\t\n";
-    eraw_def_file << "\t\n";
-    eraw_def_file << "#include <string>\t\n";
-    eraw_def_file << "\t\n";
-    eraw_def_file << "\t\n";
-    eraw_def_file << "typedef struct {\t\n";
-    eraw_def_file << "    std::string name;\t\n";
-    eraw_def_file << "    int offset;\t\n";
-    eraw_def_file << "    int len;\t\n";
-    eraw_def_file << "} eraw_st;\t\n";
-    eraw_def_file << "\t\n";
-    eraw_def_file << "#endif\t\n";
+    eraw_def_file << "/*\n";
+    eraw_def_file << " * Copyright (C) 2018 Microchip Technology Inc.  All rights reserved.\n";
+    eraw_def_file << " *\n";
+    eraw_def_file << " * SPDX-License-Identifier: Apache-2.0\n";
+    eraw_def_file << " */\n";
+    eraw_def_file << "#ifndef __ERAW_DEFINE_H__\n";
+    eraw_def_file << "#define __ERAW_DEFINE_H__\n";
+    eraw_def_file << "\n";
+    eraw_def_file << "#include <string>\n";
+    eraw_def_file << "\n";
+    eraw_def_file << "typedef struct {\n";
+    eraw_def_file << "    std::string name;\n";
+    eraw_def_file << "    int offset;\n";
+    eraw_def_file << "    int len;\n";
+    eraw_def_file << "} eraw_st;\n";
+    eraw_def_file << "\n";
+    eraw_def_file << "#endif\n";
     eraw_def_file.close();
 }
 
@@ -434,7 +447,10 @@ static void EndErawHFile(void)
         return;
     }
     
-    erawmap << "};";
+    erawmap << "};\n";
+    erawmap << "\n";
+    erawmap << "#endif\n";
+    erawmap << "\n";
     erawmap.close();
 }
 

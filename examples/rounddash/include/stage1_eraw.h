@@ -1,6 +1,5 @@
 #include "eraw_define.h"	
-	
-	
+
 eraw_st Speedo_table[] = {	
     {"Speedo", 0, 884338},    //0	
     {"logobg", 884338, 11958},    //1	

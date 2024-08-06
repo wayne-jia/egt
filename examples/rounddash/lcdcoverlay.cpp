@@ -6,11 +6,9 @@
 
 #include "lcdcoverlay.h"
 
-
 void OverlayFade::request(const std::string& name)
 {
     Fade_Request_t request;
-
     for (auto i = 0; i < m_FadeList.size(); i++)
     {
         if (egt::detail::hash(name) == egt::detail::hash(m_FadeList[i].name))
@@ -22,7 +20,6 @@ void OverlayFade::request(const std::string& name)
     
             for (auto timer: m_FadeTimerVector)
             {
-                
                 if (timer.second == m_FadeList[i].winType)
                 {
                     if (!timer.first->running())

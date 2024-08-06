@@ -6,7 +6,6 @@
 
 #include "rounddash.h"
 
-
 #define MAX_DIST_STRING_LEN      6
 #define MAX_DIST_TRVL_DIGITS     4
 #define DIST_TRAVEL_THRSH_KM     6
@@ -14,9 +13,9 @@
 const float totDist = 213;
 float travlDist = 0;
 
-locationOnMap maplocations[8]={{20, 0, 0, DIRECTION::RIGHT},{42, 0, 0, DIRECTION::LEFT},{22, 0, 0, DIRECTION::LEFT},
-                               {36, 0, 0, DIRECTION::RIGHT},{16, 0, 0, DIRECTION::RIGHT},{32, 0, 0, DIRECTION::LEFT},
-                               {20, 0, 0, DIRECTION::RIGHT},{25, 0, 0, DIRECTION::DESTINATION}};
+const locationOnMap maplocations[] = {{20, 0, 0, DIRECTION::RIGHT}, {42, 0, 0, DIRECTION::LEFT}, {22, 0, 0, DIRECTION::LEFT},
+                                      {36, 0, 0, DIRECTION::RIGHT}, {16, 0, 0, DIRECTION::RIGHT}, {32, 0, 0, DIRECTION::LEFT},
+                                      {20, 0, 0, DIRECTION::RIGHT}, {25, 0, 0, DIRECTION::DESTINATION}};
 
 locationOnMap currentLocation;
 
@@ -40,13 +39,12 @@ struct needleAnime
     NEEDLE_STATE aChange;       
 }; 
 
-struct needleAnime fixedAnime[10]= {{48, DRIVE_PROGRESS_ACCEL}, {72, DRIVE_PROGRESS_ACCEL},
-{56, DRIVE_PROGRESS_DECEL}, {64,DRIVE_PROGRESS_ACCEL}, {36, DRIVE_PROGRESS_DECEL},
-{24, DRIVE_PROGRESS_DECEL}, {72,DRIVE_PROGRESS_ACCEL}, {77,DRIVE_PROGRESS_ACCEL}, 
-{60,DRIVE_PROGRESS_DECEL}, {24,DRIVE_PROGRESS_DECEL}};
+const struct needleAnime fixedAnime[] = {{48, DRIVE_PROGRESS_ACCEL}, {72, DRIVE_PROGRESS_ACCEL}, {56, DRIVE_PROGRESS_DECEL},
+                                         {64, DRIVE_PROGRESS_ACCEL}, {36, DRIVE_PROGRESS_DECEL}, {24, DRIVE_PROGRESS_DECEL},
+                                         {72, DRIVE_PROGRESS_ACCEL}, {77, DRIVE_PROGRESS_ACCEL}, {60, DRIVE_PROGRESS_DECEL},
+                                         {24, DRIVE_PROGRESS_DECEL}};
 
-
-pic_desc needles[] = {
+const pic_desc needles[] = {
     {{157, 422, 300, 0}, 0},
     {{151, 420, 146, 300}, 2},
     {{145, 419, 135, 446}, 4},
@@ -173,7 +171,6 @@ pic_desc needles[] = {
 void APP_InitMap(void);
 void updateMapLocation(void);
 
-
 void updateNeedle(egt::detail::KMSOverlay* s, int index)
 {
     plane_set_pos(s->s(), needles[index].frame_attr.x, needles[index].frame_attr.y);
@@ -215,11 +212,12 @@ void APP_ProcessNeedle(egt::detail::KMSOverlay* s)
         }
         case TWIRL_ACCELERATE_PROGRESS:
         {
-            if(needles[needleIndex].angle < req_speed)
+            if (needles[needleIndex].angle < req_speed)
             {
                 needleIndex++;
                 updateNeedle(s, needleIndex);
-            }else
+            }
+            else
             {
                 req_speed = 0;
                 appData.nstate = TWIRL_DECELERATE_PROGRESS;
@@ -228,7 +226,7 @@ void APP_ProcessNeedle(egt::detail::KMSOverlay* s)
         }
         case TWIRL_DECELERATE_PROGRESS:
         {
-            if(needles[needleIndex].angle > req_speed)
+            if (needles[needleIndex].angle > req_speed)
             {                   
                 needleIndex--;
                 updateNeedle(s, needleIndex);
@@ -259,7 +257,7 @@ void APP_ProcessNeedle(egt::detail::KMSOverlay* s)
         }
         case DRIVE_PROGRESS_ACCEL:
         {
-            if(needles[needleIndex].angle < req_speed)
+            if (needles[needleIndex].angle < req_speed)
             {
                 needleIndex++;
                 updateNeedle(s, needleIndex);
@@ -269,7 +267,7 @@ void APP_ProcessNeedle(egt::detail::KMSOverlay* s)
         }
         case DRIVE_PROGRESS_DECEL:
         {
-            if(needles[needleIndex].angle > req_speed)
+            if (needles[needleIndex].angle > req_speed)
             {          
                 needleIndex--;
                 updateNeedle(s, needleIndex);
@@ -277,16 +275,12 @@ void APP_ProcessNeedle(egt::detail::KMSOverlay* s)
             }
             else
             {
-                if(directionStatus == DIRECTION_STATUS::REACHED)
-                {
+                if (directionStatus == DIRECTION_STATUS::REACHED)
                     appData.state = APP_STATE_PAUSE;
-                    
-                }
             }
             break;
         }
     }
-    
 }
 
 void updateMapLocation(void)
@@ -296,21 +290,22 @@ void updateMapLocation(void)
     currentLocation.current_dist = currentLocation.prev_dist+ (float)(needles[needleIndex].angle*sec);    
     /* Every 3 s update the distance label */
     MAP_CNTR++;
-    if(MAP_CNTR > 2)
+    if (MAP_CNTR > 2)
     {
         MAP_CNTR = 0;
         updateDistance = true;
     }
 
-    if((currentLocation.dist - currentLocation.current_dist) < DIST_TRAVEL_THRSH_KM)
+    if ((currentLocation.dist - currentLocation.current_dist) < DIST_TRAVEL_THRSH_KM)
     {
         directionStatus = DIRECTION_STATUS::NEXT;
         updateDistance = true;
     }
-    if((currentLocation.dist - currentLocation.current_dist) <= 0)
+
+    if ((currentLocation.dist - currentLocation.current_dist) <= 0)
     {
         /* Go to next path in map unless you have reached destination */
-        if(currentLocation.nextDirection != DIRECTION::DESTINATION)
+        if (currentLocation.nextDirection != DIRECTION::DESTINATION)
         {
             travlDist = travlDist + currentLocation.dist;
             currentLocation = maplocations[++mapIndex];
@@ -347,19 +342,18 @@ void APP_ProcessMap(void)
 
         case DIRECTION_STATUS::NEXT:
         {
-            if(currentLocation.nextDirection == DIRECTION::RIGHT)
+            if (currentLocation.nextDirection == DIRECTION::RIGHT)
             {
                 GPSLabels[0]->text("Turn Right");
                 showNavImg(1);
                 directionStatus = DIRECTION_STATUS::NO_CHANGE;
             }
-            else if(currentLocation.nextDirection == DIRECTION::LEFT)
+            else if (currentLocation.nextDirection == DIRECTION::LEFT)
             {
                 GPSLabels[0]->text("Turn Left");
                 showNavImg(2);
                 directionStatus = DIRECTION_STATUS::NO_CHANGE;
             }
-
             break;
         }    
 
@@ -367,7 +361,7 @@ void APP_ProcessMap(void)
             break;
     }
 
-    if(updateDistance)
+    if (updateDistance)
     {
         updateDistance = false;
         std::string diststr = std::to_string(static_cast<uint32_t>(currentLocation.dist - currentLocation.current_dist)) + " km";
@@ -383,7 +377,7 @@ void APP_ProcessMap(void)
 
     updateMapLocation();
 
-    if(dImageOn)
+    if (dImageOn)
     {
         GPSImgIndicators[current_img]->hide();
         dImageOn = false;
@@ -397,15 +391,15 @@ void APP_ProcessMap(void)
 
 void checkNeedleAnime(void)
 {
-    if(directionStatus != DIRECTION_STATUS::REACHED)
+    if (directionStatus != DIRECTION_STATUS::REACHED)
     {
         ANIME_CNTR++;
-        if(ANIME_CNTR > 2)
+        if (ANIME_CNTR > 2)
         {
             ANIME_CNTR=0;
             req_speed = fixedAnime[animeIndex].regSpeed;
             appData.nstate = fixedAnime[animeIndex].aChange;
-            if(++animeIndex > 8)
+            if (++animeIndex > 8)
                 animeIndex = 0;
         }
     }  
@@ -417,7 +411,7 @@ void handle_touch(egt::Event & event)
     {
         case egt::EventId::raw_pointer_down:
         {
-            if(appData.state == APP_STATE_DRIVE)
+            if (appData.state == APP_STATE_DRIVE)
             {
                 lastX = event.pointer().point.x();
                 lastY = event.pointer().point.y();
@@ -427,7 +421,7 @@ void handle_touch(egt::Event & event)
         }
         case egt::EventId::raw_pointer_up:
         {
-            if(appData.state == APP_STATE_DRIVE)
+            if (appData.state == APP_STATE_DRIVE)
             {
                 lastX = event.pointer().point.x();
                 lastY = event.pointer().point.y();
@@ -439,17 +433,17 @@ void handle_touch(egt::Event & event)
         {
             ANIME_CNTR = 0;
             //we don't want to increase speed if destination has already been reached
-            if((appData.state == APP_STATE_DRIVE)  && (directionStatus != DIRECTION_STATUS::REACHED))
+            if ((appData.state == APP_STATE_DRIVE)  && (directionStatus != DIRECTION_STATUS::REACHED))
             {
                 int diffX = abs(event.pointer().point.x() - lastX);
                 int diffY = abs(lastY - event.pointer().point.y());
                 
                 if ((diffY > diffX && event.pointer().point.y() < lastY) || (diffX > diffY && event.pointer().point.x() > lastX))
                 {
-                    if(needleIndex < 120)           
+                    if (needleIndex < 120)           
                     {
                         int newIndx = needleIndex + (diffX + diffY)/3;
-                        if(newIndx > 120)
+                        if (newIndx > 120)
                             newIndx = 120;
                         req_speed = needles[newIndx].angle;
                         appData.nstate = DRIVE_PROGRESS_ACCEL;
@@ -458,10 +452,10 @@ void handle_touch(egt::Event & event)
                 }
                 else
                 {
-                    if( needleIndex > 0 )
+                    if (needleIndex > 0)
                     {
                         int newIndx = needleIndex - (diffX + diffY)/3;
-                        if(newIndx < 0)
+                        if (newIndx < 0)
                             newIndx = 0;
                         req_speed = needles[newIndx].angle;
                         appData.nstate = DRIVE_PROGRESS_DECEL;

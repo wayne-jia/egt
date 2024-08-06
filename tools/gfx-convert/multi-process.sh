@@ -1,3 +1,6 @@
+# Copyright (C) 2018 Microchip Technology Inc.  All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 #!/bin/bash
 
 # Execute gfx-convert -s to start the conversion
