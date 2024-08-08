@@ -6,7 +6,6 @@
 #ifndef ROUNDDASH_H
 #define ROUNDDASH_H
 
-
 #include <cairo.h>
 #include <iostream>
 #include <fstream>
@@ -14,27 +13,26 @@
 #include <sys/time.h>
 #include "lcdcoverlay.h"
 
-
-
-#define MAX_WIDTH	720
-#define MAX_HEIGHT	720
-#define GPS_WIDTH   340
-#define GPS_HEIGHT  363
-#define GPS_X       195
-#define GPS_Y       265
-
-
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-
+/**
+ * The Waveshare round panel resolution and other settings
+ */
+#define MAX_WIDTH	         720
+#define MAX_HEIGHT	         720
+#define GPS_WIDTH            340
+#define GPS_HEIGHT           363
+#define GPS_X                195
+#define GPS_Y                265
+#define CENTER_RADIUS        109
+#define NEEDLE_FB_MAX_WIDTH  188
+#define NEEDLE_FB_MAX_HEIGHT 9000
+#define NEEDLE_FB_XSTRIDE    752
 
 typedef struct
 {
-    //leImage * imgAst;
     uint16_t x;
     uint16_t y;
     uint16_t speed;
-} needleObj;    
-
+} needleObj;
 
 typedef enum
 {
@@ -44,14 +42,11 @@ typedef enum
     DRIVE_START,
     DRIVE_PROGRESS_ACCEL,
     DRIVE_PROGRESS_DECEL,
-
 } NEEDLE_STATE;
 
 typedef enum
 {
-    /* Application's state machine's initial state. */
     APP_STATE_INIT=0,
-    APP_STATE_SHOW_BASE,
     APP_STATE_INIT_NEEDLE_SHOW,
     APP_STATE_NEEDLE_TWIRL,
     APP_STATE_FADEOUT_ICON,
@@ -63,8 +58,6 @@ typedef enum
     APP_STATE_PAUSE,
     APP_STATE_REACHED,
     APP_STATE_LOOPBACK,
-    APP_STATE_IDLE
-
 } APP_STATES;
 
 enum class DIRECTION
@@ -92,13 +85,12 @@ typedef struct
 
 typedef struct
 {
-    /* The application's current state */
     APP_STATES state;
     NEEDLE_STATE nstate;
-
 } APP_DATA;
 
-typedef struct {
+typedef struct
+{
     int x;
     int y;
     int pan_h;
@@ -107,17 +99,14 @@ typedef struct {
 
 typedef struct
 {
-  frame_st frame_attr;
-  int angle;
+    frame_st frame_attr;
+    int angle;
 } pic_desc;
-
-
 
 extern std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
 extern std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 extern APP_DATA appData;
-extern pic_desc needles[121];
-
+extern const pic_desc needles[69];
 extern void updateNeedle(egt::detail::KMSOverlay* s, int index);
 extern void cp1stNeedle2Fb(char* fb);
 extern void cpNeedles2Fb(char* fb);

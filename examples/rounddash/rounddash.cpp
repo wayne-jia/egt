@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-
 #include "rounddash.h"
 #include "erawparse.h"
 #include "multiple_eraw.h"
@@ -14,18 +13,14 @@
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
 
-
 APP_DATA appData;
 static uint32_t prev_tick = 0, tick = 0;
 static uint32_t prev_sec_tick = 0, sec_tick = 0;
 static bool tick_start = false;
 static uint32_t sec2 = 0;
-static bool needles_stage2_cp_done = false;
-static bool needles_stage3_cp_done = false;
+static bool needles_init_done = false;
 static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
-
-
 
 int main(int argc, char** argv)
 {
@@ -39,13 +34,17 @@ int main(int argc, char** argv)
 
     ImageParse imgs("multiple_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
 
-    egt::Point centerCircle = egt::Point(180, 180);
-    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(9)), 0, 240, -40, 200, true);
-    needleWidget->move(egt::Point(0, 167));
+    egt::Point centerCircle = egt::Point(360, 360);
+    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(10)), 0, 136, 40, -45, 90, true);
+    needleWidget->move(egt::Point(360-180-CENTER_RADIUS, 360-(27/2)));
     needleWidget->needle_center(centerCircle - needleWidget->box().point());
     needleWidget->needle_point(centerCircle);
-    needleWidget->hide();
+    needleWidget->show();
     window.add(needleWidget);
+
+    auto img1stNeedle = std::make_shared<egt::ImageLabel>(window, egt::Image(imgs.GetImageObj(9)));
+    img1stNeedle->image_align(egt::AlignFlag::center);
+    img1stNeedle->move(egt::Point(157, 422));
 
     window.background(egt::Image(imgs.GetImageObj(0)));
     window.on_show([]()    
@@ -54,16 +53,13 @@ int main(int argc, char** argv)
     });
 
     ///============ Needle layer =============
-    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(157, 422, 188, 14065),
+    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(1000, 1000, NEEDLE_FB_MAX_WIDTH, NEEDLE_FB_MAX_HEIGHT),
                                                                egt::PixelFormat::argb8888,
                                                                egt::WindowHint::overlay,
                                                                1));
-
     OverlayWinVector[0]->fill_flags().clear();
     window.add(OverlayWinVector[0]);
     ///============ Needle  layer end =============
-
-
 
     ///============ GPS layer =============
     OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(GPS_X, GPS_Y, GPS_WIDTH, GPS_HEIGHT)));
@@ -87,25 +83,21 @@ int main(int argc, char** argv)
     lblInstru->font(egt::Font("Noto Sans", 21, egt::Font::Weight::normal));
     lblInstru->move(egt::Point(103, 278));
     GPSLabels.emplace_back(lblInstru);  //[0]
-
     ///============ GPS  layer end =============
-
 
     ///============ Blue layer =============
     OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(0, 0, MAX_WIDTH, MAX_HEIGHT),
                                                                egt::PixelFormat::argb8888,
                                                                egt::WindowHint::overlay,
                                                                1));
-
     window.add(OverlayWinVector[2]);
     OverlayWinVector[2]->fill_flags().clear();
-
     auto imgLblBlur = std::make_shared<egt::ImageLabel>(*OverlayWinVector[2], egt::Image(imgs.GetImageObj(4)));
     imgLblBlur->fill_flags().clear();
     imgLblBlur->image_align(egt::AlignFlag::center);
     ///============ Blue  layer end =============
 
-
+    // Create fade effect for OVR2 and HEO
     OverlayFade fade(OverlayWinVector, "ovr2_fade_in_10", OVERLAY_TYPE::LCDC_OVR_2, 0, 255, 10);
     fade.add("ovr2_fade_in_5", OVERLAY_TYPE::LCDC_OVR_2, 0, 255, 5);
     fade.add("ovr2_fade_out_10", OVERLAY_TYPE::LCDC_OVR_2, 255, 0, 10);
@@ -116,6 +108,7 @@ int main(int argc, char** argv)
     fade.add("ovrheo_fade_out_lit_10", OVERLAY_TYPE::LCDC_OVR_HEO, 255, 100, 10);
     fade.add("ovrheo_fade_in_lit_50", OVERLAY_TYPE::LCDC_OVR_HEO, 100, 255, 50);
 
+    // Init GPS widegt function
     auto initGPSwgt = [&OverlayWinVector, &imgs]()
     {
         auto lblSpdUnit = std::make_shared<egt::Label>(*OverlayWinVector[1], "km/h");
@@ -161,9 +154,10 @@ int main(int argc, char** argv)
         }
     };
 
+    // The pulse blue blur effect function
     auto pulseBlur = [&fade]()
     {
-        if(blur_alpha_high == true)
+        if (blur_alpha_high == true)
         {
             blur_alpha_high = false;
             fade.request("ovrheo_fade_out_lit_10");
@@ -188,34 +182,35 @@ int main(int argc, char** argv)
     window.add(btn);
 
     int idx = 0;
-    int xx = 50;
-    int yy = 50;
     btn.on_click([&](egt::Event&)
     {
+        
+        if (idx > 70)
+            idx = 0;
+
         std::cout << "idx:" << idx <<  std::endl;
-        updateNeedle(OverlayWinVector[0]->GetOverlay(), idx++);
-        // plane_set_pos(OverlayWinVector[0]->GetOverlay()->s(), 100+xx, 200);
-        // plane_set_pan_pos(OverlayWinVector[0]->GetOverlay()->s(), 0, 1004);
-        // plane_set_pan_size(OverlayWinVector[0]->GetOverlay()->s(), 188, 104);
-        // plane_apply(OverlayWinVector[0]->GetOverlay()->s());
-        // OverlayWinVector[0]->GetOverlay()->schedule_flip();
-  
-        xx += 5;
-        // yy++;
+        updateNeedle(OverlayWinVector[0]->GetOverlay(), idx);
+        idx++;
     });
 
-
     egt::Button btn2("Test generate");
-    btn2.move(egt::Point(500, 200));
+    btn2.move(egt::Point(500, 500));
     window.add(btn2);
 
     btn2.on_click([&](egt::Event&)
     {
-        for (auto i=0; i<241; i+=2)
+        for (auto i=0; i<137; i+=2)
             renderNeedles(i, needleWidget, OverlayWinVector[0]);
     });
 #endif
 
+    auto initNeedles = [&OverlayWinVector, &needleWidget]()
+    {
+        for (auto i=0; i<137; i+=2)
+            renderNeedles(i, needleWidget, OverlayWinVector[0]);
+    };
+
+    // One second periodic timer
     auto sec_timer = std::make_shared<egt::PeriodicTimer>(std::chrono::milliseconds(1000));
     sec_timer->on_timeout([](){ sec_tick++; });
 
@@ -231,18 +226,9 @@ int main(int argc, char** argv)
             case APP_STATE_INIT:
             {
                 sec_tick = 0;
-                
-                appData.state = APP_STATE_SHOW_BASE;
-                break;
-            }
-            case APP_STATE_SHOW_BASE:
-            {
-                //fade.request("ovr2_fade_in_10");
-                //fade.request("ovrheo_fade_in_10");
-                renderNeedles(0, needleWidget, OverlayWinVector[0]);
                 appData.state = APP_STATE_INIT_NEEDLE_SHOW;
                 break;
-            } 
+            }
             case APP_STATE_INIT_NEEDLE_SHOW:
             {
                 for (auto i=0; i<3; i++)
@@ -254,13 +240,13 @@ int main(int argc, char** argv)
             }
             case APP_STATE_NEEDLE_TWIRL:
             {
-                if (!needles_stage2_cp_done)
+                if (!needles_init_done)
                 {
-                    needles_stage2_cp_done = true;
-                    for (auto i=2; i<77; i+=2)
-                        renderNeedles(i, needleWidget, OverlayWinVector[0]);
+                    needles_init_done = true;
+                    initNeedles();
+                    img1stNeedle->hide();
                 }
-
+                
                 if (tick != prev_tick)
                 {
                     prev_tick = tick; 
@@ -286,8 +272,8 @@ int main(int argc, char** argv)
                     gpswgt_init_done = true;
                 }
 
-                if(sec_tick > 0)
-                {                               
+                if (sec_tick > 0)
+                {
                     sec_tick = 0;
                     fade.request("ovr2_fade_in_10");
                     tick = 0;
@@ -301,16 +287,14 @@ int main(int argc, char** argv)
                 if (tick > 45)
                 {
                     for (auto i=1; i<3; i++)
-                    {
                         GPSLabels[i]->show();
-                    }
                     appData.state = APP_STATE_SPEED_INIT3;
                 }  
                 break;
             }
             case APP_STATE_SPEED_INIT3:
             {
-                if(sec_tick > 1)
+                if (sec_tick > 1)
                 {
                     appData.nstate = DRIVE_START;
                     appData.state = APP_STATE_INIT_INPUT;
@@ -332,7 +316,7 @@ int main(int argc, char** argv)
                     prev_sec_tick = sec_tick; 
                     APP_ProcessMap();
                     checkNeedleAnime();
-                    if(sec2 > 1)
+                    if (sec2 > 1)
                     {
                         sec2 = 0;
                         pulseBlur();
@@ -344,7 +328,7 @@ int main(int argc, char** argv)
             {
                 sec_tick = 0;
                 appData.state = APP_STATE_REACHED;
-                if(blur_alpha_high==false)
+                if (blur_alpha_high==false)
                 {
                     blur_alpha_high = true;
                     fade.request("ovrheo_fade_in_lit_50");
@@ -353,13 +337,12 @@ int main(int argc, char** argv)
             }
             case APP_STATE_REACHED:
             {
-                if(sec_tick > 2 )
+                if (sec_tick > 2)
                 {
                     /* Reset the demo so we can restart everything */
                     sec_tick = 0;
                     fade.request("ovr2_fade_out_10");
                     fade.request("ovrheo_fade_out_10");
-
                     appData.state = APP_STATE_LOOPBACK;
                     showNavImg(0xFF);
                     OverlayWinVector[0]->hide();
@@ -368,43 +351,33 @@ int main(int argc, char** argv)
             }
             case APP_STATE_LOOPBACK:
             {
-                if(sec_tick > 2 )
+                if (sec_tick > 2)
                 {
                     GPSLabels[0]->text("DRIVE SAFE!");
                     imgLblLogo->show();
                     GPSLabels[2]->hide();
                     GPSLabels[1]->hide();
-                    appData.state = APP_STATE_SHOW_BASE;
+                    appData.state = APP_STATE_INIT_NEEDLE_SHOW;
                     sec_timer->stop();
                     tick_start = false;
                 }
                 break;
             }
-            case APP_STATE_IDLE:
-            {
-                break;
-            }
             default:
-            {
-
                 break;
-            }
         }
     });
     main_timer.start();
-
-
-    
     ///============ Main timer for state machine end =============
 
-    ///============ Touch event handler =============
-    
+    // Touch event handler
     window.on_event(handle_touch);
 
     window.show();
 
     auto ret = app.run();
 
+    // Destruction for application if needed
+
     return ret;
 }
-

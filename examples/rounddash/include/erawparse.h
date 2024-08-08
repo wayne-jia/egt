@@ -6,14 +6,38 @@
 #ifndef ERAWPARSE_H
 #define ERAWPARSE_H
 
-
 #include "eraw_define.h"
 #include "../../../src/detail/erawimage.h"
 
-
+/**
+ * Convert the PNG/JPG/SVG... to *eraw.bin and read by program can make 
+ * application boot fast, since there no need to decode PNG/JPG/SVG...
+ * 
+ * This class is to Parse the eraw.bin content to a list of cairo surface object.
+ *
+ * This is useful, for example, if you convert many png pictures by gfx-convert
+ * tool and want to use the png in EGT, you should create an ImageParse instant
+ * by ImageParse("path/to/eraw.bin", the_array_name, the_array_size); then in 
+ * the code, you will get a shared_cairo_surface_t type vector which contains
+ * a list of image objects. The object can be used directly by egt::Image(object).
+ *
+ * @b Example
+ * @code{.cpp}
+ * ImageParse imgs("stage1_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
+ * window.background(egt::Image(imgs.GetImageObj(0))); //Use the first image object as
+ *                                                     //the background picture.
+ * ...
+ * @endcode
+ */
 class ImageParse
 {
 public:
+
+    /**
+     * @param[in] filename The *eraw.bin file name.
+     * @param[in] array_head The array name in corresponding *eraw.h.
+     * @param[in] array_size The array size in corresponding *eraw.h.
+     */
     ImageParse(const char* filename, eraw_st* array_head, uint32_t array_size) noexcept
     {
         size_t buff_size = getFileSize(filename);
@@ -44,6 +68,9 @@ public:
         free(buff_ptr);
     }
 
+    /**
+     * @param[in] index The index of image vector.
+     */
     egt::shared_cairo_surface_t GetImageObj(uint32_t index)
     {
         assert(index < m_Images.size());
@@ -62,6 +89,5 @@ private:
         return statbuf.st_size;
     }
 };
-
 
 #endif

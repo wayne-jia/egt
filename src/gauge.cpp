@@ -50,10 +50,21 @@ NeedleLayer::NeedleLayer(const Image& image,
                          float angle_start,
                          float angle_stop,
                          bool clockwise) noexcept
+{
+    NeedleLayer(image, min, max, min, angle_start, angle_stop, clockwise);
+}
+
+NeedleLayer::NeedleLayer(const Image& image,
+                         float min,
+                         float max,
+                         float init_value,
+                         float angle_start,
+                         float angle_stop,
+                         bool clockwise) noexcept
     : GaugeLayer(image),
       m_min(min),
       m_max(max),
-      m_value(m_min),
+      m_value(init_value),
       m_angle_start(angle_start),
       m_angle_stop(angle_stop),
       m_clockwise(clockwise)
@@ -94,6 +105,7 @@ void NeedleLayer::draw(Painter& painter, const Rect&)
     auto angle = detail::normalize_to_angle(m_value, m_min, m_max,
                                             m_angle_start, m_angle_stop,
                                             m_clockwise);
+}
 
 void NeedleLayer::drawbuf(Painter& painter)
 {
