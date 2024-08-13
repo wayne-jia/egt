@@ -77,10 +77,13 @@ static void draw_image(Painter& painter,
                        const PointF& point,
                        const PointF& needle_center,
                        const Image& image,
-                       float angle)
+                       float angle,
+                       cairo_antialias_t antialias)
 {
     Painter::AutoSaveRestore sr(painter);
     auto cr = painter.context().get();
+
+    cairo_set_antialias(cr, antialias);
 
     painter.translate(point);
     painter.rotate(angle);
@@ -105,16 +108,19 @@ void NeedleLayer::draw(Painter& painter, const Rect&)
     auto angle = detail::normalize_to_angle(m_value, m_min, m_max,
                                             m_angle_start, m_angle_stop,
                                             m_clockwise);
+    
+    draw_image(painter, m_point,
+               m_center, m_image, detail::to_radians<float>(0, angle), CAIRO_ANTIALIAS_NONE);
 }
 
-void NeedleLayer::drawbuf(Painter& painter)
+void NeedleLayer::drawbuf(Painter& painter, cairo_antialias_t antialias)
 {
     auto angle = detail::normalize_to_angle(m_value, m_min, m_max,
                                             m_angle_start, m_angle_stop,
                                             m_clockwise);
-//std::cout << "drawbuf angle: " << angle << std::endl;
+
     draw_image(painter, m_point,
-               m_center, m_image, detail::to_radians<float>(0, angle));
+               m_center, m_image, detail::to_radians<float>(0, angle), antialias);
 
 }
 

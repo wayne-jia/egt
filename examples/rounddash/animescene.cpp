@@ -5,8 +5,10 @@
  */
 
 #include "rounddash.h"
+#include <sys/time.h>
 
 //#define GENERATE_NEEDLE_DESC_DATA
+//#define TIME_STATISTICS_ENABLE
 #define MAX_DIST_STRING_LEN      6
 #define MAX_DIST_TRVL_DIGITS     4
 #define DIST_TRAVEL_THRSH_KM     6
@@ -32,6 +34,12 @@ DIRECTION_STATUS directionStatus;
 static int lastX, lastY;
 uint8_t MAP_CNTR = 0, ANIME_CNTR=0;
 const float sec = 0.0166666666666667;
+static unsigned long len = 0;
+
+#ifdef TIME_STATISTICS_ENABLE
+static int timediff = 0;
+static struct timeval time1, time2;
+#endif
 
 struct needleAnime 
 {
@@ -51,70 +59,70 @@ const pic_desc needles[] = {
     {{133, 421, 144, 296}, 4},
     {{127, 418, 140, 440}, 6},
     {{121, 415, 135, 580}, 8},
-    {{116, 411, 131, 715}, 10},
+    {{115, 411, 131, 715}, 10},
     {{110, 408, 127, 846}, 12},
-    {{105, 405, 122, 973}, 14},
-    {{101, 401, 117, 1095}, 16},
-    {{96, 398, 112, 1212}, 18},
+    {{105, 404, 122, 973}, 14},
+    {{100, 401, 117, 1095}, 16},
+    {{96, 397, 112, 1212}, 18},
     {{92, 394, 107, 1324}, 20},
-    {{89, 390, 102, 1431}, 22},
-    {{85, 387, 97, 1533}, 24},
-    {{82, 383, 91, 1630}, 26},
-    {{80, 379, 86, 1721}, 28},
-    {{77, 376, 80, 1807}, 30},
-    {{75, 372, 74, 1887}, 32},
-    {{74, 368, 68, 1961}, 34},
-    {{72, 364, 63, 2029}, 36},
-    {{71, 360, 57, 2092}, 38},
-    {{71, 357, 51, 2149}, 40},
-    {{71, 353, 44, 2200}, 42},
-    {{71, 349, 38, 2244}, 44},
-    {{71, 344, 32, 2282}, 46},
-    {{71, 334, 35, 2314}, 48},
-    {{71, 324, 42, 2349}, 50},
-    {{71, 314, 48, 2391}, 52},
-    {{72, 304, 54, 2439}, 54},
-    {{73, 295, 59, 2493}, 56},
-    {{74, 285, 65, 2552}, 58},
-    {{76, 275, 73, 2617}, 60},
-    {{78, 266, 78, 2690}, 62},
-    {{81, 256, 84, 2768}, 64},
-    {{84, 247, 89, 2852}, 66},
-    {{87, 238, 95, 2941}, 68},
-    {{91, 229, 100, 3036}, 70},
-    {{95, 220, 105, 3136}, 72},
-    {{99, 211, 111, 3241}, 74},
-    {{103, 203, 115, 3352}, 76},
-    {{108, 195, 120, 3467}, 78},
-    {{113, 186, 125, 3587}, 80},
-    {{119, 179, 129, 3712}, 82},
-    {{124, 171, 134, 3841}, 84},
-    {{130, 163, 139, 3975}, 86},
-    {{136, 156, 142, 4114}, 88},
-    {{143, 149, 146, 4256}, 90},
-    {{150, 143, 149, 4402}, 92},
-    {{157, 136, 153, 4551}, 94},
-    {{164, 130, 157, 4704}, 96},
-    {{172, 124, 160, 4861}, 98},
-    {{179, 118, 163, 5021}, 100},
-    {{187, 113, 166, 5184}, 102},
-    {{195, 108, 168, 5350}, 104},
-    {{204, 103, 171, 5518}, 106},
-    {{212, 99, 173, 5689}, 108},
-    {{221, 95, 174, 5862}, 110},
-    {{230, 91, 176, 6036}, 112},
-    {{239, 87, 179, 6212}, 114},
-    {{248, 84, 180, 6391}, 116},
-    {{258, 81, 181, 6571}, 118},
-    {{267, 79, 181, 6752}, 120},
-    {{276, 77, 182, 6933}, 122},
-    {{286, 75, 183, 7115}, 124},
-    {{296, 74, 183, 7298}, 126},
-    {{306, 72, 183, 7481}, 128},
-    {{316, 72, 183, 7664}, 130},
-    {{326, 71, 183, 7847}, 132},
-    {{335, 71, 183, 8030}, 134},
-    {{346, 71, 182, 8213}, 136},
+    {{88, 390, 101, 1431}, 22},
+    {{85, 386, 96, 1532}, 24},
+    {{82, 383, 91, 1628}, 26},
+    {{79, 379, 85, 1719}, 28},
+    {{77, 375, 79, 1804}, 30},
+    {{75, 371, 74, 1883}, 32},
+    {{73, 368, 68, 1957}, 34},
+    {{72, 364, 61, 2025}, 36},
+    {{71, 360, 56, 2086}, 38},
+    {{71, 356, 50, 2142}, 40},
+    {{71, 352, 44, 2192}, 42},
+    {{71, 348, 38, 2236}, 44},
+    {{71, 342, 32, 2274}, 46},
+    {{71, 332, 37, 2306}, 48},
+    {{71, 322, 43, 2343}, 50},
+    {{71, 312, 49, 2386}, 52},
+    {{72, 302, 55, 2435}, 54},
+    {{73, 293, 60, 2490}, 56},
+    {{75, 283, 67, 2550}, 58},
+    {{77, 273, 74, 2617}, 60},
+    {{79, 264, 79, 2691}, 62},
+    {{82, 254, 85, 2770}, 64},
+    {{85, 245, 91, 2855}, 66},
+    {{88, 236, 96, 2946}, 68},
+    {{92, 227, 101, 3042}, 70},
+    {{96, 218, 106, 3143}, 72},
+    {{100, 209, 112, 3249}, 74},
+    {{105, 201, 116, 3361}, 76},
+    {{109, 192, 122, 3477}, 78},
+    {{115, 184, 126, 3599}, 80},
+    {{120, 176, 131, 3725}, 82},
+    {{126, 169, 135, 3856}, 84},
+    {{132, 161, 140, 3991}, 86},
+    {{139, 154, 143, 4131}, 88},
+    {{145, 147, 147, 4274}, 90},
+    {{152, 140, 151, 4421}, 92},
+    {{159, 134, 154, 4572}, 94},
+    {{167, 128, 158, 4726}, 96},
+    {{174, 122, 161, 4884}, 98},
+    {{182, 116, 164, 5045}, 100},
+    {{190, 111, 167, 5209}, 102},
+    {{199, 106, 169, 5376}, 104},
+    {{207, 101, 172, 5545}, 106},
+    {{216, 97, 174, 5717}, 108},
+    {{225, 93, 176, 5891}, 110},
+    {{234, 89, 178, 6067}, 112},
+    {{243, 86, 179, 6245}, 114},
+    {{252, 83, 180, 6424}, 116},
+    {{262, 80, 181, 6604}, 118},
+    {{271, 78, 182, 6785}, 120},
+    {{281, 76, 182, 6967}, 122},
+    {{291, 74, 183, 7149}, 124},
+    {{300, 73, 183, 7332}, 126},
+    {{310, 72, 183, 7515}, 128},
+    {{320, 71, 183, 7698}, 130},
+    {{330, 71, 183, 7881}, 132},
+    {{340, 71, 182, 8064}, 134},
+    {{347, 71, 182, 8246}, 136},
 };
 
 void APP_InitMap(void);
@@ -127,6 +135,7 @@ static inline int getNeedleAngle(int index)
     else
         return index * 2;
 }
+
 void updateNeedle(egt::detail::KMSOverlay* s, int index)
 {
     if (index > 68)
@@ -142,8 +151,10 @@ void renderNeedles(float val,
                    std::shared_ptr<egt::experimental::NeedleLayer> needleWidget, 
                    std::shared_ptr<OverlayWindow> needleLayer)
 {
-    static unsigned long len = 0;
-    
+#ifdef TIME_STATISTICS_ENABLE
+    gettimeofday(&time1, NULL);
+#endif
+
     egt::Rect rect = needleWidget->rot_rect(val);
     egt::Rect rect_orig = needleWidget->get_rect_orig();
 
@@ -151,10 +162,6 @@ void renderNeedles(float val,
     int crop_x = rect.x();
     int crop_y = rect.y();
     int crop_h = std::max(rect.height(), rect_orig.height());
-
-    //int xstride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, NEEDLE_FB_MAX_WIDTH);
-    //const auto angle = needleWidget->value2angle(val);
-    //int save_h = crop_h - CENTER_RADIUS * std::sin(angle);
 
 #ifdef GENERATE_NEEDLE_DESC_DATA
     static int pan_y = 0;
@@ -165,11 +172,11 @@ void renderNeedles(float val,
     ///--- draw the rotated needles in a canvas
     auto surface = egt::shared_cairo_surface_t(
                     cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                            2*(180+CENTER_RADIUS), 2*(180+CENTER_RADIUS)),
+                            2*(INIT_NEEDLE_WIDTH+CENTER_RADIUS), 2*(INIT_NEEDLE_WIDTH+CENTER_RADIUS)),
                     cairo_surface_destroy);
     auto cr = egt::shared_cairo_t(cairo_create(surface.get()), cairo_destroy);
     egt::Painter painter(cr);
-    needleWidget->drawbuf(painter);
+    needleWidget->drawbuf(painter, CAIRO_ANTIALIAS_GOOD);
 
     ///--- crop the needle to overlay FB
     auto overlay_surface = egt::shared_cairo_surface_t(
@@ -182,10 +189,15 @@ void renderNeedles(float val,
     cairo_set_source_surface(overlay_cr.get(), surface.get(), -crop_x, -crop_y);
     cairo_paint(overlay_cr.get());
 
-    //len += (NEEDLE_FB_MAX_WIDTH * crop_h * 4);
     len += NEEDLE_FB_XSTRIDE * crop_h;
-}
 
+#ifdef TIME_STATISTICS_ENABLE
+	int crop_w = std::max(rect.width(), rect_orig.width());
+    gettimeofday(&time2, NULL);
+    timediff = (time1.tv_sec < time2.tv_sec) ? (time2.tv_usec + 1000000 - time1.tv_usec) : (time2.tv_usec - time1.tv_usec);
+    std::cout << "angle: " << val << ", size: " << crop_w << "x" << crop_h << ", antialias-best time cost: " << timediff << " us" << std::endl;
+#endif
+}
 
 void APP_InitMap(void)
 {

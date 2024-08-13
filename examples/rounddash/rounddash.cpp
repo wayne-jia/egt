@@ -8,7 +8,7 @@
 #include "erawparse.h"
 #include "multiple_eraw.h"
 
-
+//#define HAND_GENERATE_NEEDLE
 
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
@@ -27,7 +27,7 @@ int main(int argc, char** argv)
     std::cout << std::endl << "EGT start" << std::endl; 
 
     std::vector<std::shared_ptr<OverlayWindow>> OverlayWinVector;
-    
+    std::shared_ptr<egt::Label> AAInidcator;
 
     egt::Application app(argc, argv);
     egt::TopWindow window;
@@ -35,11 +35,11 @@ int main(int argc, char** argv)
     ImageParse imgs("multiple_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
 
     egt::Point centerCircle = egt::Point(360, 360);
-    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(10)), 0, 136, 40, -45, 90, true);
-    needleWidget->move(egt::Point(360-180-CENTER_RADIUS, 360-(27/2)));
+    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(10)), 0, 240, 40, -45, 195, true);
+    needleWidget->move(egt::Point(360-INIT_NEEDLE_WIDTH-CENTER_RADIUS, 360-(INIT_NEEDLE_HEIGHT/2)));
     needleWidget->needle_center(centerCircle - needleWidget->box().point());
     needleWidget->needle_point(centerCircle);
-    needleWidget->show();
+    needleWidget->hide();
     window.add(needleWidget);
 
     auto img1stNeedle = std::make_shared<egt::ImageLabel>(window, egt::Image(imgs.GetImageObj(9)));
@@ -109,7 +109,7 @@ int main(int argc, char** argv)
     fade.add("ovrheo_fade_in_lit_50", OVERLAY_TYPE::LCDC_OVR_HEO, 100, 255, 50);
 
     // Init GPS widegt function
-    auto initGPSwgt = [&OverlayWinVector, &imgs]()
+    auto initGPSwgt = [&OverlayWinVector, &imgs, &AAInidcator]()
     {
         auto lblSpdUnit = std::make_shared<egt::Label>(*OverlayWinVector[1], "km/h");
         lblSpdUnit->color(egt::Palette::ColorId::label_text, egt::Palette::white);
@@ -117,6 +117,13 @@ int main(int argc, char** argv)
         lblSpdUnit->move(egt::Point(136, 120));
         lblSpdUnit->hide();
         GPSLabels.emplace_back(lblSpdUnit);   //[1]
+
+        AAInidcator = std::make_shared<egt::Label>(*OverlayWinVector[1], "AA-On");
+        AAInidcator->color(egt::Palette::ColorId::label_text, egt::Palette::green);
+        AAInidcator->font(egt::Font("Noto Sans", 40, egt::Font::Weight::bold));
+        AAInidcator->width(100);
+        AAInidcator->text_align(egt::AlignFlag::center);
+        AAInidcator->move(egt::Point(100, 2));
 
         auto lblSpd = std::make_shared<egt::Label>(*OverlayWinVector[1], "0");
         lblSpd->color(egt::Palette::ColorId::label_text, egt::Palette::white);
@@ -175,8 +182,7 @@ int main(int argc, char** argv)
         app.setup_inputs();
     };
 
-    
-#if 0
+#ifdef HAND_GENERATE_NEEDLE
     egt::Button btn("Test rotation");
     btn.move(egt::Point(500, 350));
     window.add(btn);
@@ -202,13 +208,13 @@ int main(int argc, char** argv)
         for (auto i=0; i<137; i+=2)
             renderNeedles(i, needleWidget, OverlayWinVector[0]);
     });
-#endif
-
+#else
     auto initNeedles = [&OverlayWinVector, &needleWidget]()
     {
         for (auto i=0; i<137; i+=2)
             renderNeedles(i, needleWidget, OverlayWinVector[0]);
     };
+#endif
 
     // One second periodic timer
     auto sec_timer = std::make_shared<egt::PeriodicTimer>(std::chrono::milliseconds(1000));
@@ -234,7 +240,11 @@ int main(int argc, char** argv)
                 for (auto i=0; i<3; i++)
                     OverlayWinVector[i]->show();
                 tick_start = true;
-                appData.state = APP_STATE_NEEDLE_TWIRL;   
+            #ifdef HAND_GENERATE_NEEDLE
+                appData.state = APP_STATE_FADEOUT_ICON;
+            #else
+                appData.state = APP_STATE_NEEDLE_TWIRL;
+            #endif
                 appData.nstate = TWIRL_ACCELERATE_START;
                 break;
             }
@@ -243,7 +253,11 @@ int main(int argc, char** argv)
                 if (!needles_init_done)
                 {
                     needles_init_done = true;
+                #ifndef HAND_GENERATE_NEEDLE
+                    std::cout << "begin rotating" << std::endl;
                     initNeedles();
+                    std::cout << "end rotating" << std::endl;
+                #endif
                     img1stNeedle->hide();
                 }
                 
@@ -304,6 +318,10 @@ int main(int argc, char** argv)
             case APP_STATE_INIT_INPUT:
             {
                 initLibInput();
+            #ifdef HAND_GENERATE_NEEDLE
+                main_timer.stop();
+                std::cout << "main timer stopped" << std::endl;
+            #endif
                 appData.state = APP_STATE_DRIVE;
                 break;
             }

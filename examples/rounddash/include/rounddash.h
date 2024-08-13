@@ -26,6 +26,8 @@
 #define NEEDLE_FB_MAX_WIDTH  188
 #define NEEDLE_FB_MAX_HEIGHT 9000
 #define NEEDLE_FB_XSTRIDE    752
+#define INIT_NEEDLE_WIDTH    180
+#define INIT_NEEDLE_HEIGHT   27
 
 typedef struct
 {

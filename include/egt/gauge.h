@@ -327,7 +327,13 @@ public:
 
     Rect rot_rect(float value);
     Rect get_rect_orig() { return m_rect_orig; }
-    void drawbuf(Painter& painter);
+    void drawbuf(Painter& painter, cairo_antialias_t antialias);
+    float value2angle(float value)
+    {
+        return detail::to_radians(0.0f, detail::normalize_to_angle(value, m_min, m_max,
+                                          m_angle_start, m_angle_stop,
+                                          m_clockwise));
+    }
 
 protected:
 
