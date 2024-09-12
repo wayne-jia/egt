@@ -35,7 +35,8 @@ int main(int argc, char** argv)
     ImageParse imgs("multiple_eraw.bin", Speedo_table, sizeof(Speedo_table)/sizeof(eraw_st));
 
     egt::Point centerCircle = egt::Point(360, 360);
-    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(10)), 0, 240, 40, -45, 195, true);
+    auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(10)), 0, 240, -45, 195, true);
+    needleWidget->set_value(40);
     needleWidget->move(egt::Point(360-INIT_NEEDLE_WIDTH-CENTER_RADIUS, 360-(INIT_NEEDLE_HEIGHT/2)));
     needleWidget->needle_center(centerCircle - needleWidget->box().point());
     needleWidget->needle_point(centerCircle);

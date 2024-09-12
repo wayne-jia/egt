@@ -141,23 +141,6 @@ public:
                          float angle_stop = 360,
                          bool clockwise = true) noexcept;
 
-    /**
-     * @param[in] image The image for the layer.
-     * @param[in] min The min value.
-     * @param[in] max The max value.
-     * @param[in] init_value The initialized value.
-     * @param[in] angle_start The starting angle of the needle.
-     * @param[in] angle_stop The stop angle of the needle.
-     * @param[in] clockwise Rotation is clockwise.
-     */
-    explicit NeedleLayer(const Image& image,
-                         float min,
-                         float max,
-                         float init_value,
-                         float angle_start = 0,
-                         float angle_stop = 360,
-                         bool clockwise = true) noexcept;
-
     void draw(Painter& painter, const Rect& rect) override;
 
     /**
@@ -328,6 +311,7 @@ public:
     Rect rot_rect(float value);
     Rect get_rect_orig() { return m_rect_orig; }
     void drawbuf(Painter& painter, cairo_antialias_t antialias);
+    void set_value(float value) { m_value = value; }
     float value2angle(float value)
     {
         return detail::to_radians(0.0f, detail::normalize_to_angle(value, m_min, m_max,

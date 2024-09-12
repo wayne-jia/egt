@@ -50,21 +50,9 @@ NeedleLayer::NeedleLayer(const Image& image,
                          float angle_start,
                          float angle_stop,
                          bool clockwise) noexcept
-{
-    NeedleLayer(image, min, max, min, angle_start, angle_stop, clockwise);
-}
-
-NeedleLayer::NeedleLayer(const Image& image,
-                         float min,
-                         float max,
-                         float init_value,
-                         float angle_start,
-                         float angle_stop,
-                         bool clockwise) noexcept
     : GaugeLayer(image),
       m_min(min),
       m_max(max),
-      m_value(init_value),
       m_angle_start(angle_start),
       m_angle_stop(angle_stop),
       m_clockwise(clockwise)

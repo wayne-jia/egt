@@ -3,8 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#ifndef __bkgrd_H__
-#define __bkgrd_H__
+#ifndef __NEEDLEDASH_ERAW_H__
+#define __NEEDLEDASH_ERAW_H__
 
 #include "eraw_define.h"
 

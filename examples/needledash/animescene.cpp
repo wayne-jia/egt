@@ -154,11 +154,11 @@ void renderNeedles(float val,
     ///--- draw the rotated needles in a canvas
     auto surface = egt::shared_cairo_surface_t(
                     cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                            NEEDLE_WIDTH*2, NEEDLE_WIDTH*2),
+                            NEEDLE_WIDTH*2+12, NEEDLE_WIDTH*2+12),
                     cairo_surface_destroy);
     auto cr = egt::shared_cairo_t(cairo_create(surface.get()), cairo_destroy);
     egt::Painter painter(cr);
-    needleWidget->drawbuf(painter);
+    needleWidget->drawbuf(painter, CAIRO_ANTIALIAS_GOOD);
 
     ///--- crop the needle to overlay FB
     auto overlay_surface = egt::shared_cairo_surface_t(

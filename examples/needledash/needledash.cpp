@@ -6,7 +6,7 @@
 
 #include "needledash.h"
 #include "erawparse.h"
-#include "multiple_eraw.h"
+#include "needledash_eraw.h"
 
 
 
@@ -39,7 +39,7 @@ int main(int argc, char** argv)
     needleWidget->move(egt::Point(NEEDLE_CENTER_X-NEEDLE_WIDTH+NEEDLE_HEIGHT/2, NEEDLE_CENTER_Y-NEEDLE_HEIGHT/2));
     needleWidget->needle_center(centerCircle - needleWidget->box().point());
     needleWidget->needle_point(centerCircle);
-    needleWidget->show();
+    needleWidget->hide();
     window.add(needleWidget);
 
     auto img1stNeedle = std::make_shared<egt::ImageLabel>(window, egt::Image(imgs.GetImageObj(1)));
@@ -188,7 +188,7 @@ int main(int argc, char** argv)
     int idx = 0;
     btn.on_click([&](egt::Event&)
     {
-        
+        img1stNeedle->hide();
         if (idx > 55)
             idx = 0;
 
