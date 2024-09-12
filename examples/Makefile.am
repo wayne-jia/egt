@@ -28,6 +28,7 @@ CUSTOM_CXXFLAGS = \
 	-isystem $(top_srcdir)/external/rapidxml \
 	-isystem $(top_srcdir)/external/cxxopts/include \
 	-isystem $(top_srcdir)/examples/rounddash/include \
+	-isystem $(top_srcdir)/examples/needledash/include \
 	$(cairo_CFLAGS) \
 	$(CODE_COVERAGE_CXXFLAGS)
 
@@ -56,7 +57,8 @@ widgets/widgets
 
 if HAVE_LIBPLANES
 bin_PROGRAMS += \
-rounddash/rounddash
+rounddash/rounddash \
+needledash/needledash
 endif
 
 if HAVE_LUA
@@ -120,6 +122,14 @@ rounddash_rounddash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 rounddash_rounddashdir = $(prefix)/share/egt/examples/rounddash
 dist_rounddash_rounddash_DATA = $(wildcard $(top_srcdir)/examples/rounddash/images/*.png)
 rounddash_rounddash_LDFLAGS = $(AM_LDFLAGS)
+
+needledash_needledash_SOURCES = needledash/needledash.cpp needledash/animescene.cpp needledash/lcdcoverlay.cpp
+needledash_needledash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+	-DEXAMPLEDATA=\"$(datadir)/egt/examples/needledash\"
+needledash_needledash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+needledash_needledashdir = $(prefix)/share/egt/examples/needledash
+dist_needledash_needledash_DATA = $(wildcard $(top_srcdir)/examples/needledash/images/*.png)
+needledash_needledash_LDFLAGS = $(AM_LDFLAGS)
 
 audioplayer_audioplayer_SOURCES = audioplayer/audioplayer.cpp
 audioplayer_audioplayer_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
