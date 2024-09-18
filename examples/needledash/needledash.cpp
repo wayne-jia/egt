@@ -200,11 +200,33 @@ int main(int argc, char** argv)
     egt::Button btn2("Test generate");
     btn2.move(egt::Point(650, 150));
     window.add(btn2);
+    bool gene_done = false;
 
     btn2.on_click([&](egt::Event&)
     {
+        if (gene_done)
+            return;
         for (auto i=0; i<111; i+=2)
             renderNeedles(i, needleWidget, OverlayWinVector[0]);
+        std::cout << "needles generated done" << std::endl;
+        gene_done = true;
+    });
+
+    egt::Button btn3("Test x-mirror");
+    btn3.move(egt::Point(650, 260));
+    window.add(btn3);
+    int rotangle = 0;
+    btn3.on_click([&](egt::Event&)
+    {
+        auto s = OverlayWinVector[0]->GetOverlay();
+        plane_set_pos(s->s(), needles[26].frame_attr.x, needles[26].frame_attr.y);
+        plane_set_pan_pos(s->s(), 0, needles[26].frame_attr.pan_y);
+        plane_set_pan_size(s->s(), NEEDLE_FB_MAX_WIDTH, needles[26].frame_attr.pan_h);
+        //std::cout << "rotate angle:" << rotangle << std::endl;
+        plane_apply_rotate(s->s(), rotangle);
+        plane_apply(s->s());
+        s->schedule_flip();
+        rotangle = (rotangle > 450) ? 0 : rotangle + 90;
     });
 #endif
 

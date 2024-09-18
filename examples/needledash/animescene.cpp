@@ -10,6 +10,8 @@
 #define MAX_DIST_STRING_LEN      6
 #define MAX_DIST_TRVL_DIGITS     4
 #define DIST_TRAVEL_THRSH_KM     6
+#define GET_MIRROR_INDEX(index) ((index) - 2 * ((index) - 55))
+
 
 const float totDist = 213;
 float travlDist = 0;
@@ -101,7 +103,7 @@ const pic_desc needles[] = {
     {{368, 118, 204, 6461}, 104},
     {{374, 118, 204, 6665}, 106},
     {{381, 118, 203, 6869}, 108},
-    {{388, 118, 203, 7072}, 110},
+    {{388, 118, 203, 7072}, 110},  //index:55, 90°
 };
 
 void APP_InitMap(void);
@@ -109,17 +111,23 @@ void updateMapLocation(void);
 
 static inline int getNeedleAngle(int index)
 {
-    if (index < 69)
+    if (index < 56)
         return needles[index].angle;
     else
-        return index * 2;
+        return 110 + 2 * (index - 55);   // mirror index
 }
 
 void updateNeedle(egt::detail::KMSOverlay* s, int index)
 {
-    if (index > 68)
-        index = 68 * 2 - index;
-    plane_set_pos(s->s(), needles[index].frame_attr.x, needles[index].frame_attr.y);
+    int x = needles[index].frame_attr.x;
+    if (index > 55)
+    {
+        index = GET_MIRROR_INDEX(index);
+        x = 592 - x; // x` = Cx - x - pan_w + Cx; Cx: the center x=400, pan_w=NEEDLE_FB_MAX_WIDTH
+        plane_set_rotate(s->s(), 360);  // 360: X-Mirror; 450: Y-Mirror
+    }
+
+    plane_set_pos(s->s(), x, needles[index].frame_attr.y);
     plane_set_pan_pos(s->s(), 0, needles[index].frame_attr.pan_y);
     plane_set_pan_size(s->s(), NEEDLE_FB_MAX_WIDTH, needles[index].frame_attr.pan_h);
     plane_apply(s->s());

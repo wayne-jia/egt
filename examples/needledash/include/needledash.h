@@ -110,7 +110,7 @@ typedef struct
 extern std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
 extern std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 extern APP_DATA appData;
-extern const pic_desc needles[69];
+extern const pic_desc needles[56];
 extern void updateNeedle(egt::detail::KMSOverlay* s, int index);
 extern void cp1stNeedle2Fb(char* fb);
 extern void cpNeedles2Fb(char* fb);
