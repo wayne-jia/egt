@@ -183,6 +183,47 @@ void renderNeedles(float val,
     len += NEEDLE_FB_XSTRIDE * crop_h;
 }
 
+#if 1
+void  drawArc(std::shared_ptr<OverlayWindow> overlay, int value)
+{
+    auto overlay_surface = egt::shared_cairo_surface_t(
+                                cairo_image_surface_create_for_data(static_cast<unsigned char*>(overlay->GetOverlay()->raw()),
+                                CAIRO_FORMAT_ARGB32,
+                                480, 480,
+                                1920),
+                                cairo_surface_destroy);
+    auto overlay_cr = egt::shared_cairo_t(cairo_create(overlay_surface.get()), cairo_destroy);
+    //egt::Painter painter(overlay_cr);
+
+// int xstride = cairo_format_stride_for_width(CAIRO_FORMAT_ARGB32, 480);
+// std::cout << "xstride: " << xstride << std::endl;
+
+    float linew = 70;
+    float radius = 190;
+    auto angle1 = egt::detail::to_radians<float>(0.0f, 0.0f);
+
+    auto angle2 = egt::detail::to_radians<float>(0.0f,
+                                            egt::detail::normalize_to_angle(static_cast<float>(value),
+                                            0.0f, 360.0f, 0.0f, 360.0f, true));
+
+    //painter.line_width(linew);
+    cairo_set_line_width(overlay_cr.get(), linew);
+    //painter.set(egt::Color(egt::Palette::black, 255));
+    cairo_set_source_rgba(overlay_cr.get(), 0.0f, 0.0f, 0.0f, 0.8f);
+    std::cout << "arc alpha: 0.8" << std::endl;
+    //painter.draw(egt::Arc(egt::Point(240, 240), radius, angle1, angle2));
+    cairo_arc(overlay_cr.get(), 240, 240, radius, angle1, angle2);
+    //painter.paint(0);
+    //painter.stroke();
+    //cairo_stroke(overlay_cr.get());
+    cairo_stroke_preserve(overlay_cr.get());
+    //cairo_fill(overlay_cr.get());
+    //cairo_paint(overlay_cr.get());
+    //cairo_paint_with_alpha(overlay_cr.get(), 0.5f);
+    //cairo_surface_flush(overlay_surface.get());
+    overlay->GetOverlay()->schedule_flip();
+}
+#endif
 
 void APP_InitMap(void)
 {

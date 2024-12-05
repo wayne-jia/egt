@@ -6,8 +6,7 @@
 
 #include "needledash.h"
 #include "erawparse.h"
-#include "needledash_eraw.h"
-
+#include "needle_eraw.h"
 
 
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
@@ -31,8 +30,9 @@ int main(int argc, char** argv)
     egt::Application app(argc, argv);
     egt::TopWindow window;
 
-    ImageParse imgs("multiple_eraw.bin", bkgrd_table, sizeof(bkgrd_table)/sizeof(eraw_st));
+    ImageParse imgs("multiple_eraw.bin", back_table, sizeof(back_table)/sizeof(eraw_st));
 
+#if 0
     egt::Point centerCircle = egt::Point(NEEDLE_CENTER_X, NEEDLE_CENTER_Y);
     auto needleWidget = std::make_shared<egt::experimental::NeedleLayer>(egt::Image(imgs.GetImageObj(2)), 0, 110, -20, 90, true);
     needleWidget->set_value(20);
@@ -45,8 +45,12 @@ int main(int argc, char** argv)
     auto img1stNeedle = std::make_shared<egt::ImageLabel>(window, egt::Image(imgs.GetImageObj(1)));
     img1stNeedle->image_align(egt::AlignFlag::center);
     img1stNeedle->move(egt::Point(221, 296));
+#endif
 
-    window.background(egt::Image(imgs.GetImageObj(0)));
+    //window.background(egt::Image(imgs.GetImageObj(0)));
+    auto imgBG = std::make_shared<egt::ImageLabel>(window, egt::Image(imgs.GetImageObj(0)));
+    imgBG->image_align(egt::AlignFlag::center);
+    imgBG->move(egt::Point(0, 0));
     window.on_show([]()    
     {        
         std::cout << std::endl << "EGT show" << std::endl;    
@@ -61,12 +65,28 @@ int main(int argc, char** argv)
     window.add(OverlayWinVector[0]);
     ///============ Needle  layer end =============
 
-#if 0
+
     ///============ GPS layer =============
-    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(GPS_X, GPS_Y, GPS_WIDTH, GPS_HEIGHT)));
+    OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(0, 0, 480, 480),
+                                                               egt::PixelFormat::argb8888,
+                                                               egt::WindowHint::overlay,
+                                                               1));
     OverlayWinVector[1]->fill_flags().clear();
     window.add(OverlayWinVector[1]);
+    OverlayWinVector[1]->show();
 
+    auto imgLblFront = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(1)));
+    imgLblFront->image_align(egt::AlignFlag::center);
+    imgLblFront->move(egt::Point(0, 0));
+
+    // auto speed_follower = std::make_shared<MySpinProgress>(egt::Rect(0, 0, 480, 480));
+    // OverlayWinVector[1]->add(speed_follower);
+
+
+
+	//speed_follower->color(egt::Palette::ColorId::button_fg, egt::Palette::GroupId::normal, egt::Palette::transparent);
+
+#if 0
     auto imgLblLogobg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(1)));
     imgLblLogobg->image_align(egt::AlignFlag::center);
     imgLblLogobg->move(egt::Point(76, 48));
@@ -180,7 +200,21 @@ int main(int argc, char** argv)
 
     initLibInput();
 
-#if 1
+    egt::Button btn("Draw Arc");
+    btn.move(egt::Point(650, 50));
+    window.add(btn);
+
+    int v = 0;
+    btn.on_click([&](egt::Event&)
+    {
+        std::cout << "v: " << v << std::endl;
+        drawArc(OverlayWinVector[1], v);
+        //speed_follower->value(v);
+        v = v > 350 ? 0 : v + 8;
+    });
+
+
+#if 0
     egt::Button btn("Test rotation");
     btn.move(egt::Point(650, 50));
     window.add(btn);

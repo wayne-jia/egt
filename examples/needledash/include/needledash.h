@@ -24,7 +24,7 @@
 #define GPS_Y                265
 //#define CENTER_RADIUS        109
 #define NEEDLE_FB_MAX_WIDTH  208
-#define NEEDLE_FB_MAX_HEIGHT 10000
+#define NEEDLE_FB_MAX_HEIGHT 100
 #define NEEDLE_FB_XSTRIDE    832
 #define NEEDLE_CENTER_X      400
 #define NEEDLE_CENTER_Y      308
@@ -122,5 +122,47 @@ extern void handle_touch(egt::Event & event);
 extern void renderNeedles(float val, 
                    std::shared_ptr<egt::experimental::NeedleLayer> needleWidget, 
                    std::shared_ptr<OverlayWindow> needleLayer);
+extern void drawArc(std::shared_ptr<OverlayWindow> overlay, int value);
+
+class MySpinProgress : public egt::SpinProgress
+{
+public:
+	explicit MySpinProgress(const egt::Rect& rect,
+                            int start = 0, int end = 180, int value = 0) noexcept
+        : egt::SpinProgress(rect, start, end, value)
+	{}
+	void draw( egt::Painter& painter, const egt::Rect& rect) override
+	{
+		 Mydefault_draw(*this, painter, rect);
+	}
+
+private:
+	void  Mydefault_draw(egt::SpinProgressType<int>& widget, egt::Painter& painter, const egt::Rect& rect)
+    {
+		egt::detail::ignoreparam(rect);
+
+        auto b = widget.content_area();
+
+        auto dim = std::min(b.width(), b.height());
+        float linew = 10; dim / 5.0f;
+        float radius = 200; dim / 2.0f - (linew / 2.0f);
+        auto angle1 = egt::detail::to_radians<float>(180, 0);
+
+        auto min = std::min(widget.starting(), widget.ending());
+        auto max = std::max(widget.starting(), widget.ending());
+        auto angle2 = egt::detail::to_radians<float>(180.0f,
+                                                egt::detail::normalize_to_angle(static_cast<float>(widget.value()),
+                                                static_cast<float>(min), static_cast<float>(max), 0.0f, 360.0f, true));
+
+		painter.line_width(linew);
+        std::cout << "linew: " << linew << " radius: " << radius << " angle1: " << angle1 << " angle2: " << angle2 << std::endl;
+	    //painter.set(egt::Color(egt::Palette::black, 255));
+        painter.set(egt::Color(egt::Palette::red, 245));
+        
+        painter.draw(egt::Arc(widget.center(), radius, angle1, angle2));
+        //painter.paint(0);
+        painter.stroke();
+    }
+};
 
 #endif
