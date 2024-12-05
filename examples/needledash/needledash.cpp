@@ -56,6 +56,14 @@ int main(int argc, char** argv)
         std::cout << std::endl << "EGT show" << std::endl;    
     });
 
+    auto lblEGT = std::make_shared<egt::Label>(window, "EGT Draw Arc transparently\n\n\nBlack meter is on baselayer\n"
+                                                        "Green meter is on OVR1\nDraw arc on OVR1\nArc erased green meter"
+                                                        "\nBlack meter is seen");
+    lblEGT->color(egt::Palette::ColorId::label_text, egt::Palette::black);
+    lblEGT->font(egt::Font("Noto Sans", 21, egt::Font::Weight::bold));
+    lblEGT->move(egt::Point(485, 120));
+    lblEGT->show();
+
     ///============ Needle layer =============
     OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(1000, 1000, NEEDLE_FB_MAX_WIDTH, NEEDLE_FB_MAX_HEIGHT),
                                                                egt::PixelFormat::argb8888,
@@ -81,8 +89,6 @@ int main(int argc, char** argv)
 
     // auto speed_follower = std::make_shared<MySpinProgress>(egt::Rect(0, 0, 480, 480));
     // OverlayWinVector[1]->add(speed_follower);
-
-
 
 	//speed_follower->color(egt::Palette::ColorId::button_fg, egt::Palette::GroupId::normal, egt::Palette::transparent);
 
@@ -201,16 +207,23 @@ int main(int argc, char** argv)
     initLibInput();
 
     egt::Button btn("Draw Arc");
-    btn.move(egt::Point(650, 50));
+    btn.move(egt::Point(600, 400));
     window.add(btn);
 
-    int v = 0;
+
+    int start = 32;
+    int end = start + 4;
     btn.on_click([&](egt::Event&)
     {
-        std::cout << "v: " << v << std::endl;
-        drawArc(OverlayWinVector[1], v);
-        //speed_follower->value(v);
-        v = v > 350 ? 0 : v + 8;
+        std::cout << "end: " << end << std::endl;
+        drawArc(OverlayWinVector[1], start, end);
+        start = end;
+        end += 4;
+        if (end > 392)
+        {
+            start = 0;
+            end = start + 4;
+        }
     });
 
 

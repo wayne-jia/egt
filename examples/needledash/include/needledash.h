@@ -122,7 +122,7 @@ extern void handle_touch(egt::Event & event);
 extern void renderNeedles(float val, 
                    std::shared_ptr<egt::experimental::NeedleLayer> needleWidget, 
                    std::shared_ptr<OverlayWindow> needleLayer);
-extern void drawArc(std::shared_ptr<OverlayWindow> overlay, int value);
+extern void drawArc(std::shared_ptr<OverlayWindow> overlay, int start, int end);
 
 class MySpinProgress : public egt::SpinProgress
 {
