@@ -54,7 +54,20 @@ typedef enum
     APP_STATE_PAUSE,
     APP_STATE_REACHED,
     APP_STATE_LOOPBACK,
+    APP_STATE_IDLE,
 } APP_STATES;
+
+typedef enum
+{
+    BLE_NONE=0,
+    BLE_QUIT_CALL_SMS,
+    BLE_CALL_IN,
+    BLE_CALL_BLINKING,
+    BLE_CALL_ANSWERED,
+    BLE_SMS_IN,
+    BLE_SMS_BLINKING,
+    BLE_SMS_SHOW,
+} BLE_STATE;
 
 enum class DIRECTION
 {
@@ -83,6 +96,7 @@ typedef struct
 {
     APP_STATES state;
     NEEDLE_STATE nstate;
+    BLE_STATE blestate;
 } APP_DATA;
 
 typedef struct

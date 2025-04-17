@@ -113,7 +113,8 @@ endif
 EXTRA_DIST =
 CLEANFILES =
 
-rounddash_rounddash_SOURCES = rounddash/rounddash.cpp rounddash/animescene.cpp rounddash/lcdcoverlay.cpp
+rounddash_rounddash_SOURCES = rounddash/rounddash.cpp rounddash/animescene.cpp \
+	rounddash/lcdcoverlay.cpp rounddash/uartFunc.cpp rounddash/bleDevice.cpp
 rounddash_rounddash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
 	-DEXAMPLEDATA=\"$(datadir)/egt/examples/rounddash\"
 rounddash_rounddash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)

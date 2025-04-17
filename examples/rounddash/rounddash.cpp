@@ -9,6 +9,7 @@
 #include "stage1_eraw.h"
 #include "stage2_eraw.h"
 #include "stage3_eraw.h"
+#include "ble_eraw.h"
 
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
@@ -22,10 +23,184 @@ static bool needles_stage2_cp_done = false;
 static bool needles_stage3_cp_done = false;
 static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
+static APP_STATES app_last_state = APP_STATE_IDLE;
+
+#define ENABLE_UART
+
+#ifdef ENABLE_UART
+#include "uartFunc.h"
+
+#define REFRESH_PERIOD		            500
+#define STR_BLE_NOTY_INCOMING_CALL		"You have an incoming call."
+#define STR_BLE_NOTY_REMOVE_CALL 		"An incoming call has been removed."
+#define STR_BLE_NOTY_RETRIVE_DETAIL		"BLE_ANCS_EVT_NTFY_ATTR_IND."
+#define STR_BLE_NOTY_ANSWER_CALL		"Answer the incoming call:"
+#define STR_BLE_NOTY_RETRIEVE_SOCIAL	"want to retrieve a social message"
+#define STR_BLE_NOTY_MISSED_CALL		"You have a missed call"
+
+typedef enum __BLE_STATE_MACHONE__
+{
+	BLE_NOTY_NONE = 0,
+	BLE_NOTY_INCOMING_CALL,		// new call coming
+	BLE_NOTY_REMOVE_CALL,		// call was cancelled by caller
+	BLE_NOTY_RETRIEVE_DETAIL,	// retrieve caller detail
+	BLE_NOTY_ANSWER_CALL,		// answer call
+	BLE_NOTY_SOCIAL_MEDIA,		// retrieve social media
+	BLE_NOTY_MISSED_CALL,		// missed call
+} BLE_NOTIFICATION;
+
+typedef struct __BLE_CALLER_INFO__
+{
+	char caller_number[32];
+	char msg[512];
+	char date[32];
+} BLE_CALLER_INFO, *pBLE_CALLER_INFO;
+
+#define RECEIVE_BUFFER_SIZE	1024
+
+void debug_buffer(char *buf, int len)
+{
+	for(int i=0; i<len; i++)
+	{
+		printf("%02X ", buf[i]);
+	}
+	
+	printf("\n\r");
+	
+	for(int i=0; i<len; i++)
+	{
+		printf("%c", buf[i]);
+	}
+	
+	printf("\n\r");
+
+}
+
+int ble_get_caller_detail(char *buf, int length, pBLE_CALLER_INFO caller_info)
+{
+	int i;
+	int last_line_pos = -1;
+	int index = 0;
+
+	for(i=0; i<length; i++)
+	{
+		if( buf[i] == 0x0A )
+		{
+			switch( index )
+			{
+				case 0:	// BLE_ANCS_EVT_NTFY_ATTR_IND
+					break;
+				
+				case 1:	// title
+					memcpy(caller_info->caller_number, buf+(last_line_pos+1+9), i-last_line_pos-1-9);
+					caller_info->caller_number[i-last_line_pos-1-9] = 0;
+					break;
+					
+				case 2:	// sybtitle
+					break;
+					
+				case 3:	// msg
+					memcpy(caller_info->msg, buf+(last_line_pos+1+7), i-last_line_pos-1-7);
+					caller_info->msg[i-last_line_pos-1-7] = 0;
+					break;
+					
+				case 4:	// date
+					memcpy(caller_info->date, buf+(last_line_pos+1+8), i-last_line_pos-1-8);
+					caller_info->date[i-last_line_pos-1-8] = 0;
+					break;
+					
+				default:
+					break;
+			}
+		
+			last_line_pos = i;	
+			index++;
+		}
+	}
+	
+	return 0;
+}
+
+BLE_NOTIFICATION ble_identity_notification(char *buf, int length)
+{
+	int index;
+	
+	if( strstr(buf, STR_BLE_NOTY_INCOMING_CALL) != NULL )
+	{
+		return BLE_NOTY_INCOMING_CALL;
+	}
+	else if( strstr(buf, STR_BLE_NOTY_REMOVE_CALL) != NULL )
+	{
+		return BLE_NOTY_REMOVE_CALL;
+	}
+	else if( strstr(buf, STR_BLE_NOTY_RETRIVE_DETAIL) != NULL )
+	{
+		return BLE_NOTY_RETRIEVE_DETAIL;
+	}
+	else if( strstr(buf, STR_BLE_NOTY_ANSWER_CALL) != NULL )
+	{
+		return BLE_NOTY_ANSWER_CALL;
+	}
+	else if( strstr(buf, STR_BLE_NOTY_RETRIEVE_SOCIAL) != NULL )
+	{
+		return BLE_NOTY_SOCIAL_MEDIA;
+	}
+	else if( strstr(buf, STR_BLE_NOTY_MISSED_CALL) != NULL )
+	{
+		return BLE_NOTY_MISSED_CALL;
+	}
+	
+	return BLE_NOTY_NONE;
+}
+
+char recBuff[RECEIVE_BUFFER_SIZE];
+char cmdBuff[RECEIVE_BUFFER_SIZE];	
+
+#endif // end of ENABLE_UART
+
 
 int main(int argc, char** argv)
 {
     std::cout << std::endl << "EGT start" << std::endl; 
+
+
+#ifdef ENABLE_UART
+    bool isCalling = false;
+    bool isAnswered = false;
+    bool isSMS = false;
+    bool isReject = false;
+    int refresh_count = 0;
+
+	struct pollfd pollUartfds;
+	int nread;
+	
+	BLE_NOTIFICATION ble_no;
+	BLE_CALLER_INFO caller_info;
+	
+	if( argc != 2 )
+	{
+		std::cout << "USAGE: uart_transmit UART_PORT" << std::endl;
+		return -1;
+	}
+	
+	int fdUart;
+	fdUart = uartOpen(argv[1]);
+	uartSetSpeed(fdUart, 115200);
+
+	if (uartSetParity(fdUart,8,1,'N') == -1)
+	{
+		printf("Set Parity Error\n");
+		return -1;
+	}
+	else
+	{
+		printf("%s connected\r\n", argv[1]);
+	}
+	
+	pollUartfds.fd = fdUart;
+	pollUartfds.events = POLLRDNORM;
+#endif	// end of ENABLE_UART
+
 
     std::vector<std::shared_ptr<OverlayWindow>> OverlayWinVector;
     std::vector<std::shared_ptr<egt::ImageLabel>> ImgNeedlesVector;
@@ -47,6 +222,8 @@ int main(int argc, char** argv)
                                                                egt::WindowHint::overlay,
                                                                1));
     OverlayWinVector[0]->fill_flags().clear();
+    //OverlayWinVector[0]->disable();
+
     auto imgN0 = std::make_shared<egt::ImageLabel>(*OverlayWinVector[0], egt::Image(imgs.GetImageObj(9)));
     imgN0->image_align(egt::AlignFlag::center);
     imgN0->move(egt::Point(0, 0));
@@ -56,7 +233,8 @@ int main(int argc, char** argv)
     ///============ GPS layer =============
     OverlayWinVector.emplace_back(std::make_shared<OverlayWindow>(egt::Rect(GPS_X, GPS_Y, GPS_WIDTH, GPS_HEIGHT)));
     OverlayWinVector[1]->fill_flags().clear();
-    window.add(OverlayWinVector[1]);
+    //window.add(OverlayWinVector[1]);
+    //OverlayWinVector[1]->disable();
 
     auto imgLblLogobg = std::make_shared<egt::ImageLabel>(*OverlayWinVector[1], egt::Image(imgs.GetImageObj(1)));
     imgLblLogobg->image_align(egt::AlignFlag::center);
@@ -83,11 +261,86 @@ int main(int argc, char** argv)
                                                                egt::WindowHint::overlay,
                                                                1));
     window.add(OverlayWinVector[2]);
+    //OverlayWinVector[2]->disable();
     OverlayWinVector[2]->fill_flags().clear();
     auto imgLblBlur = std::make_shared<egt::ImageLabel>(*OverlayWinVector[2], egt::Image(imgs.GetImageObj(4)));
     imgLblBlur->fill_flags().clear();
     imgLblBlur->image_align(egt::AlignFlag::center);
     ///============ Blue  layer end =============
+
+#ifdef ENABLE_UART
+    ImageParse bleimgs("ble_eraw.bin", accept_table, sizeof(accept_table)/sizeof(eraw_st));
+    auto imgBtnaccept = std::make_shared<egt::ImageButton>(window, egt::Image(bleimgs.GetImageObj(0)));
+    imgBtnaccept->image_align(egt::AlignFlag::center);
+    imgBtnaccept->move(egt::Point(GPS_X+56, GPS_Y+249));
+    imgBtnaccept->hide();
+    imgBtnaccept->on_click([&](egt::Event&)
+    {
+        if( isCalling )
+		{
+			std::cout << "Accpet..." << std::endl;		
+			strcpy(cmdBuff, "Y\n\r");
+			write(fdUart, cmdBuff, 3);
+			
+			isAnswered = true;
+			isCalling = false;
+			appData.blestate = BLE_CALL_ANSWERED;
+		}
+    });
+
+    auto imgLblble = std::make_shared<egt::ImageLabel>(window, egt::Image(bleimgs.GetImageObj(1)));
+    imgLblble->image_align(egt::AlignFlag::center);
+    imgLblble->move(egt::Point(MAX_WIDTH / 2 - 32, 184));
+
+    auto imgLblcall = std::make_shared<egt::ImageLabel>(window, egt::Image(bleimgs.GetImageObj(2)));
+    imgLblcall->image_align(egt::AlignFlag::center);
+    imgLblcall->move_to_center();
+    imgLblcall->hide();
+
+    auto imgBtnreject = std::make_shared<egt::ImageButton>(window, egt::Image(bleimgs.GetImageObj(3)));
+    imgBtnreject->image_align(egt::AlignFlag::center);
+    imgBtnreject->move(egt::Point(GPS_X+56+127, GPS_Y+249));
+    imgBtnreject->hide();
+    imgBtnreject->on_click([&](egt::Event&)
+    {
+        if( isCalling || isAnswered)
+		{
+			std::cout << "Reject..." << std::endl;		
+			strcpy(cmdBuff, "N\n\r");
+			write(fdUart, cmdBuff, 3);
+			
+			isReject = true;
+            appData.blestate = BLE_QUIT_CALL_SMS;		
+		}
+    });
+
+    auto imgLblsms = std::make_shared<egt::ImageLabel>(window, egt::Image(bleimgs.GetImageObj(4)));
+    imgLblsms->image_align(egt::AlignFlag::center);
+    imgLblsms->move_to_center();
+    imgLblsms->hide();
+
+    auto lblCaller = std::make_shared<egt::Label>(window, "???");
+    lblCaller->color(egt::Palette::ColorId::label_text, egt::Palette::white);
+    lblCaller->font(egt::Font("Noto Sans TC", 23, egt::Font::Weight::bold));
+    lblCaller->x(MAX_WIDTH/2 - lblCaller->width()/2);
+    lblCaller->y(GPS_Y+199);
+    lblCaller->hide();
+
+    //auto panSMS = std::make_shared<egt::Label>(window, "");
+    auto lblSMS = std::make_shared<egt::Label>(window, "The Microchip Graphics Suite Linux, \n"
+                                                       "formely known as The Ensemble Graphics Toolkit (EGT),\n"
+                                                       "is a free and open-source C++ GUI widget toolkit for\n"
+                                                       "Microchip AT91/SAMA5 microprocessors. It is used to\n"
+                                                       "develop graphical embedded Linux applications.");
+    lblSMS->text_align(egt::AlignFlag::center);
+    lblSMS->resize(egt::Size(460, 310));
+    lblSMS->move_to_center();
+    lblSMS->color(egt::Palette::ColorId::label_text, egt::Palette::white);
+    lblSMS->color(egt::Palette::ColorId::label_bg, egt::Palette::grey);
+    lblSMS->font(egt::Font("Noto Sans TC", 28, egt::Font::Weight::bold));
+    lblSMS->fill_flags(egt::Theme::FillFlag::blend);
+    lblSMS->hide();
+#endif
 
     // Create fade effect for OVR2 and HEO
     OverlayFade fade(OverlayWinVector, "ovr2_fade_in_10", OVERLAY_TYPE::LCDC_OVR_2, 0, 255, 10);
@@ -201,6 +454,167 @@ int main(int argc, char** argv)
     egt::PeriodicTimer main_timer(std::chrono::milliseconds(1));
     main_timer.on_timeout([&]() 
     {
+#ifdef ENABLE_UART    
+		if( 0 < poll(&pollUartfds, 1, 0) )
+		{
+			// check if any data came from UART
+			if( (nread = read(fdUart, recBuff, 512)) >0)
+			{
+                //std::cout << "read byte: " << nread << std::endl;
+				debug_buffer(recBuff, nread);
+				
+				ble_no = ble_identity_notification(recBuff, nread);
+				switch( ble_no )
+				{
+					case BLE_NOTY_INCOMING_CALL:
+						strcpy(cmdBuff, "Y\n\r");
+						write(fdUart, cmdBuff, 3);
+                        isCalling = true;
+						break;
+						
+					case BLE_NOTY_REMOVE_CALL:
+                        isCalling = false;
+                        appData.blestate = BLE_QUIT_CALL_SMS;
+						break;
+
+                    case BLE_NOTY_MISSED_CALL:
+                        //isCalling = false;
+                        //appData.blestate = BLE_QUIT_CALL_SMS;
+						break;
+					
+					case BLE_NOTY_RETRIEVE_DETAIL:
+                        //std::cout << "get detail" << std::endl;
+						ble_get_caller_detail(recBuff, nread, &caller_info);
+						printf("Caller: %s\r\n", caller_info.caller_number);
+						printf("MSG: %s\r\n", caller_info.msg);
+						printf("Date: %s\r\n", caller_info.date);
+						
+						strcpy(cmdBuff, "Y\n\r");
+						write(fdUart, cmdBuff, 3);
+                        if (isCalling)
+                            appData.blestate = BLE_CALL_IN;
+                        // else if (isSMS)
+                        //     appData.blestate = BLE_SMS_IN;
+						break;
+						
+					case BLE_NOTY_ANSWER_CALL:
+                        
+						break;
+						
+					case BLE_NOTY_SOCIAL_MEDIA:
+                        if( !isReject )
+                        {
+                            printf("BLE_NOTY_SOCIAL_MEDIA\n\r");
+                            strcpy(cmdBuff, "Y\n\r");
+                            write(fdUart, cmdBuff, 3);
+                            isSMS = true;
+                        }
+                        else
+                        {
+                            isReject = false;
+                        }
+						break;
+						
+					default:
+						break;
+				}
+			
+				memset(recBuff, 0, RECEIVE_BUFFER_SIZE);
+			}
+    	}
+
+        switch (appData.blestate)
+        {
+            case BLE_QUIT_CALL_SMS:
+            {
+                imgBtnaccept->hide();
+                imgLblcall->hide();
+                imgBtnreject->hide();
+                imgLblsms->hide();
+                lblCaller->hide();
+                refresh_count = 0;
+                OverlayWinVector[1]->show();
+                appData.blestate = BLE_NONE;
+                //appData.state = app_last_state;
+                break;
+            }
+            case BLE_CALL_IN:
+            {
+                std::cout << "go to BLE_CALL_IN" << std::endl;
+                OverlayWinVector[1]->hide();
+                imgBtnaccept->show();
+                imgBtnreject->show();
+                lblCaller->text(caller_info.caller_number);
+                lblCaller->show();
+                appData.blestate = BLE_CALL_BLINKING;
+                break;
+            }
+            case BLE_CALL_BLINKING:
+            {
+                if( REFRESH_PERIOD <= refresh_count )
+                {
+                    imgLblcall->visible_toggle();
+                    refresh_count = 0;
+                }
+                
+                refresh_count++;
+                break;
+            }
+            case BLE_CALL_ANSWERED:
+            {
+                imgBtnaccept->hide();
+                imgLblcall->show();
+                appData.blestate = BLE_NONE;
+                //app_last_state = appData.state;
+                //appData.state = APP_STATE_IDLE;
+                break;
+            }
+            case BLE_SMS_IN:
+            {
+                OverlayWinVector[1]->hide();
+                lblCaller->text(caller_info.caller_number);
+                lblCaller->show();
+                appData.blestate = BLE_SMS_BLINKING;
+                break;
+            }
+            case BLE_SMS_BLINKING:
+            {
+                if( REFRESH_PERIOD <= refresh_count )
+                    imgLblsms->visible_toggle();
+                
+                refresh_count++;
+
+                if( refresh_count >= REFRESH_PERIOD * 12 )
+                {
+                    isSMS = false;
+                    refresh_count = 0;
+                    appData.blestate = BLE_SMS_SHOW;
+                }
+                break;
+            }
+            case BLE_SMS_SHOW:
+            {
+                OverlayWinVector[1]->hide();
+                lblSMS->show();
+                refresh_count++;
+
+                if( refresh_count >= REFRESH_PERIOD * 32 )
+                    appData.blestate = BLE_QUIT_CALL_SMS;
+
+                break;
+            }
+            case BLE_NONE:
+            {
+                break;
+            }
+            default:
+            {
+                break;
+            }
+        }
+#endif // end of ENABLE_UART   
+
+
         if (tick_start)
             tick++;
 
@@ -351,6 +765,8 @@ int main(int argc, char** argv)
                 }
                 break;
             }
+            case APP_STATE_IDLE:
+                break;
             default:
                 break;
         }
