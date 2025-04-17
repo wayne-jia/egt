@@ -23,6 +23,7 @@ static bool needles_stage2_cp_done = false;
 static bool needles_stage3_cp_done = false;
 static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
+static bool udev_init_done = false;
 static APP_STATES app_last_state = APP_STATE_IDLE;
 
 #define ENABLE_UART
@@ -182,23 +183,8 @@ int main(int argc, char** argv)
 		std::cout << "USAGE: uart_transmit UART_PORT" << std::endl;
 		return -1;
 	}
-	
-	int fdUart;
-	fdUart = uartOpen(argv[1]);
-	uartSetSpeed(fdUart, 115200);
-
-	if (uartSetParity(fdUart,8,1,'N') == -1)
-	{
-		printf("Set Parity Error\n");
-		return -1;
-	}
-	else
-	{
-		printf("%s connected\r\n", argv[1]);
-	}
-	
-	pollUartfds.fd = fdUart;
 	pollUartfds.events = POLLRDNORM;
+	
 #endif	// end of ENABLE_UART
 
 
@@ -280,7 +266,7 @@ int main(int argc, char** argv)
 		{
 			std::cout << "Accpet..." << std::endl;		
 			strcpy(cmdBuff, "Y\n\r");
-			write(fdUart, cmdBuff, 3);
+			write(pollUartfds.fd, cmdBuff, 3);
 			
 			isAnswered = true;
 			isCalling = false;
@@ -307,7 +293,7 @@ int main(int argc, char** argv)
 		{
 			std::cout << "Reject..." << std::endl;		
 			strcpy(cmdBuff, "N\n\r");
-			write(fdUart, cmdBuff, 3);
+			write(pollUartfds.fd, cmdBuff, 3);
 			
 			isReject = true;
             appData.blestate = BLE_QUIT_CALL_SMS;		
@@ -440,10 +426,34 @@ int main(int argc, char** argv)
         }
     };
 
-    auto initLibInput = [&app]()
+    auto initLibInput = [&app
+#ifdef ENABLE_UART
+        ,&pollUartfds, &argv
+#endif
+    ]()
     {
+        if (!udev_init_done)
+            udev_init_done = true;
+        else
+            return;
+
         std::cout << std::endl << "Enable libinput in app" << std::endl;
         app.setup_inputs();
+
+#ifdef ENABLE_UART
+        pollUartfds.fd = uartOpen(argv[1]);
+        uartSetSpeed(pollUartfds.fd, 115200);
+
+        if (uartSetParity(pollUartfds.fd,8,1,'N') == -1)
+        {
+            printf("Set Parity Error\n");
+            return;
+        }
+        else
+        {
+            printf("%s connected\r\n", argv[1]);
+        }
+#endif
     };
 
     // One second periodic timer
@@ -458,7 +468,7 @@ int main(int argc, char** argv)
 		if( 0 < poll(&pollUartfds, 1, 0) )
 		{
 			// check if any data came from UART
-			if( (nread = read(fdUart, recBuff, 512)) >0)
+			if( (nread = read(pollUartfds.fd, recBuff, 512)) >0)
 			{
                 //std::cout << "read byte: " << nread << std::endl;
 				debug_buffer(recBuff, nread);
@@ -468,7 +478,7 @@ int main(int argc, char** argv)
 				{
 					case BLE_NOTY_INCOMING_CALL:
 						strcpy(cmdBuff, "Y\n\r");
-						write(fdUart, cmdBuff, 3);
+						write(pollUartfds.fd, cmdBuff, 3);
                         isCalling = true;
 						break;
 						
@@ -490,7 +500,7 @@ int main(int argc, char** argv)
 						printf("Date: %s\r\n", caller_info.date);
 						
 						strcpy(cmdBuff, "Y\n\r");
-						write(fdUart, cmdBuff, 3);
+						write(pollUartfds.fd, cmdBuff, 3);
                         if (isCalling)
                             appData.blestate = BLE_CALL_IN;
                         // else if (isSMS)
@@ -506,7 +516,7 @@ int main(int argc, char** argv)
                         {
                             printf("BLE_NOTY_SOCIAL_MEDIA\n\r");
                             strcpy(cmdBuff, "Y\n\r");
-                            write(fdUart, cmdBuff, 3);
+                            write(pollUartfds.fd, cmdBuff, 3);
                             isSMS = true;
                         }
                         else
