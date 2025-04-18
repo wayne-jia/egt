@@ -305,9 +305,9 @@ int main(int argc, char** argv)
     imgLblsms->move_to_center();
     imgLblsms->hide();
 
-    auto lblCaller = std::make_shared<egt::Label>(window, "???");
+    auto lblCaller = std::make_shared<egt::Label>(window, "Microchip MGS");
     lblCaller->color(egt::Palette::ColorId::label_text, egt::Palette::white);
-    lblCaller->font(egt::Font("Noto Sans TC", 23, egt::Font::Weight::bold));
+    lblCaller->font(egt::Font("Noto Sans CJK TC", 23, egt::Font::Weight::bold));
     lblCaller->x(MAX_WIDTH/2 - lblCaller->width()/2);
     lblCaller->y(GPS_Y+199);
     lblCaller->hide();
@@ -323,7 +323,7 @@ int main(int argc, char** argv)
     lblSMS->move_to_center();
     lblSMS->color(egt::Palette::ColorId::label_text, egt::Palette::white);
     lblSMS->color(egt::Palette::ColorId::label_bg, egt::Palette::grey);
-    lblSMS->font(egt::Font("Noto Sans TC", 28, egt::Font::Weight::bold));
+    lblSMS->font(egt::Font("Noto Sans CJK TC", 28, egt::Font::Weight::bold));
     lblSMS->fill_flags(egt::Theme::FillFlag::blend);
     lblSMS->hide();
 #endif
@@ -550,7 +550,6 @@ int main(int argc, char** argv)
             }
             case BLE_CALL_IN:
             {
-                std::cout << "go to BLE_CALL_IN" << std::endl;
                 OverlayWinVector[1]->hide();
                 imgBtnaccept->show();
                 imgBtnreject->show();
