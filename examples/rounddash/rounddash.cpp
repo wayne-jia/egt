@@ -11,6 +11,10 @@
 #include "stage3_eraw.h"
 #include "ble_eraw.h"
 
+#define START_X  210
+#define START_Y  -200
+#define END_Y    260
+
 std::vector<std::shared_ptr<egt::Label>> GPSLabels;
 std::vector<std::shared_ptr<egt::ImageLabel>> GPSImgIndicators;
 
@@ -25,6 +29,7 @@ static bool gpswgt_init_done = false;
 static bool blur_alpha_high = true;
 static bool udev_init_done = false;
 static APP_STATES app_last_state = APP_STATE_IDLE;
+static bool stop_needle = false;
 
 #define ENABLE_UART
 
@@ -305,27 +310,66 @@ int main(int argc, char** argv)
     imgLblsms->move_to_center();
     imgLblsms->hide();
 
+    auto notifyFrm = std::make_shared<egt::Frame>();
+    notifyFrm->resize(egt::Size(300, 200));
+    notifyFrm->x(START_X);
+    notifyFrm->y(START_Y);
+    notifyFrm->border(2);
+    notifyFrm->border_radius(16);
+    notifyFrm->color(egt::Palette::ColorId::bg, egt::Color(0x9896aa96), egt::Palette::GroupId::normal);
+    notifyFrm->color(egt::Palette::ColorId::border, egt::Color(0x9896aa96), egt::Palette::GroupId::normal);
+    notifyFrm->fill_flags(egt::Theme::FillFlag::blend);
+    window.add(notifyFrm);
+
+    egt::BoxSizer vsizer(egt::Orientation::vertical,
+        egt::Justification::justify);
+    notifyFrm->add(vsizer);
+    vsizer.align(egt::AlignFlag::center_horizontal);
+    vsizer.padding(50);
+
     auto lblCaller = std::make_shared<egt::Label>(window, "Microchip MGS");
     lblCaller->color(egt::Palette::ColorId::label_text, egt::Palette::white);
-    lblCaller->font(egt::Font("Noto Sans CJK TC", 23, egt::Font::Weight::bold));
+    lblCaller->font(egt::Font("Noto Sans CJK TC", 25, egt::Font::Weight::bold));
     lblCaller->x(MAX_WIDTH/2 - lblCaller->width()/2);
     lblCaller->y(GPS_Y+199);
     lblCaller->hide();
 
-    //auto panSMS = std::make_shared<egt::Label>(window, "");
-    auto lblSMS = std::make_shared<egt::Label>(window, "The Microchip Graphics Suite Linux, \n"
-                                                       "formely known as The Ensemble Graphics Toolkit (EGT),\n"
-                                                       "is a free and open-source C++ GUI widget toolkit for\n"
-                                                       "Microchip AT91/SAMA5 microprocessors. It is used to\n"
-                                                       "develop graphical embedded Linux applications.");
-    lblSMS->text_align(egt::AlignFlag::center);
-    lblSMS->resize(egt::Size(460, 310));
-    lblSMS->move_to_center();
-    lblSMS->color(egt::Palette::ColorId::label_text, egt::Palette::white);
-    lblSMS->color(egt::Palette::ColorId::label_bg, egt::Palette::grey);
-    lblSMS->font(egt::Font("Noto Sans CJK TC", 28, egt::Font::Weight::bold));
-    lblSMS->fill_flags(egt::Theme::FillFlag::blend);
-    lblSMS->hide();
+    auto lblCallerMSG = std::make_shared<egt::Label>("Microchip MGS");
+    lblCallerMSG->color(egt::Palette::ColorId::label_text, egt::Palette::white);
+    lblCallerMSG->font(egt::Font("Noto Sans CJK TC", 25, egt::Font::Weight::bold));
+    vsizer.add(egt::center(lblCallerMSG));
+
+    auto lblMSG = std::make_shared<egt::Label>("未接來電");
+    lblMSG->color(egt::Palette::ColorId::label_text, egt::Palette::white);
+    lblMSG->font(egt::Font("Noto Sans CJK TC", 20, egt::Font::Weight::bold));
+    vsizer.add(egt::center(lblMSG));
+
+    auto in = std::make_shared<egt::PropertyAnimator>(START_Y, END_Y,
+        std::chrono::seconds(3),
+        egt::easing_exponential_easeout);
+    in->on_change([&notifyFrm](int value)
+    {
+        notifyFrm->y(value);
+    });
+
+    auto out = std::make_shared<egt::PropertyAnimator>(END_Y, START_Y,
+            std::chrono::seconds(3),
+            egt::easing_exponential_easeout);
+    out->reverse(true);
+    out->on_change([&notifyFrm, &imgLblBlur](int value)
+    {
+        notifyFrm->y(value);
+        if (value == START_Y) {
+            appData.blestate = BLE_QUIT_CALL_SMS;
+
+        }
+    });
+
+    auto delay = std::make_shared<egt::AnimationDelay>(std::chrono::seconds(2));
+    auto sequence = std::make_shared<egt::AnimationSequence>(false);
+    sequence->add(in);
+    sequence->add(out);
+    sequence->add(delay);
 #endif
 
     // Create fade effect for OVR2 and HEO
@@ -488,8 +532,7 @@ int main(int argc, char** argv)
 						break;
 
                     case BLE_NOTY_MISSED_CALL:
-                        //isCalling = false;
-                        //appData.blestate = BLE_QUIT_CALL_SMS;
+                        appData.blestate = BLE_MISSED_CALL;
 						break;
 					
 					case BLE_NOTY_RETRIEVE_DETAIL:
@@ -543,6 +586,7 @@ int main(int argc, char** argv)
                 imgLblsms->hide();
                 lblCaller->hide();
                 refresh_count = 0;
+                stop_needle = false;
                 OverlayWinVector[1]->show();
                 appData.blestate = BLE_NONE;
                 //appData.state = app_last_state;
@@ -554,6 +598,7 @@ int main(int argc, char** argv)
                 imgBtnaccept->show();
                 imgBtnreject->show();
                 lblCaller->text(caller_info.caller_number);
+                lblCallerMSG->text(caller_info.caller_number);
                 lblCaller->show();
                 appData.blestate = BLE_CALL_BLINKING;
                 break;
@@ -582,6 +627,7 @@ int main(int argc, char** argv)
             {
                 OverlayWinVector[1]->hide();
                 lblCaller->text(caller_info.caller_number);
+                lblCallerMSG->text(caller_info.caller_number);
                 lblCaller->show();
                 appData.blestate = BLE_SMS_BLINKING;
                 break;
@@ -604,12 +650,21 @@ int main(int argc, char** argv)
             case BLE_SMS_SHOW:
             {
                 OverlayWinVector[1]->hide();
-                lblSMS->show();
+                //sequence->start();
                 refresh_count++;
 
                 if( refresh_count >= REFRESH_PERIOD * 32 )
                     appData.blestate = BLE_QUIT_CALL_SMS;
 
+                break;
+            }
+            case BLE_MISSED_CALL:
+            {
+                stop_needle = true;
+                OverlayWinVector[0]->hide();
+                OverlayWinVector[1]->hide();
+                sequence->start();
+                appData.blestate = BLE_NONE;
                 break;
             }
             case BLE_NONE:
@@ -649,12 +704,15 @@ int main(int argc, char** argv)
                 if (!needles_stage2_cp_done)
                 {
                     initStage2Needles();
+                    imgN0->x(1000);
+                    imgN0->hide();
                     needles_stage2_cp_done = true;
                 }
                 
                 if (tick != prev_tick)
                 {               
                     prev_tick = tick; 
+                    if (!stop_needle)
                     APP_ProcessNeedle(OverlayWinVector[0]->GetOverlay());
                 }
                 break;
@@ -720,6 +778,9 @@ int main(int argc, char** argv)
             }
             case APP_STATE_DRIVE:
             {
+                if (stop_needle)
+                    break;
+
                 APP_ProcessNeedle(OverlayWinVector[0]->GetOverlay());
                 if (sec_tick != prev_sec_tick)
                 {   

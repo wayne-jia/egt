@@ -67,6 +67,7 @@ typedef enum
     BLE_SMS_IN,
     BLE_SMS_BLINKING,
     BLE_SMS_SHOW,
+    BLE_MISSED_CALL,
 } BLE_STATE;
 
 enum class DIRECTION
