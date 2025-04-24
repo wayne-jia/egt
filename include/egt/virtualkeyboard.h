@@ -213,6 +213,8 @@ public:
      */
     void key_space(unsigned key_space);
 
+    void dispatch(Event event) { m_in.dispatch(event); }
+
 protected:
     /**
      * Internal representation of a panel i.e. a set of keys organized by rows.

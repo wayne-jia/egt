@@ -359,13 +359,17 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
     m_hsizer.add(expand(m_top_bottom_button));
 
     m_close_button.margin(5);
-    m_close_button.on_event([this, y_keyboard_position](Event&)
+    m_close_button.on_event([this, y_keyboard_position, &keyboard](Event&)
     {
         hide();
         // By default, the virtual keyboard is displayed at the bottom of the screen.
         move(Point(0, y_keyboard_position));
         m_top_bottom_button.image(Image("res:internal_arrow_up"));
         m_bottom_positionned = true;
+
+        Event down(EventId::keyboard_down);
+        down.key().keycode = EKEY_USER1;
+        keyboard->dispatch(down);
     }, {EventId::pointer_click});
     m_hsizer.add(expand(m_close_button));
 
