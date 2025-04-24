@@ -3,13 +3,14 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "detail/cairoabstraction.h"
 #include "detail/dump.h"
-#include "egt/canvas.h"
 #include "egt/detail/filesystem.h"
 #include "egt/detail/meta.h"
 #include "egt/resource.h"
 #include "egt/respath.h"
 #include "egt/svgimage.h"
+#define RSVG_DISABLE_DEPRECATION_WARNINGS /* for rsvg_handle_get_dimensions() */
 #include <librsvg/rsvg.h>
 
 namespace egt
@@ -17,9 +18,14 @@ namespace egt
 inline namespace v1
 {
 
+struct RsvgHandle_deleter
+{
+    void operator()(RsvgHandle* handle) { g_object_unref(handle); }
+};
+
 struct SvgImage::SvgImpl
 {
-    std::shared_ptr<RsvgHandle> rsvg;
+    std::unique_ptr<RsvgHandle, RsvgHandle_deleter> rsvg;
     RsvgDimensionData dim{};
 };
 
@@ -61,25 +67,19 @@ RectF SvgImage::id_box(const std::string& id) const
         auto hfactor = s.width() / m_impl->dim.width;
         auto vfactor = s.height() / m_impl->dim.height;
 
-        RsvgPositionData pos;
-        if (rsvg_handle_get_position_sub(m_impl->rsvg.get(), &pos, id.c_str()))
-        {
-            result.point(PointF(pos.x * hfactor, pos.y * vfactor));
-        }
+        RsvgRectangle viewport;
+        viewport.x = 0;
+        viewport.y = 0;
+        viewport.width = 1;
+        viewport.height = 1;
 
-        RsvgDimensionData dim{};
-        if (rsvg_handle_get_dimensions_sub(m_impl->rsvg.get(), &dim, id.c_str()))
+        RsvgRectangle ink_r;
+        if (rsvg_handle_get_geometry_for_layer(m_impl->rsvg.get(), id.c_str(),
+                                               &viewport, &ink_r, nullptr,
+                                               nullptr))
         {
-            /*
-             * This +1 here in both dimensions is a hack of a workaround.  The
-             * existing API in librsvg uses integers for position and dimension
-             * data.  Of course this is a problem because the SVG can have
-             * floating point values.  They fixed this in around 2.46 of librsvg
-             * with a new API.
-             *
-             * See https://gitlab.gnome.org/GNOME/librsvg/blob/master/librsvg/rsvg.h#L208
-             */
-            result.size(SizeF((dim.em + 1) * hfactor, (dim.ex + 1) * vfactor));
+            result.point(PointF(ink_r.x * hfactor, ink_r.y * vfactor));
+            result.size(SizeF(ink_r.width * hfactor, ink_r.height * vfactor));
         }
     }
 
@@ -126,6 +126,7 @@ SizeF SvgImage::size() const
 
 void SvgImage::load()
 {
+    RsvgHandle* handle = nullptr;
     std::string path;
     auto type = detail::resolve_path(m_uri, path);
 
@@ -137,18 +138,13 @@ void SvgImage::load()
         if (!data)
             throw std::runtime_error("resource not found: " + path);
 
-        auto handle = rsvg_handle_new_from_data(data,
-                                                ResourceManager::instance().size(path.c_str()),
-                                                nullptr);
+        handle = rsvg_handle_new_from_data(data,
+                                           ResourceManager::instance().size(path.c_str()),
+                                           nullptr);
 
         if (!handle)
             throw std::runtime_error("unable to load svg resource: " + m_uri);
 
-        m_impl->rsvg = std::shared_ptr<RsvgHandle>(handle,
-        [](RsvgHandle * r) { g_object_unref(r); });
-
-        // this is a somewhat expensive operation, so do it once
-        rsvg_handle_get_dimensions(m_impl->rsvg.get(), &m_impl->dim);
         break;
     }
     case detail::SchemeType::filesystem:
@@ -156,16 +152,11 @@ void SvgImage::load()
         if (!detail::exists(path))
             throw std::runtime_error("file not found: " + path);
 
-        auto handle = rsvg_handle_new_from_file(path.c_str(), nullptr);
+        handle = rsvg_handle_new_from_file(path.c_str(), nullptr);
 
         if (!handle)
             throw std::runtime_error("unable to load svg file: " + m_uri);
 
-        m_impl->rsvg = std::shared_ptr<RsvgHandle>(handle,
-        [](RsvgHandle * r) { g_object_unref(r); });
-
-        // this is a somewhat expensive operation, so do it once
-        rsvg_handle_get_dimensions(m_impl->rsvg.get(), &m_impl->dim);
         break;
     }
     default:
@@ -173,16 +164,41 @@ void SvgImage::load()
         throw std::runtime_error("unsupported uri: " + m_uri);
     }
     }
+
+    m_impl->rsvg.reset(handle);
+
+    /*
+     * rsvg_handle_get_intrinsic_size_in_pixels() is not able to extract the
+     * size in pixels directly from the intrinsic dimensions of the SVG document
+     * if the `width` or `height` are in percentage units (or if they do not
+     * exist, in which case the SVG spec mandates that they default to 100%),
+     * whereas `rsvg_handle_get_dimensions()` is.
+     *
+     * This is a somewhat expensive operation, so do it once.
+     */
+    rsvg_handle_get_dimensions(m_impl->rsvg.get(), &m_impl->dim);
 }
 
-shared_cairo_surface_t SvgImage::do_render(const std::string& id, const RectF& rect) const
+Surface SvgImage::do_render(const std::string& id, const RectF& rect) const
 {
     auto s = size();
+
+    RsvgRectangle viewport;
+    viewport.x = 0;
+    viewport.y = 0;
+    viewport.width = s.width();
+    viewport.height = s.height();
+
     if (!rect.empty())
         s = rect.size();
 
-    Canvas canvas(s);
-    auto cr = canvas.context().get();
+    s.width(std::ceil(s.width()));
+    s.height(std::ceil(s.height()));
+
+    Surface surface(s);
+    surface.zero(); /* librsvg assumes a zeroed memory. */
+    unique_cairo_t context(cairo_create(surface.impl()));
+    auto cr = context.get();
 
     detail::code_timer(false, "render " + id + ": ", [&]()
     {
@@ -201,25 +217,14 @@ shared_cairo_surface_t SvgImage::do_render(const std::string& id, const RectF& r
             cairo_clip(cr);
         }
 
-        const auto scaled = size() / SizeF(m_impl->dim.width, m_impl->dim.height);
-        cairo_scale(cr, scaled.width(), scaled.height());
-
-        /* To avoid getting the edge pixels blended with 0 alpha, which would
-         * occur with the default EXTEND_NONE. Use EXTEND_PAD for 1.2 or newer (2)
-         */
-        cairo_pattern_set_extend(cairo_get_source(cr), CAIRO_EXTEND_PAD);
-
-        /* Replace the destination with the source instead of overlaying */
-        cairo_set_operator(cr, CAIRO_OPERATOR_SOURCE);
-
         if (id.empty())
-            rsvg_handle_render_cairo(m_impl->rsvg.get(), cr);
+            rsvg_handle_render_document(m_impl->rsvg.get(), cr, &viewport, nullptr);
         else
-            rsvg_handle_render_cairo_sub(m_impl->rsvg.get(), cr, id.c_str());
+            rsvg_handle_render_layer(m_impl->rsvg.get(), cr, id.c_str(), &viewport, nullptr);
 
     });
 
-    return canvas.surface();
+    return surface;
 }
 
 SvgImage::SvgImage(SvgImage&&) noexcept = default;

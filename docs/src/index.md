@@ -1,8 +1,9 @@
 @mainpage EGT Programmer's Manual
 
-The Ensemble Graphics Toolkit (EGT) is a C++ GUI Linux toolkit for
-[Microchip](http://www.microchip.com) AT91/SAMA5 processors.  EGT provides
-modern GUI functionality, look-and-feel, and maximizes performance.
+The Microchip Graphics Suite Linux, formely known as the Ensemble Graphics
+Toolkit (EGT) is a C++ GUI Linux toolkit for [Microchip](http://www.microchip.com)
+AT91/SAMA5 processors. EGT provides modern GUI functionality, look-and-feel,
+and maximizes performance.
 
 @li @ref intro
 @li @ref started
@@ -14,10 +15,12 @@ modern GUI functionality, look-and-feel, and maximizes performance.
 @li @ref layout
 @li @ref animations
 @li @ref media_page
+@li @ref audio
+@li @ref gstreamer
 @li @ref input
 @li @ref local
 @li @ref resources
-@li @ref topics
+@li @ref devtopics
 @li @ref environ
 @li @ref debug
 @li @ref custom

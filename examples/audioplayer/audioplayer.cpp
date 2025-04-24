@@ -11,6 +11,16 @@
 #include <memory>
 #include <sstream>
 
+inline uint64_t nsec_to_sec(uint64_t s)
+{
+    return (s / 1000000000ULL);
+}
+
+inline uint64_t sec_to_nsec(int s)
+{
+    return (s * 1000000000ULL);
+}
+
 class Controls : public egt::StaticGrid
 {
 public:
@@ -187,18 +197,18 @@ public:
         // handle input event to seek player
         m_dial->on_user_input_changed([this, range2]()
         {
-            m_player.seek(range2->value());
+            m_player.seek(sec_to_nsec(range2->value()));
         });
 
         m_player.on_position_changed([this, range2](uint64_t position)
         {
             if (m_player.playing())
             {
-                auto duration = static_cast<int>(m_player.duration());
+                auto duration = static_cast<int>(nsec_to_sec(m_player.duration()));
                 if (duration > 0)
                     range2->end(duration);
 
-                range2->value(static_cast<int>(position));
+                range2->value(static_cast<int>(nsec_to_sec(position)));
             }
         });
 
@@ -243,17 +253,24 @@ protected:
     egt::AudioPlayer m_player;
     egt::AnimationSequence m_animation{true};
     egt::experimental::ColorMap m_colormap;
-    egt::ImageLabel m_logo{(egt::Image("icon:egt_logo_white.png;128"))};
+    egt::ImageLabel m_logo{(egt::Image("icon:mgs_logo_white.png;128"))};
     egt::Dialog m_message_dialog;
     egt::ImageButton note{egt::Image("file:note.png")};
 };
 
 int main(int argc, char** argv)
 {
+#ifdef EXAMPLEDATA
+    egt::add_search_path(EXAMPLEDATA);
+#endif
+
+    auto default_file = std::string{};
+    egt::detail::resolve_path("file:concerto.mp3", default_file);
+
     cxxopts::Options options(argv[0], "play audio file");
     options.add_options()
     ("h,help", "Show help")
-    ("i,input", "URI to audio file", cxxopts::value<std::string>()->default_value("file:concerto.mp3"));
+    ("i,input", "URI to audio file", cxxopts::value<std::string>()->default_value("file://" + default_file));
 
     auto args = options.parse(argc, argv);
 
@@ -265,6 +282,7 @@ int main(int argc, char** argv)
 
     egt::Application app(argc, argv);
 #ifdef EXAMPLEDATA
+    // Need to redo it as the Application ctor clears the search paths.
     egt::add_search_path(EXAMPLEDATA);
 #endif
 

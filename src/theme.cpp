@@ -3,6 +3,8 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+#include "detail/cairoabstraction.h"
+#include "egt/app.h"
 #include "egt/checkbox.h"
 #include "egt/detail/enum.h"
 #include "egt/detail/math.h"
@@ -171,12 +173,9 @@ void Theme::draw_box(Painter& painter, const Widget& widget,
 
     Palette::GroupId group = widget.group();
 
-    auto box = widget.box();
-    if (widget.has_screen())
-        box -= widget.point();
     draw_box(painter,
              type,
-             box,
+             widget.box(),
              widget.color(border, group),
              widget.color(bg, group),
              widget.border(),
@@ -224,7 +223,7 @@ void Theme::draw_box(Painter& painter,
 
     if (type.is_set(FillFlag::solid))
     {
-        cairo_set_operator(painter.context().get(), CAIRO_OPERATOR_SOURCE);
+        painter.alpha_blending(false);
     }
 
     auto fill_bg = true;
@@ -232,9 +231,20 @@ void Theme::draw_box(Painter& painter,
     {
         fill_bg = false;
         background->resize(box.size());
-        painter.draw(box.point());
-        painter.draw(*background);
+        painter.draw(*background, box.point());
     }
+
+    /*
+     * If we are drawing a rounded box, it is not supported by the GPU, so
+     * prevent the painter from even trying by disabling the GPU.
+     */
+    auto gpu_was_enabled = Application::instance().gpu_enabled();
+    auto gpu_enabled = gpu_was_enabled && (detail::float_equal(border_radius, 0) || border_radius < 0);
+    Application::instance().enable_gpu(gpu_enabled);
+    auto reset = detail::on_scope_exit([gpu_was_enabled]()
+    {
+        Application::instance().enable_gpu(gpu_was_enabled);
+    });
 
     if (border_width && border_flags.is_set(BorderFlag::drop_shadow))
     {
@@ -285,7 +295,7 @@ void Theme::draw_box(Painter& painter,
             painter.set(bg);
         }
 
-        cairo_fill_preserve(cr);
+        painter.fill_preserve();
     }
 
     if (!border_flags.is_set(BorderFlag::drop_shadow))
@@ -376,11 +386,22 @@ void Theme::draw_circle(Painter& painter,
 
     if (type.is_set(FillFlag::solid))
     {
-        cairo_set_operator(painter.context().get(), CAIRO_OPERATOR_SOURCE);
+        painter.alpha_blending(false);
     }
 
     cairo_new_path(cr);
     painter.draw(circle);
+
+    /*
+     * The GPU can only draw rectangles but not circles; therefore disable it to
+     * prevent the painter from even trying.
+     */
+    auto gpu_was_enabled = Application::instance().gpu_enabled();
+    Application::instance().enable_gpu(false);
+    auto reset = detail::on_scope_exit([gpu_was_enabled]()
+    {
+        Application::instance().enable_gpu(gpu_was_enabled);
+    });
 
     if (type.is_set(FillFlag::blend) || type.is_set(FillFlag::solid))
     {
@@ -398,14 +419,14 @@ void Theme::draw_circle(Painter& painter,
             painter.set(bg);
         }
 
-        cairo_fill_preserve(cr);
+        painter.fill_preserve();
     }
 
     if (border_width)
     {
         painter.set(border);
         painter.line_width(border_width);
-        cairo_stroke(cr);
+        painter.stroke();
     }
 
     cairo_new_path(cr);

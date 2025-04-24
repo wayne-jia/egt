@@ -23,7 +23,7 @@ inline namespace v1
 
 namespace detail
 {
-class CameraImpl;
+class GstDecoderImpl;
 }
 
 /**
@@ -37,6 +37,11 @@ class CameraImpl;
  */
 class EGT_API CameraWindow : public Window
 {
+protected:
+
+    /// @private
+    std::unique_ptr<detail::GstDecoderImpl> m_camera_impl;
+
 public:
 
     /**
@@ -46,17 +51,17 @@ public:
     /**
      * Generated when an error occurs.
      */
-    Signal<const std::string&> on_error;
+    SignalW<const std::string&> on_error;
 
     /**
      * Generated when an USB camera connected.
      */
-    Signal<const std::string&> on_connect;
+    SignalW<const std::string&> on_connect;
 
     /**
      * Generated when an USB camera disconnected.
      */
-    Signal<const std::string&> on_disconnect;
+    SignalW<const std::string&> on_disconnect;
     /** @} */
 
     /**
@@ -135,6 +140,19 @@ public:
      */
     bool start();
 
+    /**
+     * Set the camera pipeline to the play state. In other words, play the
+     * video from the camera.
+     */
+    bool play();
+
+    /**
+     * Check is the camera pipeline in play state.
+     *
+     * @return true on success
+     */
+    EGT_NODISCARD bool playing() const;
+
     /*
      * set camera device node.
      *
@@ -161,36 +179,9 @@ public:
 
     void scale(float hscale, float vscale) override;
 
-    /**
-     * Get horizontal scale value.
-     */
-    EGT_NODISCARD float hscale() const
-    {
-        return m_hscale;
-    }
-
-    /**
-     * Get vertical scale value.
-     */
-    EGT_NODISCARD float vscale() const
-    {
-        return m_vscale;
-    }
-
     void serialize(Serializer& serializer) const override;
 
     ~CameraWindow() noexcept override;
-
-protected:
-
-    /// Horizontal scale value.
-    float m_hscale{1.0};
-
-    /// Vertical scale value.
-    float m_vscale{1.0};
-
-    /// @private
-    std::unique_ptr<detail::CameraImpl> m_camera_impl;
 
 private:
 

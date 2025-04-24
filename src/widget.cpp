@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "detail/egtlog.h"
-#include "egt/canvas.h"
 #include "egt/detail/alignment.h"
 #include "egt/detail/enum.h"
 #include "egt/detail/math.h"
@@ -16,6 +15,7 @@
 #include "egt/painter.h"
 #include "egt/screen.h"
 #include "egt/serialize.h"
+#include "egt/surface.h"
 #include "egt/types.h"
 #include "egt/widget.h"
 #include <cassert>
@@ -631,7 +631,8 @@ Screen* Widget::screen() const
 
 void Widget::align(const AlignFlags& a)
 {
-    m_align = a;
+    if (detail::change_if_diff<>(m_align, a))
+        parent_layout();
 }
 
 Point Widget::to_parent(const Point& r) const
@@ -669,33 +670,26 @@ void Widget::paint(Painter& painter)
 {
     Painter::AutoSaveRestore sr(painter);
 
+    auto save = painter.set_subordinate_filter(nullptr);
+
     // move origin
     painter.translate(-point());
 
     draw(painter, box());
+
+    painter.restore_subordinate_filter(std::move(save));
 }
 
 void Widget::paint_to_file(const std::string& filename)
 {
-#if CAIRO_HAS_PNG_FUNCTIONS == 1
     std::string name = filename;
     if (name.empty())
         name = fmt::format("{}.png", this->name());
 
-    auto surface = shared_cairo_surface_t(
-                       cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                               width(), height()),
-                       cairo_surface_destroy);
-
-    auto cr = shared_cairo_t(cairo_create(surface.get()), cairo_destroy);
-
-    Painter painter(cr);
+    Surface surface(size());
+    Painter painter(surface);
     paint(painter);
-    cairo_surface_write_to_png(surface.get(), name.c_str());
-#else
-    detail::ignoreparam(filename);
-    detail::error("png support not available");
-#endif
+    surface.write_to_png(name);
 }
 
 void Widget::walk(const WalkCallback& callback, int level)
@@ -990,7 +984,11 @@ void Widget::layout()
 
             subordinate->layout();
 
-            auto r = detail::align_algorithm(subordinate->box(),
+            const auto orig = subordinate->align().is_set(AlignFlag::keep_ratio) ?
+                              subordinate->m_user_requested_box :
+                              subordinate->box();
+
+            auto r = detail::align_algorithm(orig,
                                              bounding,
                                              subordinate->align(),
                                              0,
@@ -1380,21 +1378,11 @@ void Widget::draw(Painter& painter, const Rect& rect)
     if (m_subordinates.empty())
         return;
 
+    const auto& origin = point();
+    painter.translate(origin);
+
     // child rect
-    auto crect = rect;
-
-    // if this widget does not have a screen, it means the damage rect is in
-    // coordinates of some parent widget, so we have to adjust the physical origin
-    // and take it into account when looking at children, who's coordinates are
-    // respective of this widget
-    if (!has_screen())
-    {
-        const auto& origin = point();
-        painter.translate(origin);
-
-        // adjust our child rect for comparison's below
-        crect -= origin;
-    }
+    auto crect = rect - origin;
 
     // keep the crect inside our content area
     crect = Rect::intersection(crect, to_subordinate(content_area()));
@@ -1404,9 +1392,7 @@ void Widget::draw(Painter& painter, const Rect& rect)
         if (!subordinate->visible())
             continue;
 
-        // don't draw plane widget as child - this is
-        // specifically handled by event loop
-        if (subordinate->plane_window())
+        if (painter.filter_subordinate(*subordinate))
             continue;
 
         draw_subordinate(painter, crect, subordinate.get());
@@ -1534,6 +1520,8 @@ void Widget::add_component(Widget& widget)
     if (first_component)
         m_components_begin = std::prev(m_subordinates.end());
     update_subordinates_ranges();
+
+    layout();
 }
 
 void Widget::component(bool value)

@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.23)
 
 project(
     libegt
-    VERSION 1.9
+    VERSION 1.11
     DESCRIPTION "A linux graphic library for Microchip MPUs"
     LANGUAGES C;CXX;ASM
 )
-#set(PROJECT_VERSION_RC 1)
+set(PROJECT_VERSION_RC 4)
 if (DEFINED PROJECT_VERSION_RC)
     string(APPEND PROJECT_VERSION "-rc${PROJECT_VERSION_RC}")
 endif()
@@ -65,9 +65,7 @@ endif()
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(CAIRO REQUIRED cairo>=1.14.6)
-set(AX_PACKAGE_REQUIRES "cairo >= 1.14.6")
-
-CHECK_INCLUDE_FILE(cairo/cairo-gfx2d.h HAVE_CAIRO_GFX2D)
+set(AX_PACKAGE_REQUIRES_PRIVATE "cairo >= 1.14.6")
 
 check_symbol_exists(CAIRO_HAS_FT_FONT "cairo/cairo-features.h" HAVE_FREETYPE)
 if(HAVE_FREETYPE)
@@ -158,14 +156,19 @@ if(WITH_READLINE)
     endif()
 endif()
 
-pkg_check_modules(LIBPLANES libplanes>=1.0.0)
+pkg_check_modules(LIBPLANES libplanes>=1.1.0)
 if(LIBPLANES_FOUND)
-    set(AX_PACKAGE_REQUIRES_PRIVATE "${AX_PACKAGE_REQUIRES_PRIVATE} libplanes >= 1.0.0")
+    set(AX_PACKAGE_REQUIRES_PRIVATE "${AX_PACKAGE_REQUIRES_PRIVATE} libplanes >= 1.1.0")
 
     pkg_check_modules(LIBDRM REQUIRED libdrm>=2.4.0)
     if(LIBDRM_FOUND)
         set(AX_PACKAGE_REQUIRES_PRIVATE "${AX_PACKAGE_REQUIRES_PRIVATE} libdrm >= 2.4.0")
     endif()
+endif()
+
+pkg_check_modules(LIBM2D libm2d>=2.0.0)
+if(LIBM2D_FOUND)
+    set(AX_PACKAGE_REQUIRES_PRIVATE "${AX_PACKAGE_REQUIRES_PRIVATE} libm2d >= 2.0.0")
 endif()
 
 option(WITH_PLPLOT "enable/disable plplot" ON)

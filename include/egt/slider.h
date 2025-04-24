@@ -12,7 +12,6 @@
  */
 
 #include <egt/app.h>
-#include <egt/canvas.h>
 #include <egt/detail/alignment.h>
 #include <egt/detail/enum.h>
 #include <egt/detail/math.h>
@@ -63,10 +62,20 @@ struct SliderBase
 
         /// Solid color line.
         consistent_line = detail::bit(6),
+
+        /// Hide line.
+        hide_line = detail::bit(7),
     };
 
     /// Slider flags.
     using SliderFlags = Flags<SliderBase::SliderFlag>;
+
+    enum class SliderLineTransition
+    {
+        to_end,
+        to_begin,
+        to_center,
+    };
 };
 
 /**
@@ -221,6 +230,66 @@ public:
      */
     void reset_handle_image(Palette::GroupId group = Palette::GroupId::normal);
 
+    /**
+     * Set the offset the label.
+     *
+     * @note This offset is added to the y() coordinate for horizontal sliders
+     *       or to the x() coordinate for vertical sliders of the default
+     *       position of labels, if any. It may be negative.
+     * @param[in] offset
+     */
+    void label_offset(DefaultDim offset)
+    {
+        if (detail::change_if_diff<>(m_label_offset, offset))
+            this->damage();
+    }
+
+    /**
+     * Get the offset for the label.
+     */
+    EGT_NODISCARD DefaultDim label_offset() const { return m_label_offset; }
+
+    /**
+     * Set the offset for the handle.
+     *
+     * @note This offset is added to the y() coordinate for horizontal sliders
+     *       or to the x() coordinate for vertical sliders of the default
+     *       position of the handle. It may be negative.
+     * @param[in] offset
+     */
+    void handle_offset(DefaultDim offset)
+    {
+        if (detail::change_if_diff<>(m_handle_offset, offset))
+        {
+            this->damage();
+            this->layout();
+        }
+    }
+
+    /**
+     * Get the offset for the handle.
+     */
+    EGT_NODISCARD DefaultDim handle_offset() const { return m_handle_offset; }
+
+    /**
+     * Set the margin for the handle image.
+     *
+     * @note This margin is the gap between the handle in min/max positions and
+     *       the border of the content area. It may be negative to allow the
+     *       handle crossing edges of the slider content area.
+     * @param[in] margin
+     */
+    void handle_margin(DefaultDim margin)
+    {
+        if (detail::change_if_diff<>(m_handle_margin, margin))
+            this->damage();
+    }
+
+    /**
+     * Get the margin for the handle image.
+     */
+    EGT_NODISCARD DefaultDim handle_margin() const { return m_handle_margin; }
+
     using ValueRangeWidget<T>::value;
 
     T value(T value) override
@@ -269,6 +338,25 @@ public:
     void orient(Orientation orient)
     {
         if (detail::change_if_diff<>(m_orient, orient))
+        {
+            this->damage();
+            this->layout();
+        }
+    }
+
+    /**
+     * Get the line transition.
+     */
+    EGT_NODISCARD SliderLineTransition line_transition() const { return m_line_transition; }
+
+    /**
+     * Set the line transition.
+     *
+     * @param[in] transition The line transition.
+     */
+    void line_transition(SliderLineTransition transition)
+    {
+        if (detail::change_if_diff<>(m_line_transition, transition))
             this->damage();
     }
 
@@ -290,7 +378,22 @@ public:
         if (!this->m_min_size.empty())
             return this->m_min_size;
 
-        return default_size() + Widget::min_size_hint();
+        auto* image = this->background(Palette::GroupId::normal);
+        Rect rect(image ? image->size() : default_size());
+
+        image = handle_image(Palette::GroupId::normal);
+        if (image)
+        {
+            Rect r(image->size());
+            r.move_to_center(rect.center());
+            if (m_orient == Orientation::horizontal)
+                r.y(r.y() + m_handle_offset);
+            else
+                r.x(r.x() + m_handle_offset);
+            rect = Rect::merge(rect, r);
+        }
+
+        return rect.size() + Widget::min_size_hint();
     }
 
     void serialize(Serializer& serializer) const override;
@@ -304,26 +407,28 @@ protected:
     EGT_NODISCARD int to_offset(T value) const
     {
         if (detail::float_equal(static_cast<float>(this->m_start), static_cast<float>(this->m_end)))
-            return 0;
+            return m_handle_margin;
 
+        const auto m = m_handle_margin;
         const auto b = this->content_area();
         if (m_orient == Orientation::horizontal)
             return egt::detail::normalize<float>(value, this->m_start, this->m_end,
-                                                 0, b.width() - handle_width());
+                                                 m, b.width() - m - handle_width());
         else
             return egt::detail::normalize<float>(value, this->m_start, this->m_end,
-                                                 0, b.height() - handle_height());
+                                                 m, b.height() - m - handle_height());
     }
 
     /// Convert an offset to value.
     EGT_NODISCARD T to_value(int offset) const
     {
+        const auto m = m_handle_margin;
         const auto b = this->content_area();
         if (m_orient == Orientation::horizontal)
-            return egt::detail::normalize<float>(offset, 0, b.width() - handle_width(),
+            return egt::detail::normalize<float>(offset, m, b.width() - m - handle_width(),
                                                  this->m_start, this->m_end);
         else
-            return egt::detail::normalize<float>(offset, 0, b.height() - handle_height(),
+            return egt::detail::normalize<float>(offset, m, b.height() - m - handle_height(),
                                                  this->m_start, this->m_end);
     }
 
@@ -339,13 +444,10 @@ protected:
             if (slider_flags().is_set(SliderFlag::show_label))
             {
                 std::string text;
-                Canvas canvas(Size(100, 100));
-                Painter painter(canvas.context());
-
-                auto label_rect = label_box(painter, prev_value, text);
+                auto label_rect = label_box(prev_value, text);
                 this->damage(label_rect);
 
-                label_rect = label_box(painter, this->m_value, text);
+                label_rect = label_box(this->m_value, text);
                 this->damage(label_rect);
             }
 
@@ -374,22 +476,26 @@ protected:
     EGT_NODISCARD Rect handle_box(T value) const;
 
     /// Get the label box and text for the specified value.
-    EGT_NODISCARD Rect label_box(Painter& painter, T value, std::string& text) const
+    EGT_NODISCARD Rect label_box(T value, std::string& text) const
     {
         const auto b = this->content_area();
         auto handle_rect = handle_box(value);
 
+        auto* image = handle_image(Palette::GroupId::normal);
         if (m_orient == Orientation::horizontal)
-            handle_rect -= Point(0, b.height() / 2.);
+        {
+            auto shift = image ? 0 : (b.height() / 2);
+            handle_rect += Point(0, m_label_offset - shift);
+        }
         else
-            handle_rect -= Point(b.width() / 2., 0);
+        {
+            auto shift = image ? 0 : (b.width() / 2);
+            handle_rect += Point(m_label_offset - shift, 0);
+        }
 
         text = format_label(value);
 
-        painter.set(this->color(Palette::ColorId::label_text));
-        painter.set(this->font());
-
-        const auto text_size = painter.text_size(text);
+        const auto text_size = this->font().text_size(text);
         auto target = detail::align_algorithm(text_size,
                                               handle_rect,
                                               AlignFlag::center,
@@ -417,20 +523,23 @@ protected:
         return target;
     }
 
+    void compute_boxes(T value, Rect* background, Rect* handle) const;
+
     /// Draw the value label.
     void draw_label(Painter& painter, T value)
     {
         std::string text;
-        const auto target = label_box(painter, value, text);
+        const auto target = label_box(value, text);
         painter.draw(target.point());
+        painter.set(this->color(Palette::ColorId::label_text));
         painter.draw(text);
     }
 
     /// Draw the handle.
-    void draw_handle(Painter& painter);
+    void draw_handle(Painter& painter, const Rect& handle_rect);
 
     /// Draw the line.
-    void draw_line(Painter& painter, float xp, float yp);
+    void draw_line(Painter& painter, const Rect& handle_rect);
 
     /// Format the label text.
     static std::string format_label(T value)
@@ -450,6 +559,9 @@ protected:
     /// Slider flags.
     SliderFlags m_slider_flags{};
 
+    /// Line transition.
+    SliderLineTransition m_line_transition{SliderLineTransition::to_end};
+
     /// When dragging, the offset at the drag start.
     int m_start_offset{0};
 
@@ -462,6 +574,10 @@ private:
 
     /// Optional handle images.
     ImageGroup m_handles{"handle"};
+    DefaultDim m_handle_offset{0};
+    DefaultDim m_handle_margin{0};
+
+    DefaultDim m_label_offset{0};
 
     void deserialize(Serializer::Properties& props);
 };
@@ -570,42 +686,54 @@ SliderType<T>::SliderType(Serializer::Properties& props, bool is_derived) noexce
 
 
 template <class T>
-void SliderType<T>::draw(Painter& painter, const Rect& /*rect*/)
+void SliderType<T>::draw(Painter& painter, const Rect& rect)
 {
-    auto b = this->content_area();
-    auto yp = b.y() + b.height() / 2.;
-    auto xp = b.x() + b.width() / 2.;
+    Painter::AutoSaveRestore sr(painter);
 
-    if (slider_flags().is_set(SliderFlag::show_labels) ||
-        slider_flags().is_set(SliderFlag::show_label))
+    if (this->clip())
     {
-        if (m_orient == Orientation::horizontal)
-            yp += b.height() / 4.;
-        else
-            xp += b.width() / 4.;
-
-        if (slider_flags().is_set(SliderFlag::show_label))
-        {
-            draw_label(painter, this->value());
-        }
-        else
-        {
-            draw_label(painter, this->starting());
-            draw_label(painter, this->starting() + ((this->ending() - this->starting()) / 2));
-            draw_label(painter, this->ending());
-        }
+        painter.draw(rect);
+        painter.clip();
     }
 
+    painter.alpha_blending(true);
+
+    Rect background, handle;
+    compute_boxes(this->value(), &background, &handle);
+
+    auto* bg = this->background(true);
+    if (bg)
+        painter.draw(*bg, background.point(), background);
+
     // line
-    draw_line(painter, xp, yp);
+    draw_line(painter, handle);
 
     // handle
-    draw_handle(painter);
+    draw_handle(painter, handle);
+
+    /**
+     * draw labels after since they may overlap both the line and handle
+     * depending on the value of 'm_label_offset'.
+     */
+    if (slider_flags().is_set(SliderFlag::show_label))
+    {
+        draw_label(painter, this->value());
+    }
+    else if (slider_flags().is_set(SliderFlag::show_labels))
+    {
+        draw_label(painter, this->starting());
+        draw_label(painter, this->starting() + ((this->ending() - this->starting()) / 2));
+        draw_label(painter, this->ending());
+    }
 }
 
 template <class T>
 int SliderType<T>::handle_width() const
 {
+    auto* image = handle_image(Palette::GroupId::normal);
+    if (image)
+        return image->width();
+
     const auto b = this->content_area();
     auto width = b.width();
     auto height = b.height();
@@ -639,6 +767,10 @@ int SliderType<T>::handle_width() const
 template <class T>
 int SliderType<T>::handle_height() const
 {
+    auto* image = handle_image(Palette::GroupId::normal);
+    if (image)
+        return image->height();
+
     const auto b = this->content_area();
     auto width = b.width();
     auto height = b.height();
@@ -670,73 +802,86 @@ int SliderType<T>::handle_height() const
 }
 
 template <class T>
-Rect SliderType<T>::handle_box(T value) const
+void SliderType<T>::compute_boxes(T value,
+                                  Rect* background,
+                                  Rect* handle) const
 {
     const auto b = this->content_area();
     const auto dimw = handle_width();
     const auto dimh = handle_height();
+    const auto offset = to_offset(value);
+    Rect bg, hndl;
+
+    auto* image_bg = this->background(Palette::GroupId::normal);
+    bg.size(image_bg ? image_bg->size() : b.size());
+
+    auto* image_hndl = handle_image(Palette::GroupId::normal);
+    hndl.width(dimw);
+    hndl.height(dimh);
 
     if (m_orient == Orientation::horizontal)
     {
-        auto xv = b.x() + to_offset(value);
-        if (slider_flags().is_set(SliderFlag::inverted))
-            xv = b.x() + b.width() - to_offset(value) - dimw;
+        auto deltah = (bg.height() - dimh) / 2 + m_handle_offset;
 
-        if (slider_flags().is_set(SliderFlag::show_labels) ||
-            slider_flags().is_set(SliderFlag::show_label))
-        {
-            return {xv,
-                    b.y() + b.height() / 4 - dimh / 2 + b.height() / 2,
-                    dimw,
-                    dimh};
-        }
+        bg.x(b.x() + (b.width() - bg.width()) / 2);
+        bg.y(b.y() - std::min(0, deltah));
+
+        if (slider_flags().is_set(SliderFlag::inverted))
+            hndl.x(b.x() + b.width() - offset - dimw);
         else
-        {
-            return {xv,
-                    b.y() + b.height() / 2 - dimh / 2,
-                    dimw,
-                    dimh};
-        }
+            hndl.x(b.x() + offset);
+
+        if (image_hndl)
+            hndl.y(b.y() + std::max(0, deltah));
+        else if (slider_flags().is_set(SliderFlag::show_labels) ||
+                 slider_flags().is_set(SliderFlag::show_label))
+            hndl.y(b.y() + b.height() * 3 / 4 - dimh / 2 + m_handle_offset);
+        else
+            hndl.y(b.y() + b.height() / 2 - dimh / 2 + m_handle_offset);
     }
     else
     {
-        auto yv = b.y() + b.height() - to_offset(value) - dimh;
-        if (slider_flags().is_set(SliderFlag::inverted))
-            yv = b.y() + to_offset(value);
+        auto deltaw = (bg.width() - dimw) / 2 + m_handle_offset;
 
-        if (slider_flags().is_set(SliderFlag::show_labels) ||
-            slider_flags().is_set(SliderFlag::show_label))
-        {
-            return {b.x() + b.width() / 4 - dimw / 2 + b.width() / 2,
-                    yv,
-                    dimw,
-                    dimh};
-        }
+        bg.y(b.y() + (b.height() - bg.height()) / 2);
+        bg.x(b.x() - std::min(0, deltaw));
+
+        if (slider_flags().is_set(SliderFlag::inverted))
+            hndl.y(b.y() + offset);
         else
-        {
-            return {b.x() + b.width() / 2 - dimw / 2,
-                    yv,
-                    dimw,
-                    dimh};
-        }
+            hndl.y(b.y() + b.height() - offset - dimh);
+
+        if (image_hndl)
+            hndl.x(b.x() + std::max(0, deltaw));
+        else if (slider_flags().is_set(SliderFlag::show_labels) ||
+                 slider_flags().is_set(SliderFlag::show_label))
+            hndl.x(b.x() + b.width() * 3 / 4 - dimw / 2 + m_handle_offset);
+        else
+            hndl.x(b.x() + b.width() / 2 - dimw / 2 + m_handle_offset);
     }
+
+    if (background)
+        *background = bg;
+
+    if (handle)
+        *handle = hndl;
 }
 
 template <class T>
-void SliderType<T>::draw_handle(Painter& painter)
+Rect SliderType<T>::handle_box(T value) const
 {
-    const auto handle_rect = handle_box();
+    Rect handle;
+    compute_boxes(value, nullptr, &handle);
+    return handle;
+}
 
+template <class T>
+void SliderType<T>::draw_handle(Painter& painter, const Rect& handle_rect)
+{
     auto* image = handle_image(this->group(), true);
     if (image)
     {
-        this->theme().draw_box(painter,
-                               Theme::FillFlag::blend,
-                               handle_rect,
-                               Palette::transparent,
-                               Palette::transparent,
-                               0, 0, 0, {},
-                               image);
+        painter.draw(*image, handle_rect.point(), handle_rect);
     }
     else if (slider_flags().is_set(SliderFlag::round_handle))
     {
@@ -761,54 +906,98 @@ void SliderType<T>::draw_handle(Painter& painter)
 }
 
 template <class T>
-void SliderType<T>::draw_line(Painter& painter, float xp, float yp)
+void SliderType<T>::draw_line(Painter& painter, const Rect& handle_rect)
 {
-    const auto b = this->content_area();
-    const auto handle_rect = handle_box();
+    if (slider_flags().is_set(SliderFlag::hide_line))
+        return;
 
-    Point a1;
-    Point a2;
-    Point b1;
-    Point b2;
+    const auto inverted = !!slider_flags().is_set(SliderFlag::inverted);
+    const auto b = this->content_area();
+    const auto center = handle_rect.center();
+    Point p1, p2;
+    Size s1, s2, s;
 
     if (m_orient == Orientation::horizontal)
     {
-        a1 = Point(b.x(), yp);
-        a2 = Point(handle_rect.x(), yp);
-        b1 = Point(handle_rect.x(), yp);
-        b2 = Point(b.x() + b.width(), yp);
+        const auto w = handle_rect.width() / 2;
+        auto transition_x = center.x();
+        switch (line_transition())
+        {
+        case SliderLineTransition::to_end:
+            transition_x += inverted ? -w : w;
+            break;
+        case SliderLineTransition::to_begin:
+            transition_x -= inverted ? -w : w;
+            break;
+        default:
+            break;
+        }
 
-        painter.line_width(handle_rect.height() / 5.0);
+        p1.x(b.x() + m_handle_margin);
+        s1.width(transition_x - p1.x());
+        s1.height(handle_rect.height() / 5);
+        p1.y(center.y() - s1.height() / 2);
+
+        p2.x(transition_x);
+        s2.width(b.x() + b.width() - m_handle_margin - p2.x());
+        s2.height(s1.height());
+        p2.y(p1.y());
+
+        s.width(s1.width() + s2.width());
+        s.height(s1.height());
     }
     else
     {
-        a1 = Point(xp, b.y() + b.height());
-        a2 = Point(xp, handle_rect.y());
-        b1 = Point(xp, handle_rect.y());
-        b2 = Point(xp, b.y());
+        const auto h = handle_rect.height() / 2;
+        auto transition_y = center.y();
+        switch (line_transition())
+        {
+        case SliderLineTransition::to_end:
+            transition_y -= inverted ? -h : h;
+            break;
+        case SliderLineTransition::to_begin:
+            transition_y += inverted ? -h : h;
+            break;
+        default:
+            break;
+        }
 
-        painter.line_width(handle_rect.width() / 5.0);
+        p1.y(b.y() + m_handle_margin);
+        s1.height(transition_y - p1.y());
+        s1.width(handle_rect.width() / 5);
+        p1.x(center.x() - s1.width() / 2);
+
+        p2.y(transition_y);
+        s2.height(b.y() + b.height() - m_handle_margin - p2.y());
+        s2.width(s1.width());
+        p2.x(p1.x());
+
+        s.height(s1.height() + s2.height());
+        s.width(s1.width());
     }
-
-    if (slider_flags().is_set(SliderFlag::inverted))
-        std::swap(a1, b2);
 
     if (slider_flags().is_set(SliderFlag::consistent_line))
     {
-        painter.set(this->color(Palette::ColorId::button_fg,
-                                Palette::GroupId::disabled));
-        painter.draw(a1, b2);
-        painter.stroke();
+        painter.draw(this->color(Palette::ColorId::button_fg,
+                                 Palette::GroupId::disabled),
+                     Rect(p1, s));
     }
     else
     {
-        painter.set(this->color(Palette::ColorId::button_fg));
-        painter.draw(a1, a2);
-        painter.stroke();
-        painter.set(this->color(Palette::ColorId::button_fg,
-                                Palette::GroupId::disabled));
-        painter.draw(b1, b2);
-        painter.stroke();
+        auto c1 = this->color(Palette::ColorId::button_fg);
+        auto c2 = this->color(Palette::ColorId::button_fg,
+                              Palette::GroupId::disabled);
+
+        if (inverted ^ (m_orient == Orientation::vertical))
+            std::swap(c1, c2);
+
+        const Rect r1(p1, s1);
+        if (!r1.empty())
+            painter.draw(c1, r1);
+
+        const Rect r2(p2, s2);
+        if (!r2.empty())
+            painter.draw(c2, r2);
     }
 }
 
@@ -826,7 +1015,11 @@ void SliderType<T>::serialize(Serializer& serializer) const
     ValueRangeWidget<T>::serialize(serializer);
 
     serializer.add_property("sliderflags", m_slider_flags.to_string());
+    serializer.add_property("line_transition", detail::enum_to_string(line_transition()));
     serializer.add_property("orient", detail::enum_to_string(orient()));
+    serializer.add_property("label_offset", label_offset());
+    serializer.add_property("handle_offset", handle_offset());
+    serializer.add_property("handle_margin", handle_margin());
     m_handles.serialize(serializer);
 }
 
@@ -840,9 +1033,29 @@ void SliderType<T>::deserialize(Serializer::Properties& props)
             m_slider_flags.from_string(std::get<1>(p));
             return true;
         }
+        else if (std::get<0>(p) == "line_transition")
+        {
+            line_transition(detail::enum_from_string<SliderLineTransition>(std::get<1>(p)));
+            return true;
+        }
         else if (std::get<0>(p) == "orient")
         {
             orient(detail::enum_from_string<Orientation>(std::get<1>(p)));
+            return true;
+        }
+        else if (std::get<0>(p) == "label_offset")
+        {
+            label_offset(std::stoi(std::get<1>(p)));
+            return true;
+        }
+        else if (std::get<0>(p) == "handle_offset")
+        {
+            handle_offset(std::stoi(std::get<1>(p)));
+            return true;
+        }
+        else if (std::get<0>(p) == "handle_margin")
+        {
+            handle_margin(std::stoi(std::get<1>(p)));
             return true;
         }
         else if (m_handles.deserialize(std::get<0>(p), std::get<1>(p)))
@@ -863,21 +1076,26 @@ template <class T>
 void SliderType<T>::handle_image(const Image& image, Palette::GroupId group)
 {
     m_handles.set(group, image);
-    if (group == this->group())
-        this->damage(handle_box());
+    this->damage();
+    this->layout();
 }
 
 template <class T>
 void SliderType<T>::reset_handle_image(Palette::GroupId group)
 {
-    auto changed = m_handles.reset(group);
-    if (changed && group == this->group())
-        this->damage(handle_box());
+    if (m_handles.reset(group))
+    {
+        this->damage();
+        this->layout();
+    }
 }
 
 /// Enum string conversion map
 template<>
-EGT_API const std::pair<SliderBase::SliderFlag, char const*> detail::EnumStrings<SliderBase::SliderFlag>::data[7];
+EGT_API const std::pair<SliderBase::SliderFlag, char const*> detail::EnumStrings<SliderBase::SliderFlag>::data[8];
+
+template<>
+EGT_API const std::pair<SliderBase::SliderLineTransition, char const*> detail::EnumStrings<SliderBase::SliderLineTransition>::data[3];
 
 }
 }

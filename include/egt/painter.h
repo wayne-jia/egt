@@ -11,7 +11,6 @@
  * @brief Painter interface.
  */
 
-#include <cairo.h>
 #include <egt/color.h>
 #include <egt/detail/meta.h>
 #include <egt/flags.h>
@@ -19,6 +18,9 @@
 #include <egt/geometry.h>
 #include <egt/pattern.h>
 #include <egt/types.h>
+#include <functional>
+#include <iosfwd>
+#include <memory>
 #include <string>
 
 namespace egt
@@ -26,7 +28,14 @@ namespace egt
 inline namespace v1
 {
 
+namespace detail
+{
+class InternalContext;
+}
+
 class Image;
+class Surface;
+class Widget;
 
 /**
  * @defgroup drawing Drawing Classes
@@ -44,6 +53,36 @@ class Image;
 class EGT_API Painter
 {
 public:
+
+    /**
+     * Supported types of anti-aliasing.
+     */
+    enum class AntiAlias
+    {
+        system, // default
+        none,
+        gray,
+        subpixel,
+        fast,
+        good,
+        best,
+    };
+
+    /**
+     * Supported line caps.
+     */
+    enum class LineCap
+    {
+        butt,
+        round,
+        square,
+    };
+
+    /**
+     * Return true if the subordinate widget is filtered out, hence should
+     * not be drawn by the painter.
+     */
+    using SubordinateFilter = std::function<bool(const Widget&)>;
 
     /**
      * Scoped save() and restore() for a Painter.
@@ -118,15 +157,8 @@ public:
 
     Painter() = delete;
 
-    /**
-     * Construct a Painter with an existing context.
-     *
-     * @todo Painter needs to come from the Screen. This constructor should
-     * be hidden and you should have to get a custom version of it from the
-     * Screen for drawing. A default software/GPU painter can be created,
-     * otherwise for something like X11 we should be using X11 to paint.
-     */
-    explicit Painter(shared_cairo_t cr) noexcept;
+    explicit Painter(Surface& surface) noexcept;
+    ~Painter();
 
     /**
      * Save the state of the current context.
@@ -141,6 +173,48 @@ public:
      * @see AutoSaveRestore
      */
     void restore();
+
+    /**
+     * Configure low fidelity options.
+     *
+     * This configures settings related to font hinting, font aliasing, and
+     * shape aliasing.
+     */
+    void low_fidelity();
+
+    /**
+     * Configure high fidelity options.
+     *
+     * This configures settings related to font hinting, font aliasing, and
+     * shape aliasing.
+     */
+    void high_fidelity();
+
+    /**
+     * Apply the current subordinate filter.
+     *
+     * @param[in] subordinate The widget to be tested.
+     *
+     * @return true if the subordinate widget is filtered out, hence should
+     * not be drawn by the painter.
+     */
+    EGT_NODISCARD bool filter_subordinate(const Widget& subordinate) const;
+
+    /**
+     * Set the subordinate filter (nullptr to remove the current filter).
+     *
+     * @param[in] subordinate_filter The new subordinate filter.
+     *
+     * @return a copy of the previous subordinate filter.
+     */
+    SubordinateFilter set_subordinate_filter(const SubordinateFilter& subordinate_filter);
+
+    /**
+     * Restore the subordinate filter from a previous value.
+     *
+     * @param[in] subordinate_filter The saved subordinate filter to restore.
+     */
+    void restore_subordinate_filter(SubordinateFilter&& subordinate_filter);
 
     /**
      * Push a group onto the stack.
@@ -174,6 +248,54 @@ public:
     Painter& line_width(float width);
 
     /**
+     * Set the current line cap.
+     *
+     * @param[in] value Line cap.
+     */
+    Painter& line_cap(Painter::LineCap value);
+
+    /**
+     * Get the current line cap.
+     */
+    EGT_NODISCARD Painter::LineCap line_cap() const;
+
+    /**
+     * Set the dash pattern to be used by stroke().
+     *
+     * @param[in] dashes An array specifying alternate lengths of on and off stroke portions.
+     * @param[in] num_dashes The length of the dashes array.
+     * @param[in] offset An offset into the dash pattern at which the stroke should start.
+     */
+    Painter& set_dash(const double* dashes, size_t num_dashes, double offset);
+
+    /**
+     * Set the type of anti-aliasing.
+     *
+     * @param[in] value Anti-aliasing type.
+     */
+    Painter& antialias(Painter::AntiAlias value);
+
+    /**
+     * Get the current type of anti-aliasing.
+     */
+    EGT_NODISCARD Painter::AntiAlias antialias() const;
+
+    /**
+     * Set the alpha blending state either enabled or disabled.
+     *
+     * @param[in] enabled Whether the alpha blending is to be enabled.
+     *
+     * @note disabling the alpha blending is like forcing the destination alpha
+     * to zero.
+     */
+    Painter& alpha_blending(bool enabled);
+
+    /**
+     * Get the alpha blending state, either enabled or disabled.
+     */
+    EGT_NODISCARD bool alpha_blending() const;
+
+    /**
      * Move to a point.
      *
      * @param[in] point The point.
@@ -181,17 +303,13 @@ public:
     template<class T>
     Painter& draw(const PointType<T, detail::Compatible::normal>& point)
     {
-        cairo_move_to(m_cr.get(), point.x(), point.y());
-
-        return *this;
+        return move_to(point);
     }
 
     template<class T>
     Painter& line(const PointType<T, detail::Compatible::normal>& point)
     {
-        cairo_line_to(m_cr.get(), point.x(), point.y());
-
-        return *this;
+        return line_to(point);
     }
 
     /**
@@ -203,10 +321,7 @@ public:
     template<class T>
     Painter& draw(const T& start, const T& end)
     {
-        cairo_move_to(m_cr.get(), start.x(), start.y());
-        cairo_line_to(m_cr.get(), end.x(), end.y());
-
-        return *this;
+        return move_to(start).line_to(end);
     }
 
     /**
@@ -217,10 +332,7 @@ public:
     template<class T>
     Painter& draw(const LineType<T>& line)
     {
-        cairo_move_to(m_cr.get(), line.start().x(), line.start().y());
-        cairo_line_to(m_cr.get(), line.end().x(), line.end().y());
-
-        return *this;
+        return move_to(line.start()).line_to(line.end());
     }
 
     /**
@@ -231,16 +343,7 @@ public:
     template<class T>
     Painter& draw(const RectType<T>& rect)
     {
-        if (rect.empty())
-            return *this;
-
-        cairo_rectangle(m_cr.get(),
-                        rect.x(),
-                        rect.y(),
-                        rect.width(),
-                        rect.height());
-
-        return *this;
+        return rectangle(rect);
     }
 
     /**
@@ -251,30 +354,7 @@ public:
     template<class T>
     Painter& draw(const ArcType<T>& arc)
     {
-        if (arc.empty())
-            return *this;
-
-        cairo_arc(m_cr.get(), arc.center().x(), arc.center().y(),
-                  arc.radius(), arc.angle1(), arc.angle2());
-
-        return *this;
-    }
-
-    /**
-     * Create a circle.
-     *
-     * @param[in] arc The circle.
-     */
-    template<class T>
-    Painter& draw(const CircleType<T>& arc)
-    {
-        if (arc.empty())
-            return *this;
-
-        cairo_arc(m_cr.get(), arc.center().x(), arc.center().y(),
-                  arc.radius(), arc.angle1(), arc.angle2());
-
-        return *this;
+        return this->arc(arc);
     }
 
     /**
@@ -283,16 +363,59 @@ public:
     Painter& draw(const Image& image);
 
     /**
+     * Set the source pattern from a Pattern.
+     */
+    Painter& source(const Pattern& pattern);
+
+    /**
+     * Set the source pattern from a Color.
+     */
+    Painter& source(const Color& color);
+
+    /**
+     * Set the source pattern from a Surface.
+     */
+    Painter& source(const Surface& surface, const PointF& point = {});
+
+    /**
+     * Set the source pattern from an Image.
+     */
+    Painter& source(const Image& image, const PointF& point = {});
+
+    /**
      * Draw an image as a mask.
      */
+    Painter& mask(const Surface& surface, const PointF& point = {});
+
     Painter& mask(const Image& image, const Point& point = {});
 
     /**
-     * @param[in] rect The source rect to copy.
-     * @param[in] image The image surface to draw.
+     * @param[in] color The source color to fill the @rect rectangle with.
+     * @param[in] rect The rectangle to draw, if any, the whole clip region otherwise.
+     * @param[in] preserve If true and @rect is not empty, reset the path to @rect.
      */
-    Painter& draw(const Rect& rect,
-                  const Image& image);
+    Painter& draw(const Color& color, const RectF& rect = {}, bool preserve = false);
+
+    /**
+     * @param[i] pattern The source pattern to fill the @rect rectangle with.
+     * @param[in] rect The rectangle to draw, if any, the whole clip region otherwise.
+     * @param[in] preserve If true and @rect is not empty, reset the path to @rect.
+     */
+    Painter& draw(const Pattern& pattern, const RectF& rect = {}, bool preserve = false);
+
+    /**
+     * @param[in] surface The surface source to draw.
+     * @param[in] point The position of the surface origin.
+     * @param[in] rect The rectangle to draw, if any, the whole surface otherwise.
+     */
+    Painter& draw(const Surface& surface, const PointF& point, const RectF& rect = {});
+
+    /**
+     * @param[in] image The image source to draw.
+     * @param[in] point The position of the surface origin.
+     * @param[in] rect The rectangle to draw, if any, the whole image otherwise.
+     */
+    Painter& draw(const Image& image, const PointF& point, const RectF& rect = {});
 
     enum class TextDrawFlag : uint32_t
     {
@@ -310,63 +433,101 @@ public:
 
     Painter& fill();
 
+    Painter& fill_preserve();
+
     Painter& paint();
 
     Painter& paint(float alpha);
 
     Painter& stroke();
 
+    Painter& move_to(const PointF& point);
+
+    Painter& line_to(const PointF& point);
+
+    Painter& rectangle(const RectF& rect);
+
+    Painter& arc(const ArcF& arc);
+
     Painter& translate(const PointF& point);
 
     Painter& translate(const Point& point);
 
+    Painter& scale(float sx, float sy);
+
     Painter& rotate(float angle);
+
+    Painter& show_text(const char* utf8);
+
+    Painter& show_text(const std::string& str) { return show_text(str.c_str()); }
+
+    /**
+     * Get the font extents based on the current context, hence taking into
+     * account transformations such as rotation or symmetry.
+     */
+    EGT_NODISCARD Font::FontExtents extents() const;
+
+    /**
+     * Get the text extents based on the current context, hence taking into
+     * account transformations such as rotation or symmetry.
+     *
+     * @param[in] text The UTF8 encoded text.
+     */
+    EGT_NODISCARD Font::TextExtents extents(const std::string& text) const;
 
     Size text_size(const std::string& text);
 
     void color_at(const Point& point, const Color& color) noexcept;
-    static void color_at(cairo_surface_t* image, const Point& point, const Color& color) noexcept;
     Color color_at(const Point& point) noexcept;
-    static Color color_at(cairo_surface_t* image, const Point& point) noexcept;
 
     Painter& flood(const Point& point, const Color& color);
-
-    static void flood(cairo_surface_t* image,
-                      const Point& point, const Color& color);
 
     /**
      * Get the current underlying context the painter is using.
      */
-    EGT_NODISCARD inline shared_cairo_t context() const
-    {
-        return m_cr;
-    }
+    EGT_NODISCARD const detail::InternalContext& context() const { return *m_cr; }
 
     /**
-     * Get a Size from a surface.
+     * Get the target surface the painter is using.
      */
-    static inline Size surface_to_size(const shared_cairo_surface_t& surface)
-    {
-        return {cairo_image_surface_get_width(surface.get()),
-                cairo_image_surface_get_height(surface.get())};
-    }
+    EGT_NODISCARD const Surface& target() const { return m_surface; }
+
+    EGT_NODISCARD Surface& target() { return m_surface; }
 
     /**
-     * Get a Size from a surface.
+     * Claim the painter for being used by the CPU.
+     *
+     * @param[in] skip_source The boolean telling whether the source surface
+     *                        should be ignored.
+     *
+     * Wait for all GPU operations, if any, to complete. Synchronize the target
+     * surface of the Painter instance. Also synchronize the source surface, if
+     * any, unless @skip_source is 'true'. Indeed, the source should be skipped
+     * if the rendering operations to come won't use it because a new source
+     * is about to be set.
      */
-    static inline Size surface_to_size(cairo_surface_t* surface)
-    {
-        return {cairo_image_surface_get_width(surface),
-                cairo_image_surface_get_height(surface)};
-    }
+    void sync_for_cpu(bool skip_source = false) const;
 
 protected:
 
     /**
-     * Cairo context.
+     * Internal state.
      */
-    shared_cairo_t m_cr;
+    SubordinateFilter m_subordinate_filter;
+
+    /**
+     * Internal context.
+     */
+    std::unique_ptr<detail::InternalContext> m_cr;
+
+    Surface& m_surface;
 };
+
+/// Overloaded std::ostream insertion operator
+EGT_API std::ostream& operator<<(std::ostream& os, const Painter::LineCap& cap);
+
+/// Overloaded std::ostream insertion operator
+EGT_API std::ostream& operator<<(std::ostream& os, const Painter::AntiAlias& antialias);
 
 }
 }

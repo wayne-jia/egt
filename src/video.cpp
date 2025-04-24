@@ -8,8 +8,7 @@
 #endif
 
 #include "detail/egtlog.h"
-#include "detail/video/gstappsinkimpl.h"
-#include "detail/video/gstkmssinkimpl.h"
+#include "detail/multimedia/gstdecoderimpl.h"
 #include "egt/app.h"
 #include "egt/detail/filesystem.h"
 #include "egt/respath.h"
@@ -24,31 +23,6 @@ inline namespace v1
 {
 namespace detail
 {
-
-/**
- * Check if target device is sama5d4 for using hardware
- * decoder.
- */
-
-bool is_target_sama5d4()
-{
-    std::ifstream infile("/proc/device-tree/model");
-    if (infile.is_open())
-    {
-        std::string line;
-        while (getline(infile, line))
-        {
-            EGTLOG_DEBUG("CPU: {}", line);
-            if (line.find("SAMA5D4") != std::string::npos)
-            {
-                infile.close();
-                return true;
-            }
-        }
-        infile.close();
-    }
-    return false;
-}
 
 /*
  * Check if audio playback device is present
@@ -85,11 +59,14 @@ WindowHint check_windowhint(WindowHint& hint)
 } // End of detail.
 
 VideoWindow::VideoWindow(const Rect& rect, PixelFormat format, WindowHint hint)
-    : Window(rect, format, detail::check_windowhint(hint))
+    : Window(rect, format, detail::check_windowhint(hint)),
+      m_video_impl(std::make_unique<detail::GstDecoderImpl>(this, rect.size())),
+      on_position_changed(&m_video_impl->on_position_changed),
+      on_error(&m_video_impl->on_error),
+      on_eos(&m_video_impl->on_eos),
+      on_state_changed(&m_video_impl->on_state_changed)
 {
     fill_flags().clear();
-
-    create_impl(rect.size());
 }
 
 VideoWindow::VideoWindow(const Rect& rect, const std::string& uri,
@@ -103,32 +80,19 @@ VideoWindow::VideoWindow(const Rect& rect, const std::string& uri,
 }
 
 VideoWindow::VideoWindow(Serializer::Properties& props, bool is_derived)
-    : Window(props, true)
+    : Window(props, true),
+      m_video_impl(std::make_unique<detail::GstDecoderImpl>(this, box().size())),
+      on_position_changed(&m_video_impl->on_position_changed),
+      on_error(&m_video_impl->on_error),
+      on_eos(&m_video_impl->on_eos),
+      on_state_changed(&m_video_impl->on_state_changed)
 {
     fill_flags().clear();
-
-    create_impl(box().size());
 
     deserialize(props);
 
     if (!is_derived)
         deserialize_leaf(props);
-}
-
-void VideoWindow::create_impl(const Size& size)
-{
-    if (plane_window() && detail::is_target_sama5d4())
-    {
-        EGTLOG_DEBUG("VideoWindow: Using KMS sink");
-#ifdef HAVE_LIBPLANES
-        m_video_impl = std::make_unique<detail::GstKmsSinkImpl>(*this, size, detail::is_target_sama5d4());
-#endif
-    }
-    else
-    {
-        EGTLOG_DEBUG("VideoWindow: Using APP sink");
-        m_video_impl = std::make_unique<detail::GstAppSinkImpl>(*this, size);
-    }
 }
 
 void VideoWindow::draw(Painter& painter, const Rect& rect)
@@ -201,29 +165,24 @@ bool VideoWindow::seek(int64_t pos)
 
 void VideoWindow::scale(float hscale, float vscale)
 {
-    auto xs = detail::change_if_diff<float>(m_hscale, hscale);
-    auto ys = detail::change_if_diff<float>(m_vscale, vscale);
-
-    if (xs || ys)
+    if (!detail::float_equal(hscale, m_hscale) || !detail::float_equal(vscale, m_vscale))
     {
         if (!plane_window())
         {
+            m_hscale = hscale;
+            m_vscale = vscale;
             m_video_impl->scale(m_hscale, m_vscale);
         }
         else
         {
-            Window::scale(m_hscale, m_vscale);
+            Window::scale(hscale, vscale);
         }
     }
 }
 
 void VideoWindow::resize(const Size& size)
 {
-    /*
-     * sama5d4 does not support changing video resolution dynamically
-     * due to g1kmssink in client mode.
-     */
-    if ((box().size() != size) && (!detail::is_target_sama5d4()))
+    if (box().size() != size)
     {
         pause();
         Window::resize(size);
@@ -235,6 +194,21 @@ void VideoWindow::resize(const Size& size)
 bool VideoWindow::has_audio() const
 {
     return m_video_impl->has_audio();
+}
+
+void VideoWindow::gst_custom_pipeline(const std::string& pipeline_desc)
+{
+    m_video_impl->custom_pipeline(pipeline_desc);
+}
+
+void VideoWindow::loopback(bool enable)
+{
+    m_video_impl->loopback(enable);
+}
+
+bool VideoWindow::loopback() const
+{
+    return m_video_impl->loopback();
 }
 
 void VideoWindow::serialize(Serializer& serializer) const

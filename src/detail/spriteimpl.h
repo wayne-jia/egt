@@ -31,7 +31,6 @@ public:
           m_frame(frame_size),
           m_index(0)
     {
-        m_image.copy();
         m_strip = add_strip(framecount, frame_point);
     }
 
@@ -47,10 +46,6 @@ public:
     virtual void show_frame(int index) = 0;
 
     virtual void draw(Painter& painter, const Rect& rect) = 0;
-
-    virtual void paint(Painter& painter) = 0;
-
-    virtual shared_cairo_surface_t surface() const = 0;
 
     /**
      * Advance to the next frame in the strip.

@@ -3,13 +3,12 @@ add_library(egt SHARED
     app.cpp
     button.cpp
     buttongroup.cpp
-    canvas.cpp
     checkbox.cpp
     color.cpp
     combo.cpp
     detail/alignment.cpp
     detail/base64.cpp
-    detail/collision.cpp
+    detail/cairoabstraction.cpp
     detail/egtlog.cpp
     detail/eraw.cpp
     detail/filesystem.cpp
@@ -47,6 +46,7 @@ add_library(egt SHARED
     painter.cpp
     palette.cpp
     pattern.cpp
+    picture.cpp
     progressbar.cpp
     radial.cpp
     radiobox.cpp
@@ -61,6 +61,7 @@ add_library(egt SHARED
     sizer.cpp
     slider.cpp
     sprite.cpp
+    surface.cpp
     text.cpp
     textwidget.cpp
     theme.cpp
@@ -83,7 +84,7 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "^arm.*")
     target_sources(egt PRIVATE detail/memset32.S)
 endif()
 
-set_target_properties(egt PROPERTIES VERSION 8.0.0 SOVERSION 8)
+set_target_properties(egt PROPERTIES VERSION 10.0.0 SOVERSION 10)
 
 target_sources(egt PUBLIC FILE_SET HEADERS
     BASE_DIRS ${CMAKE_SOURCE_DIR}/include ${CMAKE_BINARY_DIR}/include
@@ -95,12 +96,10 @@ target_sources(egt PUBLIC FILE_SET HEADERS
     ${CMAKE_SOURCE_DIR}/include/egt/bitfields.h
     ${CMAKE_SOURCE_DIR}/include/egt/button.h
     ${CMAKE_SOURCE_DIR}/include/egt/buttongroup.h
-    ${CMAKE_SOURCE_DIR}/include/egt/canvas.h
     ${CMAKE_SOURCE_DIR}/include/egt/checkbox.h
     ${CMAKE_SOURCE_DIR}/include/egt/color.h
     ${CMAKE_SOURCE_DIR}/include/egt/combo.h
     ${CMAKE_SOURCE_DIR}/include/egt/detail/alignment.h
-    ${CMAKE_SOURCE_DIR}/include/egt/detail/collision.h
     ${CMAKE_SOURCE_DIR}/include/egt/detail/cow.h
     ${CMAKE_SOURCE_DIR}/include/egt/detail/enum.h
     ${CMAKE_SOURCE_DIR}/include/egt/detail/filesystem.h
@@ -143,6 +142,7 @@ target_sources(egt PUBLIC FILE_SET HEADERS
     ${CMAKE_SOURCE_DIR}/include/egt/painter.h
     ${CMAKE_SOURCE_DIR}/include/egt/palette.h
     ${CMAKE_SOURCE_DIR}/include/egt/pattern.h
+    ${CMAKE_SOURCE_DIR}/include/egt/picture.h
     ${CMAKE_SOURCE_DIR}/include/egt/popup.h
     ${CMAKE_SOURCE_DIR}/include/egt/progressbar.h
     ${CMAKE_SOURCE_DIR}/include/egt/radial.h
@@ -159,6 +159,7 @@ target_sources(egt PUBLIC FILE_SET HEADERS
     ${CMAKE_SOURCE_DIR}/include/egt/sizer.h
     ${CMAKE_SOURCE_DIR}/include/egt/slider.h
     ${CMAKE_SOURCE_DIR}/include/egt/sprite.h
+    ${CMAKE_SOURCE_DIR}/include/egt/surface.h
     ${CMAKE_SOURCE_DIR}/include/egt/string.h
     ${CMAKE_SOURCE_DIR}/include/egt/text.h
     ${CMAKE_SOURCE_DIR}/include/egt/textwidget.h
@@ -210,11 +211,11 @@ target_include_directories(egt SYSTEM PRIVATE
     ${CMAKE_SOURCE_DIR}/external/fmt/include
 )
 
-target_include_directories(egt PUBLIC ${CAIRO_INCLUDE_DIRS})
-target_compile_options(egt PUBLIC ${CAIRO_CFLAGS_OTHER})
-target_link_directories(egt PUBLIC ${CAIRO_LIBRARY_DIRS})
-target_link_libraries(egt PUBLIC ${CAIRO_LIBRARIES})
-target_link_options(egt PUBLIC ${CAIRO_LDFLAGS_OTHER})
+target_include_directories(egt PRIVATE ${CAIRO_INCLUDE_DIRS})
+target_compile_options(egt PRIVATE ${CAIRO_CFLAGS_OTHER})
+target_link_directories(egt PRIVATE ${CAIRO_LIBRARY_DIRS})
+target_link_libraries(egt PRIVATE ${CAIRO_LIBRARIES})
+target_link_options(egt PRIVATE ${CAIRO_LDFLAGS_OTHER})
 
 if(X11_FOUND)
     set(HAVE_X11 1)
@@ -310,13 +311,16 @@ if(GSTREAMER_PLUGINS_BASE_DEV_FOUND)
     target_sources(egt PRIVATE
         audio.cpp
         video.cpp
-        detail/video/gstappsinkimpl.cpp
-        detail/video/gstdecoderimpl.cpp
+        detail/multimedia/gstdecoderimpl.cpp
+        detail/multimedia/gstsrc.cpp
+        detail/multimedia/gsturidecodebin.cpp
+        detail/multimedia/gstv4l2src.cpp
+        detail/multimedia/gstsink.cpp
+        detail/multimedia/gstappsink.cpp
+        detail/multimedia/gstfilesink.cpp
         camera.cpp
-        detail/camera/gstcameraimpl.cpp
         capture.cpp
-        detail/camera/gstcaptureimpl.cpp
-        detail/video/gstmeta.cpp
+        detail/multimedia/gstmeta.cpp
     )
     target_sources(egt PUBLIC FILE_SET HEADERS FILES
         ${CMAKE_SOURCE_DIR}/include/egt/audio.h
@@ -324,10 +328,6 @@ if(GSTREAMER_PLUGINS_BASE_DEV_FOUND)
         ${CMAKE_SOURCE_DIR}/include/egt/camera.h
         ${CMAKE_SOURCE_DIR}/include/egt/capture.h
     )
-
-    if(LIBPLANES_FOUND)
-        target_sources(egt PRIVATE detail/video/gstkmssinkimpl.cpp)
-    endif()
 endif()
 
 if(HAVE_LINUX_INPUT_H)
@@ -390,6 +390,19 @@ if(LIBDRM_FOUND)
     target_link_directories(egt PRIVATE ${LIBDRM_LIBRARY_DIRS})
     target_link_libraries(egt PRIVATE ${LIBDRM_LIBRARIES})
     target_link_options(egt PRIVATE ${LIBDRM_LDFLAGS_OTHER})
+endif()
+
+if(LIBM2D_FOUND)
+    set(HAVE_LIBM2D 1)
+
+    target_include_directories(egt PRIVATE ${LIBM2D_INCLUDE_DIRS})
+    target_compile_options(egt PRIVATE ${LIBM2D_CFLAGS_OTHER})
+    target_link_directories(egt PRIVATE ${LIBM2D_LIBRARY_DIRS})
+    target_link_libraries(egt PRIVATE ${LIBM2D_LIBRARIES})
+    target_link_options(egt PRIVATE ${LIBM2D_LDFLAGS_OTHER})
+    target_sources(egt PRIVATE
+        detail/gpu.cpp
+    )
 endif()
 
 if(PLPLOT_FOUND)
@@ -470,27 +483,19 @@ if(LIBMAGIC_FOUND)
     target_link_options(egt PRIVATE ${LIBMAGIC_LDFLAGS_OTHER})
 endif()
 
-if(ALSA_FOUND)
-    set(HAVE_ALSA 1)
-    set(include_sound "#define EGT_HAS_SOUND 1")
+if(ALSA_FOUND AND SNDFILE_FOUND)
+    set(include_soundeffect "#define EGT_HAS_SOUNDEFFECT 1")
 
-    target_include_directories(egt PRIVATE ${ALSA_INCLUDE_DIRS})
-    target_compile_options(egt PRIVATE ${ALSA_CFLAGS_OTHER})
-    target_link_directories(egt PRIVATE ${ALSA_LIBRARY_DIRS})
-    target_link_libraries(egt PRIVATE ${ALSA_LIBRARIES})
-    target_link_options(egt PRIVATE ${ALSA_LDFLAGS_OTHER})
-    target_sources(egt PRIVATE sound.cpp)
-    target_sources(egt PUBLIC FILE_SET HEADERS FILES ${CMAKE_SOURCE_DIR}/include/egt/sound.h)
-endif()
-
-if(SNDFILE_FOUND)
-    set(HAVE_SNDFILE 1)
-
-    target_include_directories(egt PRIVATE ${SNDFILE_INCLUDE_DIRS})
-    target_compile_options(egt PRIVATE ${SNDFILE_CFLAGS_OTHER})
-    target_link_directories(egt PRIVATE ${SNDFILE_LIBRARY_DIRS})
-    target_link_libraries(egt PRIVATE ${SNDFILE_LIBRARIES})
-    target_link_options(egt PRIVATE ${SNDFILE_LDFLAGS_OTHER})
+    target_include_directories(egt PRIVATE ${ALSA_INCLUDE_DIRS} ${SNDFILE_INCLUDE_DIRS})
+    target_compile_options(egt PRIVATE ${ALSA_CFLAGS_OTHER} ${SNDFILE_CFLAGS_OTHER})
+    target_link_directories(egt PRIVATE ${ALSA_LIBRARY_DIRS} ${SNDFILE_LIBRARY_DIRS})
+    target_link_libraries(egt PRIVATE ${ALSA_LIBRARIES} ${SNDFILE_LIBRARIES})
+    target_link_options(egt PRIVATE ${ALSA_LDFLAGS_OTHER} ${SNDFILE_LDFLAGS_OTHER})
+    target_sources(egt PRIVATE
+        sound_effect.cpp
+        detail/multimedia/sound_effect_impl.h
+        detail/multimedia/sound_effect_impl.cpp)
+    target_sources(egt PUBLIC FILE_SET HEADERS FILES ${CMAKE_SOURCE_DIR}/include/egt/sound_effect.h)
 endif()
 
 if(VIRTUALKEYBOARD)
@@ -514,12 +519,18 @@ if(ENABLE_SIMD)
     include(ExternalProject)
 
     ExternalProject_Add(simd
+        PREFIX simd-prefix
         URL ${CMAKE_SOURCE_DIR}/external/Simd
         SOURCE_SUBDIR prj/cmake
         CMAKE_ARGS -Wno-dev -DTOOLCHAIN=${CMAKE_CXX_COMPILER} -DTARGET=${CMAKE_SYSTEM_PROCESSOR} -DCMAKE_BUILD_TYPE=Release -DLIBRARY=STATIC -DSIMD_TEST=off -DCHECK_VERSION=0
+        INSTALL_COMMAND :
     )
 
     add_dependencies(egt simd)
+
+    target_include_directories(egt SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/external/Simd/src)
+    target_link_directories(egt PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/simd-prefix/src/simd-build)
+    target_link_libraries(egt PRIVATE Simd)
 endif()
 
 set(prefix ${CMAKE_INSTALL_PREFIX})

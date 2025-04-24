@@ -3,12 +3,6 @@
 /* Enable virtualkeyboard support */
 #cmakedefine ENABLE_VIRTUALKEYBOARD @ENABLE_VIRTUALKEYBOARD@
 
-/* Have alsa support */
-#cmakedefine HAVE_ALSA @HAVE_ALSA@
-
-/* Have cairo gfx2d support */
-#cmakedefine HAVE_CAIRO_GFX2D @HAVE_CAIRO_GFX2D@
-
 /* Have __cxa_demangle */
 #cmakedefine HAVE_CXA_DEMANGLE @HAVE_CXA_DEMANGLE@
 
@@ -48,6 +42,9 @@
 /* Have libjpeg support */
 #cmakedefine HAVE_LIBJPEG @HAVE_LIBJPEG@
 
+/* Have libm2d support */
+#cmakedefine HAVE_LIBM2D @HAVE_LIBM2D@
+
 /* Have libmagic support */
 #cmakedefine HAVE_LIBMAGIC @HAVE_LIBMAGIC@
 
@@ -74,9 +71,6 @@
 
 /* Have simd support */
 #cmakedefine HAVE_SIMD @HAVE_SIMD@
-
-/* Have sndfile support */
-#cmakedefine HAVE_SNDFILE @HAVE_SNDFILE@
 
 /* Have tslib support */
 #cmakedefine HAVE_TSLIB @HAVE_TSLIB@

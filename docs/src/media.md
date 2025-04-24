@@ -8,7 +8,7 @@ This chapter discusses media formats supported by EGT.
 
 EGT has direct and indirect support for many standard image, video, and
 audio formats through classes like egt::VideoWindow, egt::AudioPlayer,
-egt::CameraWindow, egt::v1::experimental::CameraCapture, egt::v1::experimental::Sound,
+egt::CameraWindow, egt::CameraCapture, egt::v1::experimental::Sound,
 egt::Image, egt::SvgImage, and more.  In most cases, the low level handling is
 implemented using third party libraries like libpng, libjpeg, GStreamer, librsvg,
 Video4Linux2, and so on.
@@ -133,7 +133,7 @@ Video4Linux2 provides access to the [Image Sensor Controller](https://www.linux4
 @image html v4l2.png "Video4Linux2 API"
 @image latex v4l2.png "Video4Linux2 API" width=6cm
 
-To capture any V4L2 camera to a file, the egt::v1::experimental::CameraCapture
+To capture any V4L2 camera to a file, the egt::v1::CameraCapture
 class can be used.
 
 @snippet "../examples/snippets/snippets.cpp" capture0
@@ -142,17 +142,3 @@ To capture and display a live V4L2 camera video feed, the egt::v1::CameraWindow
 widget can be used.
 
 @snippet "../examples/snippets/snippets.cpp" camera0
-
-@section media_audio Audio Playback
-
-Playing audio in EGT is usually done with the egt::AudioPlayer class.  This
-class supports all of the expected features for playing various audio formats
-such as random seeking and pausing.
-
-@snippet "../examples/snippets/snippets.cpp" audio1
-
-If a sound needs to be quickly played asynchronously, for example in response to
-a button press, the egt::v1::experimental::Sound class is usually more
-appropriate.
-
-@snippet "../examples/snippets/snippets.cpp" sound1

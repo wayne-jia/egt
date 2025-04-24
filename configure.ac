@@ -1,5 +1,5 @@
 AC_PREREQ([2.69])
-AC_INIT([libegt],[1.9])
+AC_INIT([libegt],[1.11-rc4])
 
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_SRCDIR([Makefile.am])
@@ -418,7 +418,7 @@ if test "x$with_readline" = xyes && test "x${have_readline}" != xyes; then
    AC_MSG_FAILURE([--with-readline was given, but readline not found])
 fi
 
-AX_PKG_CHECK_MODULES2(libplanes, [], [libplanes >= 1.0.0], [have_libplanes=yes], [have_libplanes=no])
+AX_PKG_CHECK_MODULES2(libplanes, [], [libplanes >= 1.1.0], [have_libplanes=yes], [have_libplanes=no])
 AM_CONDITIONAL([HAVE_LIBPLANES], [test "x${have_libplanes}" = xyes])
 if test "x${have_libplanes}" = xyes; then
    AX_PKG_CHECK_MODULES2(libdrm, [], [libdrm >= 2.4.0], [], [AC_MSG_ERROR([
@@ -429,20 +429,20 @@ if test "x${have_libplanes}" = xyes; then
    LIBEGT_EXTRA_LDFLAGS="${libplanes_LIBS} ${libdrm_LDFLAGS} ${LIBEGT_EXTRA_LDFLAGS}"
 fi
 
-AX_PKG_CHECK_MODULES2(cairo, [cairo >= 1.14.6], [], [have_cairo=yes], [AC_MSG_ERROR([
+AX_PKG_CHECK_MODULES2(libm2d, [], [libm2d >= 2.0.0], [have_libm2d=yes], [have_libm2d=no])
+AM_CONDITIONAL([HAVE_LIBM2D], [test "x${have_libm2d}" = xyes])
+if test "x${have_libm2d}" = xyes; then
+    AC_DEFINE(HAVE_LIBM2D, 1, [Have libm2d support])
+    LIBEGT_EXTRA_CXXFLAGS="${libm2d_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
+    LIBEGT_EXTRA_LDFLAGS="${libm2d_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
+fi
+
+AX_PKG_CHECK_MODULES2(cairo, [], [cairo >= 1.14.6], [have_cairo=yes], [AC_MSG_ERROR([
      cairo is a hard dependency, but a sufficient version was not found.])])
 AM_CONDITIONAL([HAVE_CAIRO], [test "x${have_cairo}" = xyes])
 if test "x${have_cairo}" = xyes; then
   LIBEGT_EXTRA_CXXFLAGS="${cairo_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
   LIBEGT_EXTRA_LDFLAGS="${cairo_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
-  AC_SEARCH_LIBS([cairo_gfx2d_surface_create], [cairo], [have_cairo_gfx2d=yes], [have_cairo_gfx2d=no])
-  AC_CHECK_HEADER([cairo/cairo-gfx2d.h],
-    [],
-    [have_cairo_gfx2d=no
-  ])
-  if test "x${have_cairo_gfx2d}" = xyes; then
-    AC_DEFINE(HAVE_CAIRO_GFX2D, 1, [Have cairo gfx2d support])
-  fi
 fi
 
 AC_CHECK_DECL([CAIRO_HAS_FT_FONT], [], [
@@ -662,40 +662,27 @@ if test "x${MSGFMT}" != x"yes"; then
 fi
 AM_CONDITIONAL([HAVE_MSGFMT], [test "x${MSGFMT}" = xyes])
 
-AC_ARG_WITH([alsa],
-    AS_HELP_STRING([--without-alsa], [Ignore presence of alsa and disable it]),
-    [with_alsa=$withval],
-    [with_alsa=auto])
-AS_IF([test "x$with_alsa" != "xno"],[
+AC_ARG_WITH([soundeffect],
+    AS_HELP_STRING([--without-soundeffect], [Ignore presence of alsa and sndfile, and disable soundeffect]),
+    [with_soundeffect=$withval],
+    [with_soundeffect=auto])
+AS_IF([test "x$with_soundeffect" != "xno"],[
    AX_PKG_CHECK_MODULES2(alsa, [], [alsa], [have_alsa=yes], [have_alsa=no])
-   if test "x${have_alsa}" = xyes; then
-      AC_DEFINE(HAVE_ALSA, 1, [Have alsa support])
-      LIBEGT_EXTRA_CXXFLAGS="${alsa_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
-      LIBEGT_EXTRA_LDFLAGS="${alsa_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
-      AC_SUBST(include_sound, ["#define EGT_HAS_SOUND 1"])
-   fi
-])
-if test "x$with_alsa" = xyes && test "x${have_alsa}" != xyes; then
-   AC_MSG_FAILURE([--with-alsa was given, but alsa not found])
-fi
-AM_CONDITIONAL([HAVE_ALSA], [test "x${have_alsa}" = xyes])
-
-AC_ARG_WITH([sndfile],
-    AS_HELP_STRING([--without-sndfile], [Ignore presence of sndfile and disable it]),
-    [with_sndfile=$withval],
-    [with_sndfile=auto])
-AS_IF([test "x$with_sndfile" != "xno"],[
    AX_PKG_CHECK_MODULES2(sndfile, [], [sndfile], [have_sndfile=yes], [have_sndfile=no])
-   if test "x${have_sndfile}" = xyes; then
-      AC_DEFINE(HAVE_SNDFILE, 1, [Have sndfile support])
-      LIBEGT_EXTRA_CXXFLAGS="${sndfile_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
-      LIBEGT_EXTRA_LDFLAGS="${sndfile_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
+   if test "x${have_alsa}" = xyes && test "x${have_sndfile}"; then
+      have_soundeffect=yes;
+      LIBEGT_EXTRA_CXXFLAGS="${alsa_CFLAGS} ${sndfile_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
+      LIBEGT_EXTRA_LDFLAGS="${alsa_LIBS} ${sndfile_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
+      AC_SUBST(include_soundeffect, ["#define EGT_HAS_SOUNDEFFECT 1"])
    fi
 ])
-if test "x$with_sndfile" = xyes && test "x${have_sndfile}" != xyes; then
-   AC_MSG_FAILURE([--with-sndfile was given, but sndfile not found])
+if test "x$with_soundeffect" = xyes && test "x${have_alsa}" != xyes; then
+   AC_MSG_FAILURE([--with-soundeffect was given, but alsa not found or disabled])
 fi
-AM_CONDITIONAL([HAVE_SNDFILE], [test "x${have_sndfile}" = xyes])
+if test "x$with_soundeffect" = xyes && test "x${have_sndfile}" != xyes; then
+   AC_MSG_FAILURE([--with-soundeffect was given, but alsa not found or disabled])
+fi
+AM_CONDITIONAL([HAVE_SOUNDEFFECT], [test "x${have_soundeffect}" = xyes])
 
 LIBEGT_EXTRA_LDFLAGS="${LIBEGT_PRIVATE_LDFLAGS} ${LIBEGT_EXTRA_LDFLAGS}"
 
@@ -744,6 +731,7 @@ then
 
   AC_MSG_NOTICE([configuring simd])
   (
+    SIMD_CXX=`echo "$CXX" | cut -d ' ' -f 1`
     SIMD_CXXFLAGS=`echo "$CXXFLAGS" | sed -e 's/-W[-0-9a-z=]*//g'`
     # if -Wno-psabi was there, add it back
     SIMD_CXXFLAGS+=`echo "$CXXFLAGS" | grep -o '\-Wno-psabi'`
@@ -752,7 +740,7 @@ then
 
     mkdir -p external/Simd/prj/cmake/ &&
     cd external/Simd/prj/cmake/ &&
-    cmake ../../../../${srcdir}/external/Simd/prj/cmake/ -Wno-dev -DTOOLCHAIN="$CXX" -DTARGET="$host_cpu" \
+    cmake ../../../../${srcdir}/external/Simd/prj/cmake/ -Wno-dev -DTOOLCHAIN="$SIMD_CXX" -DTARGET="$host_cpu" \
 	  -DCMAKE_BUILD_TYPE="Release" -DLIBRARY="STATIC" \
 	  -DSIMD_TEST=off -DCMAKE_CXX_FLAGS="${SIMD_CXXFLAGS} -DCHECK_VERSION=0"
   )
@@ -814,6 +802,7 @@ echo
 
 echo "Display:"
 echo "  DRM/KMS                ${have_libplanes:-no}"
+echo "  M2D                    ${have_libm2d:-no}"
 echo "  X11                    ${have_x11:-no}"
 echo "  SDL2                   ${have_sdl2:-no}"
 echo
@@ -831,6 +820,7 @@ echo "  gstreamer              ${have_gstreamer:-no}"
 echo "  SVG                    ${have_librsvg:-no}"
 echo "  JPEG                   ${have_libjpeg:-no}"
 echo "  PNG                    ${have_png:-no}"
+echo "  soundeffect            ${have_soundeffect:-no}"
 echo
 
 echo "Features:"
@@ -838,8 +828,6 @@ echo "  Networking             ${have_libcurl:-no}"
 echo "  libmagic               ${have_libmagic:-no}"
 echo "  LUA Interpreter        ${have_lua:-no}"
 echo "  LUA Bindings           ${have_lua_bindings:-no}"
-echo "  ALSA Sound             ${have_alsa:-no}"
-echo "  sndfile                ${have_sndfile:-no}"
 echo "  plplot                 ${have_plplot:-no}"
 echo "  Fontconfig             ${have_fontconfig:-no}"
 echo "  libintl                ${have_libintl:-no}"

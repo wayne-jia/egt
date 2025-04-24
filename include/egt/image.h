@@ -11,11 +11,11 @@
  * @brief Working with images.
  */
 
-#include <cairo.h>
 #include <egt/detail/meta.h>
 #include <egt/geometry.h>
 #include <egt/painter.h>
 #include <egt/serialize.h>
+#include <egt/surface.h>
 #include <map>
 #include <string>
 
@@ -30,8 +30,7 @@ class SvgImage;
  * Raster image resource used for drawing or displaying.
  *
  * This class by default shares the internal surface pointer with anything
- * else using the surface.  To force this class to keep its own copy, call
- * the copy() function.
+ * else using the surface.
  *
  * @ingroup media
  */
@@ -90,17 +89,9 @@ public:
      */
     // cppcheck-suppress noExplicitConstructor
     // NOLINTNEXTLINE(hicpp-explicit-conversions, google-explicit-constructor)
-    Image(shared_cairo_surface_t surface);
+    Image(std::shared_ptr<Surface> surface);
 
-    /**
-     * @param surface A pre-existing surface.
-     *
-     * This will not own the passed in pointer or surface, and instead will make
-     * a copy of the surface.
-     */
-    // cppcheck-suppress noExplicitConstructor
-    // NOLINTNEXTLINE(hicpp-explicit-conversions, google-explicit-constructor)
-    Image(cairo_surface_t* surface);
+    Image(Surface&& surface);
 
     /**
      * Scale the image.
@@ -134,7 +125,7 @@ public:
      */
     void resize(const Size& size)
     {
-        if (this->size() != size)
+        if (!m_orig_size.empty() && this->size() != size)
         {
             float hs = static_cast<float>(size.width()) / static_cast<float>(m_orig_size.width());
             float vs = static_cast<float>(size.height()) / static_cast<float>(m_orig_size.height());
@@ -155,14 +146,7 @@ public:
     /**
      * Get the absolute size of the image.
      */
-    EGT_NODISCARD Size size() const
-    {
-        if (empty())
-            return {};
-
-        return {cairo_image_surface_get_width(surface().get()),
-                cairo_image_surface_get_height(surface().get())};
-    }
+    EGT_NODISCARD Size size() const;
 
     EGT_NODISCARD DefaultDim width() const
     {
@@ -177,29 +161,14 @@ public:
     /**
      * Returns true if no internal surface is set.
      */
-    EGT_NODISCARD bool empty() const
-    {
-        return !surface();
-    }
+    EGT_NODISCARD bool empty() const;
 
     /**
      * Get a reference to the internal image surface.
      */
-    EGT_NODISCARD shared_cairo_surface_t surface() const
+    EGT_NODISCARD const std::shared_ptr<Surface>& surface() const
     {
-        if (m_surface_local.get())
-            return m_surface_local;
         return m_surface;
-    }
-
-    /// Get internal pattern representation.
-    EGT_NODISCARD cairo_pattern_t* pattern() const
-    {
-        if (!m_pattern)
-            m_pattern.reset(cairo_pattern_create_for_surface(surface().get()),
-                            cairo_pattern_destroy);
-        assert(m_pattern.get());
-        return m_pattern.get();
     }
 
     /**
@@ -233,16 +202,6 @@ public:
         return m_keep_image_ratio;
     }
 
-    /**
-     * This function must be called any time the surface is going to be
-     * modified.  It's safe to call this function when not necessary, and in
-     * any event it will ensure this Image contains a unique copy of the
-     * surface.
-     *
-     * @todo Tricky API.
-     */
-    void copy();
-
     EGT_NODISCARD std::string uri() const
     {
         return m_uri;
@@ -252,12 +211,7 @@ public:
 
     void reset_uri() { uri({}); }
 
-    Image crop(const RectF& rect);
-
-    Image crop(const Rect& rect)
-    {
-        return crop(RectF(rect.x(), rect.y(), rect.width(), rect.height()));
-    }
+    Image crop(const Rect& rect) const;
 
     /**
     * Serialize to the specified serializer.
@@ -283,19 +237,13 @@ protected:
     float m_vscale{1.0};
 
     /// Shared surface pointer.
-    shared_cairo_surface_t m_surface;
-
-    /// Local surface pointer.
-    shared_cairo_surface_t m_surface_local;
+    std::shared_ptr<Surface> m_surface;
 
     /// Original image size.
     Size m_orig_size;
 
     /// Keep the image ratio when the aligned with AlignFlag::expand.
     bool m_keep_image_ratio{true};
-
-    /// Internal pattern representation.
-    mutable shared_cairo_pattern_t m_pattern;
 
 private:
     /**
@@ -305,8 +253,8 @@ private:
      * @param surface The surface created by the SvgImage instance.
      * @param uri The original URI copied from the SvgImage instance.
      */
-    Image(shared_cairo_surface_t surface, const std::string& uri)
-        : Image(surface)
+    Image(Surface&& surface, const std::string& uri)
+        : Image(std::move(surface))
     {
         m_uri = uri;
     }

@@ -143,7 +143,7 @@ public:
           m_penpicker(egt::Palette::blue),
           m_fillpicker(egt::Palette::red),
           m_widthpicker(2),
-          m_canvas(screen()->size(), egt::PixelFormat::argb8888)
+          m_surface(screen()->size(), egt::PixelFormat::argb8888)
     {
         // don't draw background, we'll do it in draw()
         fill_flags().clear();
@@ -206,7 +206,7 @@ public:
             paint_to_file();
         });
 
-        auto logo = std::make_shared<egt::ImageLabel>(egt::Image("icon:egt_logo_black.png;128"));
+        auto logo = std::make_shared<egt::ImageLabel>(egt::Image("icon:mgs_logo_black.png;128"));
         logo->align(egt::AlignFlag::right | egt::AlignFlag::top);
         logo->margin(10);
         add(logo);
@@ -216,8 +216,8 @@ public:
 
     void clear()
     {
-        egt::Painter painter(m_canvas.context());
-        cairo_set_operator(painter.context().get(), CAIRO_OPERATOR_SOURCE);
+        egt::Painter painter(m_surface);
+        painter.alpha_blending(false);
         painter.set(egt::Palette::transparent);
         painter.paint();
     }
@@ -231,8 +231,8 @@ public:
         case egt::EventId::pointer_click:
         {
             const auto mouse = display_to_local(event.pointer().point);
-            egt::Painter painter(m_canvas.context());
-            cairo_set_antialias(painter.context().get(), CAIRO_ANTIALIAS_NONE);
+            egt::Painter painter(m_surface);
+            painter.antialias(egt::Painter::AntiAlias::none);
             painter.flood(mouse, m_fillpicker.selected_color());
             damage();
             break;
@@ -250,11 +250,10 @@ public:
                 const auto width = m_widthpicker.width();
 
                 egt::Line line(m_last, mouse);
-                egt::Painter painter(m_canvas.context());
-                cairo_set_antialias(painter.context().get(), CAIRO_ANTIALIAS_NONE);
+                egt::Painter painter(m_surface);
+                painter.antialias(egt::Painter::AntiAlias::none);
                 painter.line_width(width);
-                auto cr = painter.context();
-                cairo_set_line_cap(cr.get(), CAIRO_LINE_CAP_ROUND);
+                painter.line_cap(egt::Painter::LineCap::round);
                 painter.set(m_penpicker.selected_color());
                 painter.draw(line.start(), line.end());
                 painter.stroke();
@@ -281,8 +280,7 @@ public:
         painter.draw(rect);
         painter.fill();
 
-        painter.draw(rect.point());
-        painter.draw(rect, egt::Image(m_canvas.surface()));
+        painter.draw(m_surface, {}, rect);
 
         egt::TopWindow::draw(painter, rect);
     }
@@ -301,7 +299,7 @@ protected:
     ColorPickerWindow m_penpicker;
     ColorPickerWindow m_fillpicker;
     WidthPickerWindow m_widthpicker;
-    egt::Canvas m_canvas;
+    egt::Surface m_surface;
 };
 
 static int run(int argc, char** argv)

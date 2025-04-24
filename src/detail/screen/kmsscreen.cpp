@@ -9,13 +9,13 @@
 
 #include "detail/egtlog.h"
 #include "detail/screen/flipthread.h"
+#include "detail/screen/framebuffer.h"
 #include "egt/detail/screen/kmsscreen.h"
 #include "egt/eventloop.h"
 #include "egt/input.h"
 #include "egt/widget.h"
 #include "egt/window.h"
 #include <algorithm>
-#include <cairo.h>
 #include <cstring>
 #include <drm_fourcc.h>
 #include <filesystem>
@@ -25,10 +25,6 @@
 #include <planes/plane.h>
 #include <string>
 #include <xf86drm.h>
-
-#if defined(HAVE_CAIRO_GFX2D)
-#include <cairo-gfx2d.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -75,11 +71,6 @@ KMSScreen::KMSScreen(bool allocate_primary_plane,
 {
     detail::info("DRM/KMS Screen ({} buffers)", max_buffers());
 
-#if defined(HAVE_CAIRO_GFX2D)
-    if (getenv("EGT_USE_GFX2D") && strlen(getenv("EGT_USE_GFX2D")))
-        m_gfx2d = true;
-#endif
-
     m_fd = drmOpen("atmel-hlcdc", nullptr);
     if (m_fd < 0)
         throw std::runtime_error("unable to open DRM driver");
@@ -103,49 +94,23 @@ KMSScreen::KMSScreen(bool allocate_primary_plane,
             throw std::runtime_error("unable to create primary plane");
 
         plane_fb_map(m_plane.get());
+#ifdef HAVE_LIBM2D
+        plane_fb_export(m_plane.get());
+#endif
         plane_apply(m_plane.get());
 
         EGTLOG_DEBUG("primary plane dumb buffer {},{} {}", plane_width(m_plane.get()),
                      plane_height(m_plane.get()), format);
 
-        if (!m_gfx2d)
-        {
-            init(m_plane->bufs, KMSScreen::max_buffers(),
-                 Size(plane_width(m_plane.get()), plane_height(m_plane.get())),
-                 format);
-        }
-#if defined(HAVE_CAIRO_GFX2D)
-        else
-        {
-            EGTLOG_DEBUG("use gfx2d surfaces");
-            m_size = Size(plane_width(m_plane.get()), plane_height(m_plane.get()));
+        const auto num_infos = KMSScreen::max_buffers();
+        std::vector<detail::FrameBufferInfo> info;
+        info.reserve(num_infos);
+        for (uint32_t fd = 0; fd < num_infos; ++fd)
+            info.emplace_back(m_plane->bufs[fd], m_plane->prime_fds[fd]);
 
-            cairo_format_t f = detail::cairo_format(format);
-            if (f == CAIRO_FORMAT_INVALID)
-                f = CAIRO_FORMAT_ARGB32;
-
-            m_buffers.clear();
-
-            for (uint32_t x = 0; x < KMSScreen::max_buffers(); x++)
-            {
-                m_buffers.emplace_back(
-                    cairo_gfx2d_surface_create_from_name(
-                        m_plane->gem_names[x],
-                        f,
-                        m_size.width(), m_size.height()));
-
-                m_buffers.back().damage.emplace_back(Point(), m_size);
-            }
-
-            m_surface = shared_cairo_surface_t(
-                            cairo_gfx2d_surface_create(f, m_size.width(), m_size.height()),
-                            cairo_surface_destroy);
-            assert(m_surface.get());
-
-            m_cr = shared_cairo_t(cairo_create(m_surface.get()), cairo_destroy);
-            assert(m_cr);
-        }
-#endif
+        init(info.data(), info.size(),
+             Size(plane_width(m_plane.get()), plane_height(m_plane.get())),
+             format);
 
         m_pool = std::make_unique<FlipThread>(m_plane->buffer_count - 1);
     }
@@ -302,6 +267,9 @@ unique_plane_t KMSScreen::allocate_overlay(const Size& size,
     if (plane)
     {
         plane_fb_map(plane.get());
+#ifdef HAVE_LIBM2D
+        plane_fb_export(plane.get());
+#endif
         plane_set_pos(plane.get(), 0, 0);
 
         EGTLOG_DEBUG("allocated overlay index {} {},{} {} {}", plane->index,

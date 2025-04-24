@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "egt/camera.h"
-#include "detail/camera/gstcameraimpl.h"
+#include "detail/multimedia/gstdecoderimpl.h"
 #include "egt/video.h"
 
 namespace egt
@@ -23,12 +23,20 @@ CameraWindow::CameraWindow(const Rect& rect,
                            PixelFormat format_hint,
                            WindowHint hint)
     : Window(rect, format_hint, detail::check_windowhint(hint)),
-      m_camera_impl(std::make_unique<detail::CameraImpl>(*this, rect, device))
-{}
+      m_camera_impl(std::make_unique<detail::GstDecoderImpl>(this, rect.size())),
+      on_error(&m_camera_impl->on_error),
+      on_connect(&m_camera_impl->on_connect),
+      on_disconnect(&m_camera_impl->on_disconnect)
+{
+    m_camera_impl->device(device);
+}
 
 CameraWindow::CameraWindow(Serializer::Properties& props, bool is_derived)
     : Window(props, true),
-      m_camera_impl(std::make_unique<detail::CameraImpl>(*this, box(), ""))
+      m_camera_impl(std::make_unique<detail::GstDecoderImpl>(this, box().size())),
+      on_error(&m_camera_impl->on_error),
+      on_connect(&m_camera_impl->on_connect),
+      on_disconnect(&m_camera_impl->on_disconnect)
 {
     deserialize(props);
 
@@ -45,6 +53,16 @@ bool CameraWindow::start()
 {
     allocate_screen();
     return m_camera_impl->start();
+}
+
+bool CameraWindow::playing() const
+{
+    return m_camera_impl->playing();
+}
+
+bool CameraWindow::play()
+{
+    return m_camera_impl->play();
 }
 
 void CameraWindow::device(const std::string& device)
@@ -64,18 +82,17 @@ std::vector<std::string> CameraWindow::list_devices()
 
 void CameraWindow::scale(float hscale, float vscale)
 {
-    auto xs = detail::change_if_diff<float>(m_hscale, hscale);
-    auto ys = detail::change_if_diff<float>(m_vscale, vscale);
-
-    if (xs || ys)
+    if (!detail::float_equal(hscale, m_hscale) || !detail::float_equal(vscale, m_vscale))
     {
         if (!plane_window())
         {
+            m_hscale = hscale;
+            m_vscale = vscale;
             m_camera_impl->scale(m_hscale, m_vscale);
         }
         else
         {
-            Window::scale(m_hscale, m_vscale);
+            Window::scale(hscale, vscale);
         }
     }
 }

@@ -3,11 +3,12 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "egt/canvas.h"
+#include "detail/egtlog.h"
 #include "egt/detail/alignment.h"
 #include "egt/detail/image.h"
 #include "egt/detail/imagecache.h"
 #include "egt/image.h"
+#include "egt/painter.h"
 #include "egt/serialize.h"
 
 namespace egt
@@ -26,34 +27,28 @@ Image::Image(const std::string& uri,
     load(uri, hscale, vscale);
 }
 
-Image::Image(shared_cairo_surface_t surface)
+Image::Image(std::shared_ptr<Surface> surface)
     : m_surface(std::move(surface))
 {
     handle_surface_changed();
 }
 
-Image::Image(cairo_surface_t* surface)
-    : m_surface(cairo_image_surface_create(cairo_image_surface_get_format(surface),
-                                           cairo_image_surface_get_width(surface),
-                                           cairo_image_surface_get_height(surface)),
-                cairo_surface_destroy)
+Image::Image(Surface&& surface)
+    : m_surface(std::make_shared<Surface>(std::move(surface)))
 {
     handle_surface_changed();
 }
 
 Image::Image(const unsigned char* data, size_t len)
-    : m_surface(detail::load_image_from_memory(data, len))
+    : m_surface(std::make_shared<Surface>(detail::load_image_from_memory(data, len)))
 {
     handle_surface_changed();
 }
 
 void Image::handle_surface_changed()
 {
-    assert(cairo_surface_status(m_surface.get()) == CAIRO_STATUS_SUCCESS);
-
-    m_surface_local.reset();
-    m_orig_size = Size(std::ceil(cairo_image_surface_get_width(m_surface.get()) / m_hscale),
-                       std::ceil(cairo_image_surface_get_height(m_surface.get()) / m_vscale));
+    m_orig_size = Size(std::ceil(static_cast<float>(m_surface->width()) / m_hscale),
+                       std::ceil(static_cast<float>(m_surface->height()) / m_vscale));
 }
 
 void Image::load(const std::string& uri, float hscale, float vscale, bool approximate)
@@ -65,24 +60,51 @@ void Image::load(const std::string& uri, float hscale, float vscale, bool approx
     do_update |= detail::change_if_diff<>(m_vscale, vscale);
     if (do_update)
     {
-        if (!uri.empty())
+        bool do_reset = uri.empty();
+
+        if (!do_reset)
         {
-            m_surface = detail::image_cache().get(uri, hscale, vscale, approximate);
-            handle_surface_changed();
+            try
+            {
+                m_surface = detail::image_cache().get(uri, hscale, vscale, approximate);
+                handle_surface_changed();
+            }
+            catch (const std::exception& e)
+            {
+                EGTLOG_ERROR("{}", e.what());
+                do_reset = true;
+            }
+            catch (...)
+            {
+                EGTLOG_ERROR("unknown exception caught when calling ImageCache::get()");
+                do_reset = true;
+            }
         }
-        else
+
+        if (do_reset)
         {
             m_surface.reset();
-            m_surface_local.reset();
             m_orig_size = Size();
         }
-        m_pattern.reset();
     }
 }
 
 void Image::scale(float hscale, float vscale, bool approximate)
 {
     load(m_uri, hscale, vscale, approximate);
+}
+
+bool Image::empty() const
+{
+    return !m_surface || m_surface->empty();
+}
+
+Size Image::size() const
+{
+    if (empty())
+        return {};
+
+    return m_surface->size();
 }
 
 Rect Image::align(const Rect& bounding, const AlignFlags& align)
@@ -143,20 +165,29 @@ Rect Image::align(const Rect& bounding, const AlignFlags& align)
     return target;
 }
 
-void Image::copy()
+Image Image::crop(const Rect& rect) const
 {
-    if (!m_surface_local.get())
-    {
-        auto canvas = Canvas(surface());
-        m_surface_local = canvas.surface();
-    }
-}
+    if (empty())
+        return Image();
 
-Image Image::crop(const RectF& rect)
-{
-    Canvas canvas(rect.size());
-    canvas.copy(m_surface, rect);
-    return canvas.surface();
+    const auto r = Rect::intersection(rect, Rect(m_surface->size()));
+    if (r.empty())
+        return Image();
+
+    Surface target(r.size(), m_surface->format());
+    {
+        Painter painter(target);
+        painter.source(*this, -r.point());
+        painter.rectangle(RectF(r.size()));
+        painter.fill();
+        /*
+         * Make sure 'painter' is destroyed before moving the 'target' surface
+         * into the output Image because Painter::~Painter() calls
+         * 'm_surface.flush();', hence still requires a valid Surface instance.
+         */
+    }
+
+    return Image(std::move(target));
 }
 
 void Image::serialize(const std::string& name, Serializer& serializer) const

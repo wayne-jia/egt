@@ -27,10 +27,9 @@ CUSTOM_CXXFLAGS = \
 	-I$(top_builddir)/include \
 	-isystem $(top_srcdir)/external/rapidxml \
 	-isystem $(top_srcdir)/external/cxxopts/include \
-	$(cairo_CFLAGS) \
 	$(CODE_COVERAGE_CXXFLAGS)
 
-CUSTOM_LDADD = $(cairo_LIBS) $(CODE_COVERAGE_LDFLAGS)
+CUSTOM_LDADD = $(CODE_COVERAGE_LDFLAGS)
 
 bin_PROGRAMS = \
 basic/basic \
@@ -45,6 +44,7 @@ grid/grid \
 imagebutton/imagebutton \
 imagestack/imagestack \
 keys/keys \
+listboxmulti/listboxmulti \
 press/press \
 sizers/sizers \
 space/space \
@@ -75,11 +75,9 @@ gauge/gauge \
 sevensegment/sevensegment
 endif
 
-if HAVE_ALSA
-if HAVE_SNDFILE
+if HAVE_SOUNDEFFECT
 bin_PROGRAMS += \
 drummachine/drummachine
-endif
 endif
 
 if HAVE_PLPLOT
@@ -200,7 +198,9 @@ drummachine_drummachine_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
 	-DEXAMPLEDATA=\"$(datadir)/egt/examples/drummachine\"
 drummachine_drummachine_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 drummachine_drummachinedir = $(prefix)/share/egt/examples/drummachine
-drummachine_drummachine_DATA = $(wildcard $(top_srcdir)/examples/drummachine/*.wav)
+drummachine_drummachine_DATA = $(wildcard $(top_srcdir)/examples/drummachine/*.wav) \
+	$(wildcard $(top_srcdir)/examples/drummachine/*.png) \
+	$(top_srcdir)/examples/drummachine/drummachine.xml
 drummachine_drummachine_LDFLAGS = $(AM_LDFLAGS)
 
 easing_easing_SOURCES = easing/easing.cpp
@@ -271,6 +271,12 @@ keys_keys_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
 keys_keys_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
 keys_keysdir = $(prefix)/share/egt/examples/keys
 keys_keys_LDFLAGS = $(AM_LDFLAGS)
+
+listboxmulti_listboxmulti_SOURCES = listboxmulti/listboxmulti.cpp
+listboxmulti_listboxmulti_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
+listboxmulti_listboxmulti_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+listboxmulti_listboxmultidir = $(prefix)/share/egt/examples/listboxmulti
+listboxmulti_listboxmulti_LDFLAGS = $(AM_LDFLAGS)
 
 luarepl_luarepl_SOURCES = luarepl/luarepl.cpp
 luarepl_luarepl_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)

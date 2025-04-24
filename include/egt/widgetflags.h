@@ -281,6 +281,11 @@ public:
         return static_cast<const BitField*>(this)->operator==(rhs);
     }
 
+    constexpr bool equals(const AlignFlag& rhs) const
+    {
+        return static_cast<const BitField*>(this)->operator==(rhs);
+    }
+
     static constexpr HorizontalBitField center_horizontal = HorizontalBitField(1);
     static constexpr HorizontalBitField left = HorizontalBitField(2);
     static constexpr HorizontalBitField right = HorizontalBitField(3);
@@ -294,6 +299,7 @@ public:
     static constexpr ExpandBitField expand_horizontal = ExpandBitField(detail::bit(0));
     static constexpr ExpandBitField expand_vertical = ExpandBitField(detail::bit(1));
     static constexpr ExpandBitField expand = expand_horizontal | expand_vertical;
+    static constexpr ExpandBitField keep_ratio = ExpandBitField(detail::bit(2));
 
 private:
     constexpr AlignFlag(const BitField& field)
@@ -361,13 +367,13 @@ template<>
 EGT_API const std::pair<VerticalBitField, char const*> detail::EnumStrings<VerticalBitField>::data[3];
 
 template<>
-EGT_API const std::pair<ExpandBitField, char const*> detail::EnumStrings<ExpandBitField>::data[3];
+EGT_API const std::pair<ExpandBitField, char const*> detail::EnumStrings<ExpandBitField>::data[4];
 
 template<>
 EGT_API const std::pair<HVBitField, char const*> detail::EnumStrings<HVBitField>::data[1];
 
 template<>
-EGT_API const std::pair<AlignFlag, char const*> detail::EnumStrings<AlignFlag>::data[10];
+EGT_API const std::pair<AlignFlag, char const*> detail::EnumStrings<AlignFlag>::data[11];
 
 /// Alignment flags.
 class AlignFlags : public BitFields<AlignFlag>
@@ -611,6 +617,32 @@ std::shared_ptr<T>& expand(std::shared_ptr<T>& widget)
 {
     assert(widget);
     widget->align(widget->align() | AlignFlag::expand);
+    return widget;
+}
+
+/** Helper to set alignment of a widget. */
+template<class T>
+T& keep_ratio(T& widget)
+{
+    widget.align(widget.align() | AlignFlag::keep_ratio);
+    return widget;
+}
+
+/** Helper to set alignment of a widget. */
+template<class T>
+const std::shared_ptr<T>& keep_ratio(const std::shared_ptr<T>& widget)
+{
+    assert(widget);
+    widget->align(widget->align() | AlignFlag::keep_ratio);
+    return widget;
+}
+
+/** Helper to set alignment of a widget. */
+template<class T>
+std::shared_ptr<T>& keep_ratio(std::shared_ptr<T>& widget)
+{
+    assert(widget);
+    widget->align(widget->align() | AlignFlag::keep_ratio);
     return widget;
 }
 

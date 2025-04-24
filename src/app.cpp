@@ -8,8 +8,10 @@
 #endif
 
 #include "detail/egtlog.h"
+#include "detail/gpu.h"
 #include "egt/app.h"
 #include "egt/detail/filesystem.h"
+#include "egt/detail/imagecache.h"
 #include "egt/detail/screen/composerscreen.h"
 #include "egt/detail/screen/kmsscreen.h"
 #include "egt/detail/screen/memoryscreen.h"
@@ -19,6 +21,7 @@
 #include "egt/painter.h"
 #include "egt/respath.h"
 #include "egt/serialize.h"
+#include "egt/surface.h"
 #include "egt/timer.h"
 #include "egt/utils.h"
 #include "egt/version.h"
@@ -104,6 +107,8 @@ Application::Application(int argc, char** argv,
         the_app = this;
     }
 
+    setup_gpu();
+
     setup_search_paths();
 
     setup_locale(name);
@@ -113,6 +118,14 @@ Application::Application(int argc, char** argv,
     setup_inputs();
 
     setup_events();
+}
+
+void Application::setup_gpu()
+{
+    if (getenv("EGT_GPU_DISABLED"))
+        m_gpu_enabled = false;
+
+    detail::gpu_init();
 }
 
 void Application::setup_events()
@@ -206,7 +219,7 @@ void Application::setup_search_paths(const std::vector<std::string>& extra_paths
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-void Application::setup_backend(bool primary, const std::string& name)
+void Application::setup_backend(bool primary, [[maybe_unused]] const std::string& name)
 {
     detail::ignoreparam(primary);
     std::string backend;
@@ -393,21 +406,14 @@ void Application::quit(int exit_value)
 
 void Application::paint_to_file(const std::string& filename)
 {
-#if CAIRO_HAS_PNG_FUNCTIONS == 1
     auto name = filename;
     if (name.empty())
     {
         name = "screen.png";
     }
 
-    auto surface = shared_cairo_surface_t(
-                       cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                               screen()->size().width(), screen()->size().height()),
-                       cairo_surface_destroy);
-
-    auto cr = shared_cairo_t(cairo_create(surface.get()), cairo_destroy);
-
-    Painter painter(cr);
+    Surface surface(screen()->size());
+    Painter painter(surface);
 
     for (auto& w : windows())
     {
@@ -415,15 +421,11 @@ void Application::paint_to_file(const std::string& filename)
             continue;
 
         // draw top level frames and plane frames
-        if (w->top_level() || w->plane_window())
+        if (w->top_level())
             w->paint(painter);
     }
 
-    cairo_surface_write_to_png(surface.get(), name.c_str());
-#else
-    detail::ignoreparam(filename);
-    detail::error("png support not available");
-#endif
+    surface.write_to_png(name);
 }
 
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
@@ -467,6 +469,25 @@ const std::vector<std::pair<std::string, std::string>>& Application::get_input_d
 Application::~Application() noexcept
 {
     Input::global_input().remove_handler(m_handle);
+
+    /*
+     * Clear the image cache to release all its shared Surfaces, hence giving a
+     * chance to release the GPUSurface instances behind, before calling
+     * detail::gpu_cleanup().
+     *
+     * Indeed all widgets containing images with shared Surfaces from the image
+     * cache should already have been destroyed, before destroying this
+     * Application instance.
+     */
+    detail::image_cache().clear();
+
+    /*
+     * Screen buffers must be released, hence releasing their Surface instances
+     * thus the GPUSurface instances behind, before calling detail::gpu_cleanup().
+     */
+    m_screen.reset(nullptr);
+
+    detail::gpu_cleanup();
 
     if (the_app == this)
         the_app = nullptr;

@@ -7,9 +7,10 @@
 #include "config.h"
 #endif
 
+#include "detail/cairoabstraction.h"
 #include "detail/egtlog.h"
+#include "detail/painter.h"
 #include "egt/app.h"
-#include "egt/canvas.h"
 #include "egt/detail/enum.h"
 #include "egt/font.h"
 #include "egt/respath.h"
@@ -67,7 +68,7 @@ static void ft_done_face_uncached(void* closure)
     FT_Done_Face(face);
 }
 
-static shared_cairo_scaled_font_t create_ft_font(cairo_t* cr,
+static detail::InternalFont create_ft_font(cairo_t* cr,
         FT_Face& face,
         const Font& font)
 {
@@ -90,19 +91,17 @@ static shared_cairo_scaled_font_t create_ft_font(cairo_t* cr,
     cairo_matrix_init_scale(&size_matrix, font.size(), font.size());
     cairo_matrix_init_identity(&identity_matrix);
 
-    shared_cairo_scaled_font_t scaled_font(cairo_scaled_font_create(font_face.get(),
-                                           &size_matrix,
-                                           &identity_matrix,
-                                           font_options.get()),
-                                           cairo_scaled_font_destroy);
-
+    detail::InternalFont scaled_font(cairo_scaled_font_create(font_face.get(),
+                                     &size_matrix,
+                                     &identity_matrix,
+                                     font_options.get()));
     if (!scaled_font || cairo_scaled_font_status(scaled_font.get()))
         return nullptr;
 
     return scaled_font;
 }
 
-static shared_cairo_scaled_font_t create_ft_scaled_font(cairo_t* cr,
+static detail::InternalFont create_ft_scaled_font(cairo_t* cr,
         const char* path,
         const Font& font)
 {
@@ -122,7 +121,7 @@ static shared_cairo_scaled_font_t create_ft_scaled_font(cairo_t* cr,
     return create_ft_font(cr, face, font);
 }
 
-static shared_cairo_scaled_font_t create_ft_scaled_font(cairo_t* cr,
+static detail::InternalFont create_ft_scaled_font(cairo_t* cr,
         const unsigned char* data,
         size_t len, const Font& font)
 {
@@ -141,7 +140,7 @@ static shared_cairo_scaled_font_t create_ft_scaled_font(cairo_t* cr,
 }
 
 #ifdef HAVE_FONTCONFIG
-static shared_cairo_scaled_font_t create_scaled_font(cairo_t* cr, const Font& font)
+static detail::InternalFont create_scaled_font(cairo_t* cr, const Font& font)
 {
     EGTLOG_DEBUG("allocating font using Fontconfig: {}", font.face());
 
@@ -214,12 +213,10 @@ static shared_cairo_scaled_font_t create_scaled_font(cairo_t* cr, const Font& fo
     cairo_matrix_t ctm;
     cairo_get_matrix(cr, &ctm);
 
-    shared_cairo_scaled_font_t scaled_font(cairo_scaled_font_create(font_face.get(),
-                                           &font_matrix,
-                                           &ctm,
-                                           font_options.get()),
-                                           cairo_scaled_font_destroy);
-
+    detail::InternalFont scaled_font(cairo_scaled_font_create(font_face.get(),
+                                     &font_matrix,
+                                     &ctm,
+                                     font_options.get()));
     cairo_status_t status = cairo_scaled_font_status(scaled_font.get());
     if (status)
         return nullptr;
@@ -278,6 +275,21 @@ Font::Font(Font::Slant slant)
     : m_size(default_font_size()),
       m_slant(slant)
 {}
+
+Font::FontExtents Font::extents() const
+{
+    return detail::dummy_painter().set(*this).extents();
+}
+
+Font::TextExtents Font::extents(const std::string& text) const
+{
+    return detail::dummy_painter().set(*this).extents(text);
+}
+
+Size Font::text_size(const std::string& text) const
+{
+    return detail::dummy_painter().set(*this).text_size(text);
+}
 
 Font::Size Font::default_font_size()
 {
@@ -355,20 +367,21 @@ struct FontCache : private detail::NonCopyable<FontCache>
         }
     };
 
-    std::map<Font, shared_cairo_scaled_font_t, FontCompare> cache;
+    std::map<Font, detail::InternalFont, FontCompare> cache;
 
-    shared_cairo_scaled_font_t scaled_font(const Font& font)
+    const detail::InternalFont& scaled_font(const Font& font)
     {
+        static const detail::InternalFont dummy;
+
         auto i = cache.find(font);
         if (i != cache.end())
             return i->second;
 
         EGTLOG_TRACE("creating scaled font {}", font);
 
-        Canvas canvas(Size(100, 100));
-        auto cr = canvas.context();
+        auto cr = detail::dummy_painter().context().get();
 
-        shared_cairo_scaled_font_t scaled_font;
+        detail::InternalFont scaled_font;
 
         std::string path;
         auto type = detail::resolve_path(font.face(), path);
@@ -377,13 +390,13 @@ struct FontCache : private detail::NonCopyable<FontCache>
         {
         case detail::SchemeType::filesystem:
         {
-            scaled_font = create_ft_scaled_font(cr.get(), path.c_str(), font);
+            scaled_font = create_ft_scaled_font(cr, path.c_str(), font);
             break;
         }
         case detail::SchemeType::unknown:
 #ifdef HAVE_FONTCONFIG
         {
-            scaled_font = create_scaled_font(cr.get(), font);
+            scaled_font = create_scaled_font(cr, font);
             break;
         }
 #endif
@@ -393,27 +406,25 @@ struct FontCache : private detail::NonCopyable<FontCache>
             throw std::runtime_error("unable to load font uri: " + font.face());
         }
 
-        if (scaled_font)
-            cache.insert(std::make_pair(font, scaled_font));
-        return scaled_font;
+        const auto [it, success] = cache.insert(std::make_pair(font, std::move(scaled_font)));
+        return success ? it->second : dummy;
     }
 };
 
 static FontCache font_cache;
 
-cairo_scaled_font_t* Font::scaled_font() const
+const detail::InternalFont& Font::scaled_font() const
 {
     if (m_data && m_len && !m_scaled_font)
     {
-        Canvas canvas(egt::Size(100, 100));
-        auto cr = canvas.context().get();
-        m_scaled_font = create_ft_scaled_font(cr, m_data, m_len, *this);
+        auto cr = detail::dummy_painter().context().get();
+        m_scaled_font = std::make_shared<detail::InternalFont>(create_ft_scaled_font(cr, m_data, m_len, *this));
     }
 
     if (m_scaled_font)
-        return m_scaled_font.get();
+        return *m_scaled_font;
 
-    return font_cache.scaled_font(*this).get();
+    return font_cache.scaled_font(*this);
 }
 
 std::ostream& operator<<(std::ostream& os, const Font& font)

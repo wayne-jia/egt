@@ -40,10 +40,6 @@ public:
 
     virtual void draw(Painter& painter, const Rect& rect) override;
 
-    virtual void paint(Painter& painter) override;
-
-    virtual shared_cairo_surface_t surface() const override;
-
 protected:
     ImageLabel m_label;
     Sprite& m_interface;
@@ -63,36 +59,9 @@ public:
 
     void draw(Painter& painter, const Rect& rect) override;
 
-    void paint(Painter& painter) override;
-
-    EGT_NODISCARD shared_cairo_surface_t surface() const override;
-
 protected:
     Sprite& m_interface;
 };
-
-/**
- * This pulls out a frame into its own surface.
- */
-static shared_cairo_surface_t frame_surface(const Rect& rect, const Image& image)
-{
-    // cairo_surface_create_for_rectangle() would work here with one
-    // exception - the resulting image has no width and height
-
-    shared_cairo_surface_t copy =
-        shared_cairo_surface_t(cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
-                               rect.width(),
-                               rect.height()),
-                               cairo_surface_destroy);
-
-    shared_cairo_t cr = shared_cairo_t(cairo_create(copy.get()), cairo_destroy);
-    cairo_set_source_surface(cr.get(), image.surface().get(), -rect.x(), -rect.y());
-    cairo_rectangle(cr.get(), 0, 0, rect.width(), rect.height());
-    cairo_set_operator(cr.get(), CAIRO_OPERATOR_SOURCE);
-    cairo_fill(cr.get());
-
-    return copy;
-}
 
 #ifdef HAVE_LIBPLANES
 HardwareSprite::HardwareSprite(Sprite& iface, const Image& image, const Size& frame_size,
@@ -116,7 +85,16 @@ HardwareSprite::HardwareSprite(Sprite& iface, const Image& image, const Size& fr
 
 void HardwareSprite::draw(Painter& painter, const Rect& rect)
 {
-    m_label.draw(painter, rect);
+    /**
+     * 'm_label' can be seen as a component of the 'm_interface' Sprite widget.
+     * Therefore, insert a translation of 'm_interface.point()', as
+     * Widget::draw() would have done before drawing the subordinate/component.
+     */
+    Painter::AutoSaveRestore sr(painter);
+
+    const auto& origin = m_interface.point();
+    painter.translate(origin);
+    m_label.draw(painter, rect - origin);
 }
 
 void HardwareSprite::show_frame(int index)
@@ -137,18 +115,6 @@ void HardwareSprite::show_frame(int index)
     }
 }
 
-shared_cairo_surface_t HardwareSprite::surface() const
-{
-    Point origin = get_frame_origin(m_index);
-    return frame_surface(Rect(origin, Size(m_frame.width(), m_frame.height())), m_image);
-}
-
-void HardwareSprite::paint(Painter& painter)
-{
-    painter.draw(m_interface.point());
-    painter.draw(Image(surface()));
-}
-
 #endif
 
 SoftwareSprite::SoftwareSprite(Sprite& iface, const Image& image, const Size& frame_size,
@@ -164,8 +130,8 @@ void SoftwareSprite::draw(Painter& painter, const Rect& rect)
     ignoreparam(rect);
 
     Point origin = get_frame_origin(m_index);
-    painter.draw(m_interface.box().point());
-    painter.draw(Rect(origin.x(), origin.y(), m_frame.width(), m_frame.height()), m_image);
+    const auto& point = m_interface.box().point();
+    painter.draw(m_image, point - origin, Rect(point, m_frame));
 }
 
 void SoftwareSprite::show_frame(int index)
@@ -175,19 +141,6 @@ void SoftwareSprite::show_frame(int index)
         m_index = index;
         m_interface.damage();
     }
-}
-
-shared_cairo_surface_t SoftwareSprite::surface() const
-{
-    Point origin = get_frame_origin(m_index);
-    return frame_surface(Rect(origin, Size(m_frame.width(), m_frame.height())), m_image);
-}
-
-void SoftwareSprite::paint(Painter& painter)
-{
-    auto cr = painter.context();
-    cairo_move_to(cr.get(), m_interface.point().x(), m_interface.point().y());
-    painter.draw(Image(surface()));
 }
 
 }
@@ -237,20 +190,6 @@ void Sprite::show_frame(int index)
     if (!m_simpl)
         throw std::runtime_error("no sprite implementation initialized");
     m_simpl->show_frame(index);
-}
-
-void Sprite::paint(Painter& painter)
-{
-    if (!m_simpl)
-        return;
-    m_simpl->paint(painter);
-}
-
-shared_cairo_surface_t Sprite::surface() const
-{
-    if (!m_simpl)
-        throw std::runtime_error("no sprite implementation initialized");
-    return m_simpl->surface();
 }
 
 void Sprite::advance()

@@ -105,7 +105,9 @@ if(ALSA_FOUND AND SNDFILE_FOUND)
     install(DIRECTORY drummachine
             DESTINATION ${CMAKE_INSTALL_DATADIR}/egt/examples
             FILES_MATCHING
-            PATTERN *.wav)
+            PATTERN *.wav
+            PATTERN *.png
+            PATTERN drummachine.xml)
 endif()
 
 if(PLPLOT_FOUND)
@@ -177,6 +179,10 @@ install(DIRECTORY imagestack
 add_executable(egt_keys keys/keys.cpp)
 target_link_libraries(egt_keys PRIVATE egt)
 install(TARGETS egt_keys RUNTIME)
+
+add_executable(egt_listboxmulti listboxmulti/listboxmulti.cpp)
+target_link_libraries(egt_listboxmulti PRIVATE egt)
+install(TARGETS egt_listboxmulti RUNTIME)
 
 if(LUA_FOUND AND ENABLE_LUA_BINDINGS)
     add_executable(egt_luarepl luarepl/luarepl.cpp)

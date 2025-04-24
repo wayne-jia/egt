@@ -23,13 +23,10 @@ namespace detail
 {
 /// @todo these functions should be internal
 /// @private
-bool is_target_sama5d4();
-/// @private
 bool audio_device();
 /// @private
 WindowHint check_windowhint(WindowHint& hint);
 class GstDecoderImpl;
-class GstKmsSinkImpl;
 class GstAppSinkImpl;
 }
 
@@ -46,6 +43,14 @@ class GstAppSinkImpl;
  */
 class EGT_API VideoWindow : public Window
 {
+protected:
+    /// @private
+    /*
+     * Must be declared before SignalW members to match the order of members
+     * in the constructor initialization lists.
+     */
+    std::unique_ptr<detail::GstDecoderImpl> m_video_impl;
+
 public:
 
     /**
@@ -53,16 +58,16 @@ public:
      * @{
      */
     /// Invoked when the position of the player changes.
-    Signal<int64_t> on_position_changed;
+    SignalW<int64_t> on_position_changed;
 
     /// Invoked when an error occurs.
-    Signal<const std::string&> on_error;
+    SignalW<const std::string&> on_error;
 
     /// Invoked on end of stream.
-    Signal<> on_eos;
+    SignalW<> on_eos;
 
     /// Invoked when the state of the player changes.
-    Signal<> on_state_changed;
+    SignalW<> on_state_changed;
     /** @} */
 
     /**
@@ -207,42 +212,20 @@ public:
      *
      * @param enable enable/disable loop-back mode.
      */
-    void loopback(bool enable)
-    {
-        m_loopback = enable;
-    }
+    void loopback(bool enable);
 
     /**
      * Get loop-back state
      *
      * @return true/false based on loop-back state
      */
-    EGT_NODISCARD bool loopback() const
-    {
-        return m_loopback;
-    }
+    EGT_NODISCARD bool loopback() const;
 
     using Window::scale;
     void scale(float hscale, float vscale) override;
 
     using Window::resize;
     void resize(const Size& s) override;
-
-    /**
-     * Get horizontal scale value.
-     */
-    EGT_NODISCARD float hscale() const
-    {
-        return m_hscale;
-    }
-
-    /**
-     * Get vertical scale value.
-     */
-    EGT_NODISCARD float vscale() const
-    {
-        return m_vscale;
-    }
 
     /**
      * check for audio is supported. check is done based on
@@ -252,31 +235,17 @@ public:
      */
     EGT_NODISCARD bool has_audio() const;
 
+    void gst_custom_pipeline(const std::string& pipeline_desc);
+
     void serialize(Serializer& serializer) const override;
 
     ~VideoWindow() noexcept override;
 
 protected:
-    /// Loopback enabled.
-    bool m_loopback{false};
-
-    /// Horizontal scale value.
-    float m_hscale{1.0};
-
-    /// Vertical scale value.
-    float m_vscale{1.0};
-
     /// media file
     std::string m_uri;
 
-    /// Create the internal implementation.
-    void create_impl(const Size& size);
-
-    /// @private
-    std::unique_ptr<detail::GstDecoderImpl> m_video_impl;
-
     friend class detail::GstDecoderImpl;
-    friend class detail::GstKmsSinkImpl;
     friend class detail::GstAppSinkImpl;
 
 private:

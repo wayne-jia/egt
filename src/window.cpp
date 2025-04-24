@@ -140,12 +140,6 @@ void Window::hide()
         m_impl->hide();
 }
 
-void Window::paint(Painter& painter)
-{
-    if (m_impl)
-        m_impl->paint(painter);
-}
-
 void Window::begin_draw()
 {
     EGTLOG_TRACE("{} top draw", name());
@@ -186,10 +180,22 @@ void Window::do_draw()
 
     detail::code_timer(time_child_draw_enabled(), name() + " draw: ", [this]()
     {
-        Painter painter(screen()->context());
+        auto& painter = screen()->painter();
+
+        Painter::AutoSaveRestore sr(painter);
+
+        auto save = painter.set_subordinate_filter([](const Widget & subordinate)
+        {
+            return subordinate.plane_window();
+        });
+
+        // move origin
+        painter.translate(-point());
 
         for (auto& damage : m_damage)
-            draw(painter, damage);
+            draw(painter, damage + point());
+
+        painter.restore_subordinate_filter(std::move(save));
 
         screen()->flip(m_damage);
         m_damage.clear();
@@ -217,8 +223,12 @@ void Window::scale(float hscale, float vscale)
     if (egt_unlikely(Application::instance().m_main_window == this))
         return;
 
-    if (m_impl)
-        m_impl->scale(hscale, vscale);
+    const auto xs = detail::change_if_diff<float>(m_hscale, hscale);
+    const auto ys = detail::change_if_diff<float>(m_vscale, vscale);
+
+    if (xs || ys)
+        if (m_impl)
+            m_impl->scale(m_hscale, m_vscale);
 }
 
 void Window::create_impl(const Rect& rect,

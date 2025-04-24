@@ -103,8 +103,6 @@ public:
 
     void draw(Painter& painter, const Rect& rect) override;
 
-    void paint(Painter& painter) override;
-
     /**
      * Initialize the sprite with new configuration.
      *
@@ -121,14 +119,6 @@ public:
      * Show the frame specified by the index.
      */
     void show_frame(int index);
-
-    /**
-     * Get a surface for the current frame.
-     *
-     * @warning This does not return the whole image surface.  Just the current
-     * frame.
-     */
-    EGT_NODISCARD shared_cairo_surface_t surface() const;
 
     /**
      * Advance to the next frame in the strip.

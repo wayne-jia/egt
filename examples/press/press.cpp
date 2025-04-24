@@ -12,13 +12,13 @@ public:
 
     MainWindow()
         : m_clearbtn(egt::Image("icon:warning.png")),
-          m_canvas(screen()->size(), egt::PixelFormat::argb8888)
+          m_surface(screen()->size(), egt::PixelFormat::argb8888)
     {
         // don't draw background, we'll do it in draw()
         fill_flags().clear();
         color(egt::Palette::ColorId::bg, egt::Palette::white);
 
-        auto logo = std::make_shared<egt::ImageLabel>(egt::Image("icon:egt_logo_black.png;128"));
+        auto logo = std::make_shared<egt::ImageLabel>(egt::Image("icon:mgs_logo_black.png;128"));
         logo->align(egt::AlignFlag::left | egt::AlignFlag::top);
         logo->margin(10);
         add(logo);
@@ -39,8 +39,8 @@ public:
 
     void clear()
     {
-        egt::Painter painter(m_canvas.context());
-        cairo_set_operator(painter.context().get(), CAIRO_OPERATOR_SOURCE);
+        egt::Painter painter(m_surface);
+        painter.alpha_blending(false);
         painter.set(egt::Palette::transparent);
         painter.paint();
     }
@@ -56,7 +56,7 @@ public:
         case egt::EventId::raw_pointer_down:
         {
             auto mouse = display_to_local(event.pointer().point);
-            egt::Painter painter(m_canvas.context());
+            egt::Painter painter(m_surface);
             painter.set(egt::Palette::red);
             painter.draw(egt::Line(egt::Point(mouse.x() - dim, mouse.y()),
                                    egt::Point(mouse.x() + dim, mouse.y())));
@@ -69,7 +69,7 @@ public:
         case egt::EventId::raw_pointer_up:
         {
             auto mouse = display_to_local(event.pointer().point);
-            egt::Painter painter(m_canvas.context());
+            egt::Painter painter(m_surface);
             painter.set(egt::Palette::blue);
             painter.draw(egt::Line(egt::Point(mouse.x() - dim, mouse.y()),
                                    egt::Point(mouse.x() + dim, mouse.y())));
@@ -82,7 +82,7 @@ public:
         case egt::EventId::pointer_click:
         {
             auto mouse = display_to_local(event.pointer().point);
-            egt::Painter painter(m_canvas.context());
+            egt::Painter painter(m_surface);
             painter.set(egt::Palette::green);
             egt::Circle circle(mouse, dim);
             painter.draw(circle);
@@ -93,7 +93,7 @@ public:
         case egt::EventId::pointer_dblclick:
         {
             auto mouse = display_to_local(event.pointer().point);
-            egt::Painter painter(m_canvas.context());
+            egt::Painter painter(m_surface);
             painter.set(egt::Palette::orange);
             egt::Circle circle(mouse, dim);
             painter.draw(circle);
@@ -104,7 +104,7 @@ public:
         case egt::EventId::pointer_drag:
         {
             auto mouse = display_to_local(event.pointer().point);
-            egt::Painter painter(m_canvas.context());
+            egt::Painter painter(m_surface);
             painter.set(egt::Palette::black);
             egt::Rect rect(egt::Size(2, 2));
             rect.move_to_center(mouse);
@@ -124,8 +124,7 @@ public:
         painter.draw(rect);
         painter.fill();
 
-        painter.draw(rect.point());
-        painter.draw(rect, egt::Image(m_canvas.surface()));
+        painter.draw(m_surface, {}, rect);
 
         egt::TopWindow::draw(painter, rect);
     }
@@ -135,7 +134,7 @@ protected:
     bool internal_drag() const override { return true; }
 
     egt::ImageButton m_clearbtn;
-    egt::Canvas m_canvas;
+    egt::Surface m_surface;
 };
 
 static int run(int argc, char** argv)

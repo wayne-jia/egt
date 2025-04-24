@@ -146,7 +146,21 @@ public:
 
     void scale(float hscale, float vscale) override;
 
-    void paint(Painter& painter) override;
+    /**
+     * Get horizontal scale value.
+     */
+    EGT_NODISCARD float hscale() const
+    {
+        return m_hscale;
+    }
+
+    /**
+     * Get vertical scale value.
+     */
+    EGT_NODISCARD float vscale() const
+    {
+        return m_vscale;
+    }
 
     /*
      * Damage rectangles propagate up the widget tree and stop at a top level
@@ -280,12 +294,6 @@ protected:
     }
 
     /// @private
-    virtual void default_paint(Painter& painter)
-    {
-        Frame::paint(painter);
-    }
-
-    /// @private
     std::unique_ptr<detail::WindowImpl> m_impl;
 
     /// Set this window as the main window.
@@ -296,6 +304,12 @@ protected:
 
     /// @private
     WindowHint m_hint;
+
+    /// Horizontal scale value.
+    float m_hscale{1.0};
+
+    /// Vertical scale value.
+    float m_vscale{1.0};
 
     friend class detail::WindowImpl;
     friend class detail::PlaneWindow;

@@ -45,11 +45,12 @@ enum
 };
 
 static void draw_text_setup(std::vector<detail::LayoutRect>& rects,
-                            cairo_t* cr,
-                            cairo_font_extents_t& fe,
+                            const Painter& painter,
                             const std::string& text,
                             const TextBox::TextFlags& flags)
 {
+    const auto fe = painter.extents();
+
     // tokenize based on words or code points
     static const std::string delimiters = " \t\n\r";
     std::vector<std::string> tokens;
@@ -85,8 +86,7 @@ static void draw_text_setup(std::vector<detail::LayoutRect>& rects,
         }
         else
         {
-            cairo_text_extents_t te;
-            cairo_text_extents(cr, t.c_str(), &te);
+            const auto te = painter.extents(t);
             rects.emplace_back(behave, Rect(0, 0, te.x_advance, fe.height), t);
             behave = default_behave;
         }
@@ -109,17 +109,13 @@ void draw_text(Painter& painter,
                size_t select_start,
                size_t select_len)
 {
-    auto cr = painter.context().get();
-
     painter.set(font);
-    cairo_font_extents_t fe;
-    cairo_font_extents(cr, &fe);
+    const auto fe = painter.extents();
 
     std::vector<detail::LayoutRect> rects;
 
     draw_text_setup(rects,
-                    cr,
-                    fe,
+                    painter,
                     text,
                     flags);
 
@@ -140,8 +136,7 @@ void draw_text(Painter& painter,
 
             if (*ch != '\n')
             {
-                cairo_text_extents_t te;
-                cairo_text_extents(cr, last_char.c_str(), &te);
+                const auto te = painter.extents(last_char);;
                 char_width = te.x_advance;
 
                 auto p = PointF(fl(b.x()) + fl(r.rect.x()) + roff + fl(te.x_bearing),
@@ -163,9 +158,7 @@ void draw_text(Painter& painter,
                     auto rect = RectF(p2, s);
                     if (!rect.empty())
                     {
-                        painter.set(highlight_color);
-                        painter.draw(rect);
-                        painter.fill();
+                        painter.draw(highlight_color, rect);
                     }
                 }
 
@@ -243,17 +236,13 @@ void draw_text(Painter& painter,
                size_t select_start,
                size_t select_len)
 {
-    auto cr = painter.context().get();
-
     painter.set(font);
-    cairo_font_extents_t fe;
-    cairo_font_extents(cr, &fe);
+    const auto fe = painter.extents();
 
     std::vector<detail::LayoutRect> rects;
 
     draw_text_setup(rects,
-                    cr,
-                    fe,
+                    painter,
                     text,
                     flags);
 
@@ -290,11 +279,10 @@ void draw_text(Painter& painter,
     {
         if (r.str.empty())
         {
-            auto p = PointF(fl(b.x()) + fl(r.rect.x()),
-                            fl(b.y()) + fl(r.rect.y()));
+            auto p = Point(b.x() + r.rect.x(),
+                           b.y() + r.rect.y());
 
-            painter.draw(p);
-            painter.draw(image);
+            painter.draw(image, p);
             continue;
         }
 
@@ -307,8 +295,7 @@ void draw_text(Painter& painter,
 
             if (*ch != '\n')
             {
-                cairo_text_extents_t te;
-                cairo_text_extents(cr, last_char.c_str(), &te);
+                const auto te = painter.extents(last_char);
                 char_width = te.x_advance;
 
                 auto p = PointF(fl(b.x()) + fl(r.rect.x()) + roff + fl(te.x_bearing),
@@ -330,9 +317,7 @@ void draw_text(Painter& painter,
                     auto rect = RectF(p2, s);
                     if (!rect.empty())
                     {
-                        painter.set(highlight_color);
-                        painter.draw(rect);
-                        painter.fill();
+                        painter.draw(highlight_color, rect);
                     }
                 }
 

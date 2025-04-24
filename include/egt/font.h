@@ -12,6 +12,7 @@
  */
 
 #include <egt/detail/math.h>
+#include <egt/geometry.h>
 #include <egt/serialize.h>
 #include <egt/types.h>
 #include <iosfwd>
@@ -22,6 +23,11 @@ namespace egt
 {
 inline namespace v1
 {
+
+namespace detail
+{
+class InternalFont;
+}
 
 /**
  * Manages a font and properties of a font.
@@ -34,6 +40,33 @@ inline namespace v1
 class EGT_API Font
 {
 public:
+
+    using Extent = float;
+
+    /**
+     * Font extent.
+     */
+    struct FontExtents
+    {
+        Extent ascent;
+        Extent descent;
+        Extent height;
+        Extent max_x_advance;
+        Extent max_y_advance;
+    };
+
+    /**
+     * Text extent.
+     */
+    struct TextExtents
+    {
+        Extent x_bearing;
+        Extent y_bearing;
+        Extent width;
+        Extent height;
+        Extent x_advance;
+        Extent y_advance;
+    };
 
     /// Scalar used for font size
     using Size = float;
@@ -171,12 +204,52 @@ public:
     void slant(Font::Slant s) { m_slant = s; }
 
     /**
+     * Get the font extents based on a default context.
+     *
+     * Internally, calls 'Painter::extents()' on a default Painter instance,
+     * which has no transformation like rotation or symmetry.
+     *
+     * If you want to transform the font, then you should call
+     * 'Painter::extents()' instead, on the relevant Painter instance.
+     */
+    EGT_NODISCARD Font::FontExtents extents() const;
+
+    /**
+     * Get the text extents based on a default context.
+     *
+     * Internally, calls 'Painter::extents(const std::string&)' on a default
+     * Painter instance, which has no transformation like rotation or symmetry.
+     *
+     * If you want to transform the font, then you should call
+     * 'Painter::extents(const std::string&)' instead, on the relevant Painter
+     * instance.
+     *
+     * @param[in] text The UTF8 encoded text.
+     */
+    EGT_NODISCARD Font::TextExtents extents(const std::string& text) const;
+
+    /**
+     * Get the size of a rectangle containing the text, based on a default
+     * context.
+     *
+     * Internally, calls 'Painter::text_size()' on a default Painter instance,
+     * which has no transformation like rotation or symmetry.
+     *
+     * If you want to transform the font, then you should call
+     * 'Painter::text_size()' instead, on the relevant Painter instance.
+     *
+     * @param[in] text The UTF8 encoded text.
+     * @return the minimum size of a rectangle containing the text.
+     */
+    EGT_NODISCARD egt::Size text_size(const std::string& text) const;
+
+    /**
      * Generates a FontConfig scaled font instance.
      *
      * Internally, this may use a font cache to limit regeneration of the same
      * font more than once.
      */
-    EGT_NODISCARD cairo_scaled_font_t* scaled_font() const;
+    EGT_NODISCARD const detail::InternalFont& scaled_font() const;
 
     /**
      * Serialize to the specified serializer.
@@ -233,7 +306,7 @@ protected:
     Font::Slant m_slant{DEFAULT_SLANT};
 
     /// Only used when an in-memory font is created.
-    mutable shared_cairo_scaled_font_t m_scaled_font;
+    mutable std::shared_ptr<detail::InternalFont> m_scaled_font;
     const unsigned char* m_data{nullptr};
     size_t m_len{0};
 

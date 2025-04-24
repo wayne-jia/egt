@@ -43,7 +43,6 @@ animation.cpp \
 app.cpp \
 button.cpp \
 buttongroup.cpp \
-canvas.cpp \
 checkbox.cpp \
 color.cpp \
 combo.cpp \
@@ -51,7 +50,8 @@ detail/asioallocator.h \
 detail/alignment.cpp \
 detail/base64.cpp \
 detail/base64.h \
-detail/collision.cpp \
+detail/cairoabstraction.cpp \
+detail/cairoabstraction.h \
 detail/dump.h \
 detail/egtlog.cpp \
 detail/egtlog.h \
@@ -60,15 +60,18 @@ detail/eraw.h \
 detail/erawimage.h \
 detail/filesystem.cpp \
 detail/fmt.h \
+detail/gpu.h \
 detail/image.cpp \
 detail/imagecache.cpp \
 detail/input/inputkeyboard.cpp \
 detail/input/inputkeyboard.h \
 detail/layout.cpp \
 detail/mousegesture.cpp \
+detail/painter.h \
 detail/priorityqueue.h \
 detail/screen/composerscreen.cpp \
 detail/screen/flipthread.h \
+detail/screen/framebuffer.h \
 detail/screen/memoryscreen.cpp \
 detail/spriteimpl.h \
 detail/string.cpp \
@@ -102,6 +105,7 @@ object.cpp \
 painter.cpp \
 palette.cpp \
 pattern.cpp \
+picture.cpp \
 progressbar.cpp \
 radial.cpp \
 radiobox.cpp \
@@ -116,6 +120,7 @@ sideboard.cpp \
 sizer.cpp \
 slider.cpp \
 sprite.cpp \
+surface.cpp \
 text.cpp \
 textwidget.cpp \
 theme.cpp \
@@ -167,12 +172,10 @@ $(top_builddir)/include/egt/version.h \
 ../include/egt/bitfields.h \
 ../include/egt/button.h \
 ../include/egt/buttongroup.h \
-../include/egt/canvas.h \
 ../include/egt/checkbox.h \
 ../include/egt/color.h \
 ../include/egt/combo.h \
 ../include/egt/detail/alignment.h \
-../include/egt/detail/collision.h \
 ../include/egt/detail/cow.h \
 ../include/egt/detail/enum.h \
 ../include/egt/detail/filesystem.h \
@@ -215,6 +218,7 @@ $(top_builddir)/include/egt/version.h \
 ../include/egt/painter.h \
 ../include/egt/palette.h \
 ../include/egt/pattern.h \
+../include/egt/picture.h \
 ../include/egt/popup.h \
 ../include/egt/progressbar.h \
 ../include/egt/radial.h \
@@ -231,6 +235,7 @@ $(top_builddir)/include/egt/version.h \
 ../include/egt/sizer.h \
 ../include/egt/slider.h \
 ../include/egt/sprite.h \
+../include/egt/surface.h \
 ../include/egt/string.h \
 ../include/egt/text.h \
 ../include/egt/textwidget.h \
@@ -279,24 +284,24 @@ if HAVE_GSTREAMER
 libegt_la_SOURCES += \
 audio.cpp \
 video.cpp \
-detail/video/gstappsinkimpl.cpp \
-detail/video/gstappsinkimpl.h \
-detail/video/gstdecoderimpl.cpp \
-detail/video/gstdecoderimpl.h \
+detail/multimedia/gstdecoderimpl.cpp \
+detail/multimedia/gstdecoderimpl.h \
+detail/multimedia/gstsrc.cpp \
+detail/multimedia/gstsrc.h \
+detail/multimedia/gsturidecodebin.cpp \
+detail/multimedia/gsturidecodebin.h \
+detail/multimedia/gstv4l2src.cpp \
+detail/multimedia/gstv4l2src.h \
+detail/multimedia/gstsink.cpp \
+detail/multimedia/gstsink.h \
+detail/multimedia/gstappsink.cpp \
+detail/multimedia/gstappsink.h \
+detail/multimedia/gstfilesink.cpp \
+detail/multimedia/gstfilesink.h \
 camera.cpp \
-detail/camera/gstcameraimpl.cpp \
-detail/camera/gstcameraimpl.h \
 capture.cpp \
-detail/camera/gstcaptureimpl.cpp \
-detail/camera/gstcaptureimpl.h \
-detail/video/gstmeta.cpp \
-detail/video/gstmeta.h
-
-if HAVE_LIBPLANES
-libegt_la_SOURCES += \
-detail/video/gstkmssinkimpl.cpp \
-detail/video/gstkmssinkimpl.h
-endif
+detail/multimedia/gstmeta.cpp \
+detail/multimedia/gstmeta.h
 
 nobase_libegtinclude_HEADERS += \
 ../include/egt/audio.h \
@@ -304,6 +309,11 @@ nobase_libegtinclude_HEADERS += \
 ../include/egt/camera.h \
 ../include/egt/capture.h
 
+endif
+
+if HAVE_LIBM2D
+libegt_la_SOURCES += \
+detail/gpu.cpp
 endif
 
 if HAVE_LIBPLANES
@@ -371,12 +381,14 @@ nobase_libegtinclude_HEADERS += \
 ../include/egt/luaapp.h
 endif
 
-if HAVE_ALSA
+if HAVE_SOUNDEFFECT
 libegt_la_SOURCES += \
-sound.cpp
+sound_effect.cpp \
+detail/multimedia/sound_effect_impl.h \
+detail/multimedia/sound_effect_impl.cpp
 
 nobase_libegtinclude_HEADERS += \
-../include/egt/sound.h
+../include/egt/sound_effect.h
 endif
 
 if HAVE_PLPLOT
@@ -409,7 +421,7 @@ if OS_WIN32
 libegt_la_LIBADD += -lws2_32 -lintl
 endif
 
-libegt_la_LDFLAGS = $(AM_LDFLAGS) @LIBEGT_EXTRA_LDFLAGS@ -version-info 8:0:0 -no-undefined
+libegt_la_LDFLAGS = $(AM_LDFLAGS) @LIBEGT_EXTRA_LDFLAGS@ -version-info 10:0:0 -no-undefined
 
 pkgconfigdir = @pkgconfigdir@
 pkgconfig_DATA = $(top_builddir)/libegt.pc

@@ -11,7 +11,6 @@
  * @brief Common types.
  */
 
-#include <cairo.h>
 #include <egt/detail/enum.h>
 #include <egt/detail/meta.h>
 #include <iosfwd>
@@ -21,69 +20,6 @@ namespace egt
 {
 inline namespace v1
 {
-
-/**
- * Shared pointer for a cairo surface.
- */
-using shared_cairo_surface_t =
-    std::shared_ptr<cairo_surface_t>;
-
-/**
- * Shared pointer for a cairo context.
- */
-using shared_cairo_t =
-    std::shared_ptr<cairo_t>;
-
-/**
- * Shared pointer for a cairo pattern.
- */
-using shared_cairo_pattern_t =
-    std::shared_ptr<cairo_pattern_t>;
-
-/**
- * Shared pointer for a cairo font.
- */
-using shared_cairo_scaled_font_t =
-    std::shared_ptr<cairo_scaled_font_t>;
-
-namespace detail
-{
-/// @private
-struct cairo_t_deleter
-{
-    void operator()(cairo_t* cr) { cairo_destroy(cr); }
-};
-
-/// @private
-struct cairo_surface_t_deleter
-{
-    void operator()(cairo_surface_t* surface) { cairo_surface_destroy(surface); }
-};
-
-/// @private
-struct cairo_pattern_t_deleter
-{
-    void operator()(cairo_pattern_t* pattern) { cairo_pattern_destroy(pattern); }
-};
-}
-
-/**
- * Unique pointer for a cairo context.
- */
-using unique_cairo_t =
-    std::unique_ptr<cairo_t, detail::cairo_t_deleter>;
-
-/**
- * Unique pointer for a cairo surface.
- */
-using unique_cairo_surface_t =
-    std::unique_ptr<cairo_surface_t, detail::cairo_surface_t_deleter>;
-/**
- * Unique pointer for a cairo pattern.
- */
-using unique_cairo_pattern_t =
-    std::unique_ptr<cairo_pattern_t, detail::cairo_pattern_t_deleter>;
-
 
 /**
  * Supported pixel formats.
@@ -105,11 +41,12 @@ enum class PixelFormat
     nv61,
     yuy2,     ///< Packed YUY 4:2:2
     uyvy,     ///< Reverse byte order of YUY2
+    a8,
 };
 
 /// Enum string conversion map
 template<>
-EGT_API const std::pair<PixelFormat, char const*> detail::EnumStrings<PixelFormat>::data[11];
+EGT_API const std::pair<PixelFormat, char const*> detail::EnumStrings<PixelFormat>::data[12];
 
 /// Overloaded std::ostream insertion operator
 EGT_API std::ostream& operator<<(std::ostream& os, const PixelFormat& format);
@@ -124,11 +61,6 @@ namespace detail
 {
 
 /**
- * Convert a PixelFormat to a cairo format.
- */
-cairo_format_t cairo_format(PixelFormat format);
-
-/**
  * Convert a pixel format to a DRM format.
  */
 uint32_t drm_format(PixelFormat format);
@@ -137,11 +69,6 @@ uint32_t drm_format(PixelFormat format);
  * Convert a DRM format to a pixel format.
  */
 PixelFormat egt_format(uint32_t format);
-
-/**
- * Convert a cairo format to a pixel format.
- */
-PixelFormat egt_format(cairo_format_t format);
 
 /**
  * Convert a pixel format to a gstreamer format.
