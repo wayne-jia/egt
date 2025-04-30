@@ -147,6 +147,17 @@ void Input::dispatch(Event& event)
     case EventId::keyboard_up:
     case EventId::keyboard_repeat:
     {
+#ifdef HAVE_LIBPINYIN
+        if (detail::vkbd_register_event())
+        {
+            auto target = detail::vkbd_register_event();
+            handler_dispatch(event, eevent, [target](Event & event)
+            {
+                target->handle(event);
+            });
+        }
+#endif
+
         if (detail::keyboard_focus())
         {
             auto target = detail::keyboard_focus();
@@ -209,6 +220,10 @@ static Widget* mouse_grab_widget = nullptr;
 static Widget* keyboard_focus_widget = nullptr;
 static Widget* dragged_widget = nullptr;
 
+#ifdef HAVE_LIBPINYIN
+static Widget* vkbd_register_event_widget = nullptr;
+#endif
+
 Widget* mouse_grab()
 {
     return mouse_grab_widget;
@@ -230,8 +245,9 @@ void mouse_grab(Widget* widget)
 
 void keyboard_focus(Widget* widget)
 {
-    if (keyboard_focus_widget == widget)
-        return;
+    // Close the keyboard, click the textbox again, the keyboard would not be popped up
+    // if (keyboard_focus_widget == widget)
+    //     return;
 
     if (keyboard_focus_widget)
     {
@@ -260,6 +276,18 @@ void dragged(Widget* widget)
 {
     dragged_widget = widget;
 }
+
+#ifdef HAVE_LIBPINYIN
+void vkbd_register_event(Widget* widget)
+{
+    vkbd_register_event_widget = widget;
+}
+
+Widget* vkbd_register_event()
+{
+    return vkbd_register_event_widget;
+}
+#endif
 
 }
 }

@@ -1358,6 +1358,12 @@ void TextBox::handle_key(const Key& key)
         move_sliders();
         break;
     }
+#ifdef HAVE_LIBPINYIN
+    case EKEY_PINYIN_INPUT:
+    {
+        break;
+    }
+#endif
     default:
     {
         if (key.unicode)

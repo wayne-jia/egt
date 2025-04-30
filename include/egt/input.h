@@ -134,6 +134,18 @@ EGT_API Widget* dragged();
  */
 EGT_API void dragged(Widget* widget);
 
+#ifdef HAVE_LIBPINYIN
+/**
+ * Register keyboard event for virtual keyboard.
+ */
+EGT_API void vkbd_register_event(Widget* widget);
+
+/**
+ * Get the current virtual keyboard widget which has registered keyboard event, or nullptr.
+ */
+EGT_API Widget* vkbd_register_event();
+#endif
+
 }
 
 }

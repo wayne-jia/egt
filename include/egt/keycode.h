@@ -9,6 +9,10 @@
 #include <cstdint>
 #include <egt/detail/meta.h>
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 /**
  * @file
  * @brief Key codes.
@@ -156,6 +160,11 @@ enum KeyboardCode
     EKEY_POWER = 0x98,
     EKEY_COMPOSE = 0xE6,
     EKEY_USER1 = 0x104,
+#ifdef HAVE_LIBPINYIN
+    EKEY_CN_EN = 0x105,
+    EKEY_PINYIN_INPUT = 0x106,
+    EKEY_PINYIN_BACKSPACE = 0x107,
+#endif
 };
 
 namespace detail

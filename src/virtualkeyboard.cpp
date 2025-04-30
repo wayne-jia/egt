@@ -12,6 +12,9 @@
 #include "egt/popup.h"
 #include "egt/sizer.h"
 #include "egt/virtualkeyboard.h"
+#ifdef HAVE_LIBPINYIN
+#include "detail/egtlog.h"
+#endif
 
 #ifdef SRCDIR
 EGT_EMBED(internal_microphone, SRCDIR "/icons/32px/microphone.png")
@@ -21,6 +24,51 @@ namespace egt
 {
 inline namespace v1
 {
+#ifdef HAVE_LIBPINYIN
+static constexpr inline bool isAsciiLetter(char32_t ch) {
+    return (ch >= U'A' && ch <= U'Z') ||
+            (ch >= U'a' && ch <= U'z');
+}
+
+static std::vector<uint32_t> utf8_to_codepoints(const std::string& str) {
+    std::vector<uint32_t> result;
+    size_t i = 0;
+    while (i < str.size()) {
+        unsigned char c = str[i];
+        uint32_t codepoint = 0;
+        size_t bytes = 0;
+
+        if ((c & 0x80) == 0)
+        {
+            codepoint = c;
+            bytes = 1;
+        }
+        else if ((c & 0xE0) == 0xC0)
+        {
+            codepoint = c & 0x1F;
+            bytes = 2;
+        }
+        else if ((c & 0xF0) == 0xE0)
+        {
+            codepoint = c & 0x0F;
+            bytes = 3;
+        }
+        else if ((c & 0xF8) == 0xF0)
+        {
+            codepoint = c & 0x07;
+            bytes = 4;
+        }
+
+        for (size_t j = 1; j < bytes; ++j)
+            codepoint = (codepoint << 6) | (str[i + j] & 0x3F);
+
+        result.push_back(codepoint);
+        i += bytes;
+    }
+    return result;
+}
+
+#endif
 
 VirtualKeyboard::Key::Key(uint32_t unicode, double length) noexcept
     : m_button(std::make_shared<Button>()),
@@ -40,6 +88,9 @@ VirtualKeyboard::Key::Key(const std::string& label, KeyboardCode keycode,
       m_length(length)
 {
     m_button->autoresize(false);
+#ifdef HAVE_LIBPINYIN
+    m_button->font(Font("Noto Sans CJK SC"));
+#endif
 }
 
 VirtualKeyboard::Key::Key(const Image& img, KeyboardCode keycode,
@@ -230,6 +281,53 @@ void VirtualKeyboard::key_input_value(const std::shared_ptr<Key>& k)
 {
     k->m_button->on_event([this, k](Event&)
     {
+#ifdef HAVE_LIBPINYIN
+        if (EKEY_CN_EN == k->m_keycode)
+        {
+            if (!m_is_pinyin)
+            {
+                k->m_button->text("拼音");
+                m_is_pinyin = true;
+            }
+            else
+            {
+                k->m_button->text("Eng");
+                m_is_pinyin = false;
+            }
+        }
+
+        if (!k->m_button->text().empty() && m_is_pinyin)
+        {
+            if (EKEY_BACKSPACE == k->m_keycode)
+            {
+                Event event2(EventId::keyboard_down);
+                event2.key().unicode = k->m_unicode;
+                event2.key().keycode = EKEY_PINYIN_BACKSPACE;
+                m_in.dispatch(event2);
+
+                event2.id(EventId::keyboard_up);
+                event2.key().unicode = k->m_unicode;
+                event2.key().keycode = EKEY_PINYIN_BACKSPACE;
+                m_in.dispatch(event2);
+                return 0;
+            }
+
+            if (isAsciiLetter(k->m_unicode))
+            {
+                Event event2(EventId::keyboard_down);
+                event2.key().unicode = k->m_unicode;
+                event2.key().keycode = EKEY_PINYIN_INPUT;
+                m_in.dispatch(event2);
+
+                event2.id(EventId::keyboard_up);
+                event2.key().unicode = k->m_unicode;
+                event2.key().keycode = EKEY_PINYIN_INPUT;
+                m_in.dispatch(event2);
+                return 0;
+            }
+        }
+#endif
+
         if (!k->m_button->text().empty())
         {
             Event event2(EventId::keyboard_down);
@@ -317,17 +415,35 @@ void VirtualKeyboard::key_multichoice(const std::shared_ptr<Key>& k)
     }
 }
 
+#ifdef HAVE_LIBPINYIN
+void VirtualKeyboard::dispatch(Event event)
+{
+    m_in.dispatch(event);
+}
+#endif
+
 static PopupVirtualKeyboard* the_popup_virtual_keyboard = nullptr;
 
 PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard>& keyboard, Size size) noexcept
+#ifdef HAVE_LIBPINYIN
+    : m_keyboard(keyboard)
+#endif
 {
     // Make the keyboard partially transparent.
     fill_flags(Theme::FillFlag::blend);
+#ifdef HAVE_LIBPINYIN
+    color(Palette::ColorId::bg, Color(Palette::transparent, 20));
+#else
     color(Palette::ColorId::bg, Color(Palette::transparent, 80));
+#endif
 
     const auto screen_size = Application::instance().screen()->size();
     if (size.empty())
-        size = egt::Size(screen_size.width(), screen_size.height() * 0.4);
+#ifdef HAVE_LIBPINYIN
+        size = Size(screen_size.width(), screen_size.height() * 0.47);
+#else
+        size = Size(screen_size.width(), screen_size.height() * 0.4);
+#endif
 
     resize(size);
     auto y_keyboard_position = screen_size.height() - size.height();
@@ -336,9 +452,115 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
     m_vsizer.align(AlignFlag::expand);
     add(m_vsizer);
 
+#ifdef HAVE_LIBPINYIN
+    m_pinyin_input = std::make_shared<Label>("n");
+    m_pinyin_input->font(Font("Noto Sans", 17, Font::Weight::normal));
+    m_pinyin_input->color(Palette::ColorId::label_bg, Color(0x4d4d4dee), Palette::GroupId::normal);
+    m_pinyin_input->color(Palette::ColorId::label_text, Palette::white);
+    m_pinyin_input->color(Palette::ColorId::bg, Color(0x4d4d4dee), Palette::GroupId::normal);
+    m_pinyin_input->color(Palette::ColorId::border, Color(0x4d4d4dee), Palette::GroupId::normal);
+    m_pinyin_input->border(2);
+    m_pinyin_input->border_radius(4);
+    m_pinyin_input->fill_flags(Theme::FillFlag::blend);
+    m_pinyin_input->margin(4);
+    m_pinyin_input->align(AlignFlag::left);
+    m_pinyin_input->hide();
+    m_vsizer.add(m_pinyin_input);
+
+    m_hsizer.align(AlignFlag::top);
+    m_hsizer.resize(Size(size.width(), size.height() * 0.15));
+
+    m_candidates_hsizer.align(AlignFlag::left);
+    m_candidates_hsizer.resize(Size(size.width() * 0.8, size.height() * 0.15));
+    m_hsizer.add(m_candidates_hsizer);
+
+    m_icons_hsizer.align(AlignFlag::right);
+    m_icons_hsizer.resize(Size(size.width() * 0.2, size.height() * 0.15));
+    m_hsizer.add(m_icons_hsizer);
+#else
     m_hsizer.align(AlignFlag::top | AlignFlag::right);
     m_hsizer.resize(Size(size.width() * 0.2, size.height() * 0.15));
+#endif
     m_vsizer.add(m_hsizer);
+
+#ifdef HAVE_LIBPINYIN
+    for (auto i=0; i<5; i++)
+    {
+        auto candidate = std::make_shared<egt::Label>("你好");
+        candidate->font(egt::Font("Noto Sans CJK SC", 18, egt::Font::Weight::normal));
+        candidate->color(egt::Palette::ColorId::label_text, egt::Palette::white);
+        candidate->color(Palette::ColorId::label_bg, Color(0x4d4d4dee), Palette::GroupId::normal);
+        candidate->color(Palette::ColorId::bg, Color(0x4d4d4dee), Palette::GroupId::normal);
+        candidate->color(Palette::ColorId::border, Color(0x4d4d4dee), Palette::GroupId::normal);
+        candidate->border(2);
+        candidate->border_radius(4);
+        candidate->fill_flags(Theme::FillFlag::blend);
+        candidate->margin(4);
+        candidate->align(AlignFlag::left);
+        candidate->hide();
+        m_candidates_hsizer.add(left(candidate));
+        m_candidates.emplace_back(candidate);
+        m_candidates[i]->on_event([this, i, &keyboard](egt::Event&)
+        {
+            for (uint32_t unicode : utf8_to_codepoints(m_candidates[i]->text()))
+            {
+                Event event2(EventId::keyboard_down);
+                event2.key().unicode = unicode;
+                event2.key().keycode = EKEY_UNKNOWN;
+                keyboard->dispatch(event2);
+
+                event2.id(EventId::keyboard_up);
+                event2.key().unicode = unicode;
+                event2.key().keycode = EKEY_UNKNOWN;
+                keyboard->dispatch(event2);
+            }
+            reset_pinyin_input();
+        }, {egt::EventId::pointer_click});
+    }
+
+    m_prev_button.margin(5);
+    m_prev_button.show();
+    m_prev_button.on_event([this](Event&)
+    {
+        if (m_candidates_cur_idx <= 5)
+            return;
+
+        int32_t i;
+        int32_t margin = m_candidates_list.size() % 5;
+        int32_t back_step = m_candidates_cur_idx % 5 ? (5 + margin) : 10;
+        for (i = 0; i < 5; i++)
+        {
+            m_candidates[i]->text(m_candidates_list[m_candidates_cur_idx - back_step + i]);
+            m_candidates[i]->show();
+        }
+        m_candidates_cur_idx -= (back_step == 10) ? 10 : margin;
+    }, {EventId::pointer_click});
+    m_icons_hsizer.add(expand(m_prev_button));
+
+    m_next_button.margin(5);
+    m_next_button.show();
+    m_next_button.on_event([this](Event&)
+    {
+        int32_t i, len;
+        int32_t margin = m_candidates_list.size() % 5;
+        if (m_candidates_cur_idx < m_candidates_list.size())
+        {
+            len = (m_candidates_cur_idx + 5 > m_candidates_list.size()) ? margin : 5;
+            for (i = 0; i < len; i++)
+            {
+                m_candidates[i]->text(m_candidates_list[m_candidates_cur_idx+i]);
+                m_candidates[i]->show();
+            }
+            m_candidates_cur_idx += i;
+            if (len < 5)
+            {
+                for (i = 0; i < 5 - len; i++)
+                    m_candidates[4-i]->hide();
+            }
+        }
+    }, {EventId::pointer_click});
+    m_icons_hsizer.add(expand(m_next_button));
+#endif
 
     m_top_bottom_button.margin(5);
     m_top_bottom_button.on_event([this, y_keyboard_position](Event&)
@@ -356,7 +578,11 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
 
         m_bottom_positionned = !m_bottom_positionned;
     }, {EventId::pointer_click});
+#ifdef HAVE_LIBPINYIN
+    m_icons_hsizer.add(expand(m_top_bottom_button));
+#else
     m_hsizer.add(expand(m_top_bottom_button));
+#endif
 
     m_close_button.margin(5);
     m_close_button.on_event([this, y_keyboard_position](Event&)
@@ -366,19 +592,169 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
         move(Point(0, y_keyboard_position));
         m_top_bottom_button.image(Image("res:internal_arrow_up"));
         m_bottom_positionned = true;
+#ifdef HAVE_LIBPINYIN
+        reset_pinyin_input();
+#endif
     }, {EventId::pointer_click});
+#ifdef HAVE_LIBPINYIN
+    m_icons_hsizer.add(expand(m_close_button));
+#else
     m_hsizer.add(expand(m_close_button));
+#endif
 
     keyboard->align(AlignFlag::expand);
     m_vsizer.add(keyboard);
 
     the_popup_virtual_keyboard = this;
+
+#ifdef HAVE_LIBPINYIN
+    detail::vkbd_register_event(this);
+
+    /* Construct libpinyin engine */
+    m_pinyin_context = pinyin_init(LIBPINYIN_DATA_PATH, "");
+    if (m_pinyin_context == NULL)
+    {
+        detail::error("Context not allocted for pinyin...\n");
+        return;
+    }
+
+    m_pinyin_instance = pinyin_alloc_instance(m_pinyin_context);
+    if (m_pinyin_instance == NULL)
+        detail::error("Pinyin instance not allocted...\n");
+#endif
 }
 
 PopupVirtualKeyboard*& popup_virtual_keyboard()
 {
     return the_popup_virtual_keyboard;
 }
+
+#ifdef HAVE_LIBPINYIN
+PopupVirtualKeyboard::~PopupVirtualKeyboard() noexcept
+{
+    pinyin_free_instance(m_pinyin_instance);
+    pinyin_fini(m_pinyin_context);
+}
+
+void PopupVirtualKeyboard::reset_pinyin_input(void)
+{
+    if (!m_pinyin_str.empty())
+        m_pinyin_str.clear();
+
+    m_pinyin_input->hide();
+    m_pinyin_input->text("n");
+
+    for (auto candidate : m_candidates)
+    {
+        candidate->hide();
+        candidate->text("reset");
+    }
+
+    m_candidates_list.clear();
+}
+
+void PopupVirtualKeyboard::handle(Event& event)
+{
+    Widget::handle(event);
+
+    switch (event.id())
+    {
+        case EventId::keyboard_up:
+        case EventId::keyboard_down:
+        case EventId::keyboard_repeat:
+            handle_pinyin_input(event);
+            event.stop();
+        default:
+            break;
+    }
+}
+
+void PopupVirtualKeyboard::handle_pinyin_input(Event& event)
+{
+    if (!m_keyboard->get_pinyin_input())
+        return;
+
+    switch (event.key().keycode)
+    {
+        case EKEY_PINYIN_BACKSPACE:
+        {
+            if (!m_pinyin_str.empty())
+                m_pinyin_str.pop_back();
+            else
+            {
+                Event event1(EventId::keyboard_down);
+                event1.key().unicode = event.key().unicode;
+                event1.key().keycode = EKEY_BACKSPACE;
+
+                Event event2(EventId::keyboard_up);
+                event2.key().unicode = event.key().unicode;
+                event2.key().keycode = EKEY_BACKSPACE;
+
+                if (Application::check_instance())
+                {
+                    asio::post(Application::instance().event().io(), [this, event1, event2]()
+                    {
+                        m_keyboard->dispatch(event1);
+                        m_keyboard->dispatch(event2);
+                    });
+                }
+                return;
+            }
+
+            break;
+        }
+
+        case EKEY_PINYIN_INPUT:
+        {
+            m_pinyin_str.push_back(event.key().unicode);
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    if (m_pinyin_str.empty())
+    {
+        m_pinyin_input->hide();
+        return;
+    }
+    else
+    {
+        m_pinyin_input->text(m_pinyin_str);
+        m_pinyin_input->show();
+    }
+
+    pinyin_parse_more_full_pinyins (m_pinyin_instance, m_pinyin_str.c_str());
+    pinyin_guess_sentence (m_pinyin_instance);
+    guint number;
+    pinyin_guess_candidates(m_pinyin_instance, 0, {});
+    pinyin_get_n_candidate (m_pinyin_instance, &number);
+    detail::info("Pinyin {} has {} candidates\n", m_pinyin_str.c_str(), number);
+
+    if (!number)
+        return;
+
+    int32_t i;
+    lookup_candidate_t * candidate;
+    const gchar *display_string;
+    m_candidates_list.clear();
+    for (i = 0; i < std::min(MAX_CANDIDATES_NUM, static_cast<int>(number)); i++)
+    {
+        pinyin_get_candidate(m_pinyin_instance, i, &candidate);
+        pinyin_get_candidate_string(m_pinyin_instance, candidate, &display_string);
+        std::string cpp_string(display_string);
+        m_candidates_list.emplace_back(cpp_string);
+    }
+
+    for (i = 0; i < std::min(5, static_cast<int>(m_candidates_list.size())); i++)
+    {
+        m_candidates[i]->text(m_candidates_list[i]);
+        m_candidates[i]->show();
+    }
+    m_candidates_cur_idx = i;
+}
+#endif
 
 VirtualKeyboard::PanelKeys& multichoice_e()
 {
@@ -906,7 +1282,11 @@ VirtualKeyboard::PanelKeys& QwertyLettersLowerCase()
             std::make_shared<VirtualKeyboard::Key>("\u2190", EKEY_BACKSPACE, 1.5)
         }, {
             std::make_shared<VirtualKeyboard::Key>("!#\u263a", 2, 1.5),
+#ifdef HAVE_LIBPINYIN
+            std::make_shared<VirtualKeyboard::Key>("Eng", EKEY_CN_EN),
+#else
             std::make_shared<VirtualKeyboard::Key>(Image("res:internal_microphone"), EKEY_UNKNOWN),
+#endif
             std::make_shared<VirtualKeyboard::Key>(0x0020, 5.0),
             std::make_shared<VirtualKeyboard::Key>(0x002e),
             std::make_shared<VirtualKeyboard::Key>("Enter", EKEY_ENTER, 1.5)
@@ -963,7 +1343,11 @@ VirtualKeyboard::PanelKeys& QwertyLettersUpperCase()
             std::make_shared<VirtualKeyboard::Key>("\u2190", EKEY_BACKSPACE, 1.5)
         }, {
             std::make_shared<VirtualKeyboard::Key>("!#\u263a", 2, 1.5),
+#ifdef HAVE_LIBPINYIN
+            std::make_shared<VirtualKeyboard::Key>("Eng", EKEY_CN_EN),
+#else
             std::make_shared<VirtualKeyboard::Key>(Image("res:internal_microphone"), EKEY_UNKNOWN),
+#endif
             std::make_shared<VirtualKeyboard::Key>(0x0020, 5.0),
             std::make_shared<VirtualKeyboard::Key>(0x002e),
             std::make_shared<VirtualKeyboard::Key>("Enter", EKEY_ENTER, 1.5)
@@ -1021,7 +1405,11 @@ VirtualKeyboard::PanelKeys& QwertySymbols1()
             std::make_shared<VirtualKeyboard::Key>("\u2190", EKEY_BACKSPACE, 1.5)
         }, {
             std::make_shared<VirtualKeyboard::Key>("ABC", 0, 1.5),
+#ifdef HAVE_LIBPINYIN
+            std::make_shared<VirtualKeyboard::Key>("Eng", EKEY_CN_EN),
+#else
             std::make_shared<VirtualKeyboard::Key>(Image("res:internal_microphone"), EKEY_UNKNOWN),
+#endif
             std::make_shared<VirtualKeyboard::Key>(0x0020, 5.0),
             std::make_shared<VirtualKeyboard::Key>(0x002e),
             std::make_shared<VirtualKeyboard::Key>("Enter", EKEY_ENTER, 1.5)
@@ -1079,7 +1467,11 @@ VirtualKeyboard::PanelKeys& QwertySymbols2()
             std::make_shared<VirtualKeyboard::Key>("\u2190", EKEY_BACKSPACE, 1.5)
         }, {
             std::make_shared<VirtualKeyboard::Key>("ABC", 0, 1.5),
+#ifdef HAVE_LIBPINYIN
+            std::make_shared<VirtualKeyboard::Key>("Eng", EKEY_CN_EN),
+#else
             std::make_shared<VirtualKeyboard::Key>(Image("res:internal_microphone"), EKEY_UNKNOWN),
+#endif
             std::make_shared<VirtualKeyboard::Key>(0x0020, 5.0),
             std::make_shared<VirtualKeyboard::Key>(0x002e),
             std::make_shared<VirtualKeyboard::Key>("Enter", EKEY_ENTER, 1.5)

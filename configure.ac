@@ -596,6 +596,24 @@ if test "x$with_libmagic" = xyes && test "x${have_libmagic}" != xyes; then
 fi
 AM_CONDITIONAL([HAVE_LIBMAGIC], [test "x${have_libmagic}" = xyes])
 
+AC_ARG_WITH([libpinyin],
+    AS_HELP_STRING([--without-libpinyin], [Ignore presence of libpinyin and disable it]),
+    [with_libpinyin=$withval],
+    [with_libpinyin=auto])
+AS_IF([test "x$with_libpinyin" != "xno"],[
+   AX_PKG_CHECK_MODULES2(libpinyin, [], [libpinyin], [have_libpinyin=yes], [have_libpinyin=no])
+   if test "x${have_libpinyin}" = xyes; then
+      AC_DEFINE(HAVE_LIBPINYIN, 1, [Have libpinyin support])
+      AC_SUBST(include_pinyin, ["#define EGT_HAS_PINYIN 1"])
+      LIBEGT_EXTRA_CXXFLAGS="${libpinyin_CFLAGS} ${LIBEGT_EXTRA_CXXFLAGS}"
+      LIBEGT_EXTRA_LDFLAGS="${libpinyin_LIBS} ${LIBEGT_EXTRA_LDFLAGS}"
+   fi
+])
+if test "x$with_libpinyin" = xyes && test "x${have_libpinyin}" != xyes; then
+   AC_MSG_FAILURE([--with-libpinyin was given, but libpinyin not found])
+fi
+AM_CONDITIONAL([HAVE_LIBPINYIN], [test "x${have_libpinyin}" = xyes])
+
 if test "x${have_gstreamer}" = xyes; then
    AC_SUBST(include_audio, ["#define EGT_HAS_AUDIO 1"])
    AC_SUBST(include_video, ["#define EGT_HAS_VIDEO 1"])

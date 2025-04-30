@@ -22,6 +22,12 @@
 #include <string>
 #include <vector>
 
+#ifdef HAVE_LIBPINYIN
+#include <pinyin.h>
+#define LIBPINYIN_DATA_PATH "/usr/local/lib/libpinyin/data"
+#define MAX_CANDIDATES_NUM  100
+#endif
+
 namespace egt
 {
 inline namespace v1
@@ -213,6 +219,11 @@ public:
      */
     void key_space(unsigned key_space);
 
+#ifdef HAVE_LIBPINYIN
+    void dispatch(Event event);
+    bool get_pinyin_input(void) { return m_is_pinyin; }
+#endif
+
 protected:
     /**
      * Internal representation of a panel i.e. a set of keys organized by rows.
@@ -293,6 +304,10 @@ protected:
     double m_key_size_multichoice_factor {1.2};
 
     void initialize(const std::vector<PanelKeys>& keys);
+
+#ifdef HAVE_LIBPINYIN
+    bool m_is_pinyin {false};
+#endif
 };
 
 /**
@@ -309,6 +324,11 @@ public:
      * @param[in] keyboard The virtual keyboard to display.
      */
     explicit PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard>& keyboard, Size size = {}) noexcept;
+
+#ifdef HAVE_LIBPINYIN
+    ~PopupVirtualKeyboard() noexcept;
+    void handle(Event& event) override;
+#endif
 
 protected:
     /**
@@ -336,6 +356,36 @@ protected:
      * Store the position of the virtual keyboard on the screen.
      */
     bool m_bottom_positionned {true};
+
+#ifdef HAVE_LIBPINYIN
+    HorizontalBoxSizer m_candidates_hsizer {Justification::start};
+
+    HorizontalBoxSizer m_icons_hsizer;
+
+    std::shared_ptr<VirtualKeyboard> m_keyboard;
+
+    /**
+     * Handle pinyin IME
+     */
+    void handle_pinyin_input(Event& event);
+
+    /**
+     * Reset the pinyin context and UI
+     */
+    void reset_pinyin_input(void);
+
+    pinyin_context_t* m_pinyin_context {NULL};
+    pinyin_instance_t* m_pinyin_instance {NULL};
+
+    std::string m_pinyin_str;
+    std::shared_ptr<Label> m_pinyin_input {nullptr};
+    std::vector<std::shared_ptr<Label>> m_candidates;
+    std::vector<std::string> m_candidates_list;
+    uint32_t m_candidates_cur_idx;
+
+    ImageButton m_next_button {Image("icon:arrow_right.png")};
+    ImageButton m_prev_button {Image("icon:arrow_left.png")};
+#endif
 };
 
 /**

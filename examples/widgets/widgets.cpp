@@ -215,6 +215,9 @@ struct TextPage : public egt::NotebookTab
         sizer->add(egt::expand(grid0));
 
         auto text1 = std::make_shared<egt::TextBox>("text 1", egt::TextBox::TextFlag::fit_to_width);
+#ifdef HAVE_LIBPINYIN
+        text1->font(egt::Font("Noto Sans CJK SC"));
+#endif
         grid0->add(egt::expand(text1));
 
         auto text2 = std::make_shared<egt::TextBox>("text 2 disabled");
@@ -222,6 +225,9 @@ struct TextPage : public egt::NotebookTab
         grid0->add(egt::expand(text2));
 
         auto text3 = std::make_shared<egt::TextBox>("right aligned text");
+#ifdef HAVE_LIBPINYIN
+        text3->font(egt::Font("Noto Sans CJK SC"));
+#endif
         text3->fill_flags(egt::Theme::FillFlag::blend);
         text3->border_flags({egt::Theme::BorderFlag::bottom, egt::Theme::BorderFlag::top});
         text3->text_align(egt::AlignFlag::right);
@@ -234,6 +240,9 @@ struct TextPage : public egt::NotebookTab
         grid0->add(egt::expand(text4));
 
         auto text5 = std::make_shared<egt::TextBox>("all characters allowed");
+#ifdef HAVE_LIBPINYIN
+        text5->font(egt::Font("Noto Sans CJK SC"));
+#endif
         text5->add_validator_function([](const std::string&) { return true; });
         text5->input_validation_enabled(true);
         grid0->add(egt::expand(text5));
@@ -253,6 +262,9 @@ struct TextPage : public egt::NotebookTab
                          " functionality, look-and-feel, and performance.\n\nThis multi-line TextBox fully"
                          " supports UTF-8 encoding.  See: \u2190\u2191\u2192\u2193",
                          egt::TextBox::TextFlags({egt::TextBox::TextFlag::multiline, egt::TextBox::TextFlag::word_wrap}));
+#ifdef HAVE_LIBPINYIN
+        text7->font(egt::Font("Noto Sans CJK SC"));
+#endif
         text7->selection(4, 25);
         text7->margin(5);
         sizer->add(egt::expand(text7));
@@ -680,7 +692,11 @@ int main(int argc, char** argv)
     header.resize(egt::Size(0, header_height));
     vsizer.add(egt::expand_horizontal(header));
 
+#ifdef HAVE_LIBPINYIN
+    egt::ImageLabel logo(egt::Image("icon:mgs_logo_black.png;128"));
+#else
     egt::ImageLabel logo(egt::Image("icon:mgs_logo_black.svg;svg"));
+#endif
     if (landscape)
         logo.height(header_height * 0.8);
     else
