@@ -75,6 +75,16 @@ public:
      */
     SideBoard(PositionFlag position, WindowHint hint);
 
+    explicit SideBoard(Rect rect,
+                       DefaultDim start,
+                       DefaultDim end,
+                       PositionFlag position = PositionFlag::left,
+                       std::chrono::milliseconds open_duration = std::chrono::milliseconds(1000),
+                       EasingFunc open_func = easing_cubic_easeinout,
+                       std::chrono::milliseconds close_duration = std::chrono::milliseconds(1000),
+                       EasingFunc close_func = easing_circular_easeinout,
+                       WindowHint hint = WindowHint::automatic);
+
     /**
      * @param[in] props list of widget argument and its properties.
      */
@@ -125,6 +135,14 @@ protected:
 
     /// State of the current direction.
     bool m_dir{false};
+
+    DefaultDim m_start;
+
+    DefaultDim m_end;
+
+    Point m_point;
+
+    bool m_custom_range{false};
 
 private:
     void initialize();

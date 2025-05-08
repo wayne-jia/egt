@@ -49,6 +49,30 @@ SideBoard::SideBoard(PositionFlag position,
     initialize();
 }
 
+SideBoard::SideBoard(Rect rect,
+                     DefaultDim start,
+                     DefaultDim end,
+                     PositionFlag position,
+                     std::chrono::milliseconds open_duration,
+                     EasingFunc open_func,
+                     std::chrono::milliseconds close_duration,
+                     EasingFunc close_func,
+                     WindowHint hint)
+    : Window(rect, PixelFormat::argb8888, hint),
+    m_position(position),
+    m_start(start),
+    m_end(end),
+    m_point(rect.point())
+{
+    m_oanim.duration(open_duration);
+    m_canim.duration(close_duration);
+    m_oanim.easing_func(std::move(open_func));
+    m_canim.easing_func(std::move(close_func));
+    m_custom_range = true;
+
+    initialize();
+}
+
 SideBoard::SideBoard(Serializer::Properties& props, bool is_derived) noexcept
     : Window(props, true)
 {
@@ -76,7 +100,7 @@ void SideBoard::initialize()
         m_oanim.on_change([this](PropertyAnimator::Value value) { x(value); });
         m_canim.on_change([this](PropertyAnimator::Value value) { x(value); });
 
-        move(Point(m_oanim.starting(), 0));
+        move(Point(m_oanim.starting(), m_custom_range ? m_point.y() : 0));
         break;
     }
     case PositionFlag::right:
@@ -84,7 +108,7 @@ void SideBoard::initialize()
         m_oanim.on_change([this](PropertyAnimator::Value value) { x(value); });
         m_canim.on_change([this](PropertyAnimator::Value value) { x(value); });
 
-        move(Point(m_oanim.starting(), 0));
+        move(Point(m_oanim.starting(), m_custom_range ? m_point.y() : 0));
         break;
     }
     case PositionFlag::top:
@@ -92,7 +116,7 @@ void SideBoard::initialize()
         m_oanim.on_change([this](PropertyAnimator::Value value) { y(value); });
         m_canim.on_change([this](PropertyAnimator::Value value) { y(value); });
 
-        move(Point(0, m_oanim.starting()));
+        move(Point(m_custom_range ? m_point.x() : 0, m_oanim.starting()));
         break;
     }
     case PositionFlag::bottom:
@@ -100,7 +124,7 @@ void SideBoard::initialize()
         m_oanim.on_change([this](PropertyAnimator::Value value) { y(value); });
         m_canim.on_change([this](PropertyAnimator::Value value) { y(value); });
 
-        move(Point(0, m_oanim.starting()));
+        move(Point(m_custom_range ? m_point.x() : 0, m_oanim.starting()));
         break;
     }
     }
@@ -112,49 +136,60 @@ void SideBoard::position(PositionFlag position)
     {
         m_oanim.stop();
         m_canim.stop();
-        resize(calculate_size(position));
+        if (!m_custom_range)
+            resize(calculate_size(position));
         m_dir = false;
         reset_animations();
-        move(Point(m_oanim.starting(), 0));
+        move(Point(m_oanim.starting(), m_custom_range ? m_point.y() : 0));
     }
 }
 
 void SideBoard::reset_animations()
 {
-    switch (m_position)
+    if (m_custom_range)
     {
-    case PositionFlag::left:
-    {
-        m_oanim.starting(-Application::instance().screen()->size().width());
-        m_oanim.ending(0);
+        m_oanim.starting(m_start);
+        m_oanim.ending(m_end);
         m_canim.starting(m_oanim.ending());
         m_canim.ending(m_oanim.starting());
-        break;
     }
-    case PositionFlag::right:
+    else
     {
-        m_oanim.starting(Application::instance().screen()->size().width() - HANDLE_WIDTH);
-        m_oanim.ending(-HANDLE_WIDTH);
-        m_canim.starting(m_oanim.ending());
-        m_canim.ending(m_oanim.starting());
-        break;
-    }
-    case PositionFlag::top:
-    {
-        m_oanim.starting(-Application::instance().screen()->size().height());
-        m_oanim.ending(0);
-        m_canim.starting(m_oanim.ending());
-        m_canim.ending(m_oanim.starting());
-        break;
-    }
-    case PositionFlag::bottom:
-    {
-        m_oanim.starting(Application::instance().screen()->size().height() - HANDLE_WIDTH);
-        m_oanim.ending(-HANDLE_WIDTH);
-        m_canim.starting(m_oanim.ending());
-        m_canim.ending(m_oanim.starting());
-        break;
-    }
+        switch (m_position)
+        {
+        case PositionFlag::left:
+        {
+            m_oanim.starting(-Application::instance().screen()->size().width());
+            m_oanim.ending(0);
+            m_canim.starting(m_oanim.ending());
+            m_canim.ending(m_oanim.starting());
+            break;
+        }
+        case PositionFlag::right:
+        {
+            m_oanim.starting(Application::instance().screen()->size().width() - HANDLE_WIDTH);
+            m_oanim.ending(-HANDLE_WIDTH);
+            m_canim.starting(m_oanim.ending());
+            m_canim.ending(m_oanim.starting());
+            break;
+        }
+        case PositionFlag::top:
+        {
+            m_oanim.starting(-Application::instance().screen()->size().height());
+            m_oanim.ending(0);
+            m_canim.starting(m_oanim.ending());
+            m_canim.ending(m_oanim.starting());
+            break;
+        }
+        case PositionFlag::bottom:
+        {
+            m_oanim.starting(Application::instance().screen()->size().height() - HANDLE_WIDTH);
+            m_oanim.ending(-HANDLE_WIDTH);
+            m_canim.starting(m_oanim.ending());
+            m_canim.ending(m_oanim.starting());
+            break;
+        }
+        }
     }
 }
 
