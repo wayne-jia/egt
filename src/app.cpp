@@ -215,7 +215,7 @@ void Application::setup_backend(bool primary, const std::string& name)
     if (value && strlen(value))
         backend = value;
 
-    Size size(800, 480);
+    Size size(1280, 720);
     auto sizestr = getenv("EGT_SCREEN_SIZE");
     if (sizestr && strlen(sizestr))
     {

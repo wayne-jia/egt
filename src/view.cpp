@@ -8,6 +8,7 @@
 #include "egt/input.h"
 #include "egt/painter.h"
 #include "egt/view.h"
+#include <iostream>
 
 namespace egt
 {
@@ -284,7 +285,7 @@ void ScrolledView::handle(Event& event)
     {
         auto diff = event.pointer().point -
                     event.pointer().drag_start;
-        offset(m_start_offset + Point(diff.x(), diff.y()));
+        offset(m_start_offset + Point(m_hlocked ? 0 : diff.x(), m_vlocked ? 0 : diff.y()));
         break;
     }
     default:

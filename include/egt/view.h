@@ -220,6 +220,16 @@ public:
      */
     void post_deserialize(Serializer::Properties& props) override;
 
+    /**
+     * Lock/unlock the horizontal scrolling
+     */
+    void lock_h(bool lock) { m_hlocked = lock; }
+
+    /**
+     * Lock/unlock the vertical scrolling
+     */
+    void lock_v(bool lock) { m_vlocked = lock; }
+
     static std::string policy2str(Policy policy);
     static Policy str2policy(const std::string& str);
 
@@ -301,6 +311,12 @@ protected:
 
     /// Width/height of the slider when shown.
     DefaultDim m_slider_dim{8};
+
+    /// Horizontal scrolling lock state
+    bool m_hlocked{false};
+
+    /// Vertical scrolling lock state
+    bool m_vlocked{false};
 };
 
 }
