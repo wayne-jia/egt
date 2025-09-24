@@ -27,7 +27,7 @@ CUSTOM_CXXFLAGS = \
 	-I$(top_builddir)/include \
 	-isystem $(top_srcdir)/external/rapidxml \
 	-isystem $(top_srcdir)/external/cxxopts/include \
-	-isystem $(top_srcdir)/examples/rounddash/include \
+	-isystem $(top_srcdir)/examples/uartserver/include \
 	$(cairo_CFLAGS) \
 	$(CODE_COVERAGE_CXXFLAGS)
 
@@ -52,12 +52,9 @@ space/space \
 sprite/sprite \
 squares/squares \
 whiteboard/whiteboard \
-widgets/widgets
+widgets/widgets \
+uartserver/uartserver
 
-if HAVE_LIBPLANES
-bin_PROGRAMS += \
-rounddash/rounddash
-endif
 
 if HAVE_LUA
 bin_PROGRAMS += \
@@ -113,14 +110,14 @@ endif
 EXTRA_DIST =
 CLEANFILES =
 
-rounddash_rounddash_SOURCES = rounddash/rounddash.cpp rounddash/animescene.cpp \
-	rounddash/lcdcoverlay.cpp rounddash/uartFunc.cpp rounddash/bleDevice.cpp
-rounddash_rounddash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
-	-DEXAMPLEDATA=\"$(datadir)/egt/examples/rounddash\"
-rounddash_rounddash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
-rounddash_rounddashdir = $(prefix)/share/egt/examples/rounddash
-dist_rounddash_rounddash_DATA = $(wildcard $(top_srcdir)/examples/rounddash/images/*.png)
-rounddash_rounddash_LDFLAGS = $(AM_LDFLAGS)
+#rounddash_rounddash_SOURCES = rounddash/rounddash.cpp rounddash/animescene.cpp \
+#	rounddash/lcdcoverlay.cpp rounddash/uartFunc.cpp rounddash/bleDevice.cpp
+#rounddash_rounddash_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
+#	-DEXAMPLEDATA=\"$(datadir)/egt/examples/rounddash\"
+#rounddash_rounddash_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+#rounddash_rounddashdir = $(prefix)/share/egt/examples/rounddash
+#dist_rounddash_rounddash_DATA = $(wildcard $(top_srcdir)/examples/rounddash/images/*.png)
+#rounddash_rounddash_LDFLAGS = $(AM_LDFLAGS)
 
 audioplayer_audioplayer_SOURCES = audioplayer/audioplayer.cpp
 audioplayer_audioplayer_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS) \
@@ -362,6 +359,12 @@ dist_widgets_widgets_DATA = $(wildcard $(top_srcdir)/examples/widgets/*.png) \
 	$(top_srcdir)/examples/widgets/widgets.xml
 widgets_widgets_LDFLAGS = $(AM_LDFLAGS)
 EXTRA_DIST += widgets/widgets.xml
+
+uartserver_uartserver_SOURCES = uartserver/uartserver.cpp \
+	uartserver/serialport.cpp
+uartserver_uartserver_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
+uartserver_uartserver_LDADD = $(top_builddir)/src/libegt.la $(CUSTOM_LDADD)
+uartserver_uartserver_LDFLAGS = $(AM_LDFLAGS)
 
 virtualkeyboard_virtualkeyboard_SOURCES = virtualkeyboard/virtualkeyboard.cpp
 virtualkeyboard_virtualkeyboard_CXXFLAGS = $(CUSTOM_CXXFLAGS) $(AM_CXXFLAGS)
