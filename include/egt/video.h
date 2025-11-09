@@ -68,6 +68,8 @@ public:
 
     /// Invoked when the state of the player changes.
     SignalW<> on_state_changed;
+
+    SignalW<const unsigned char*, const unsigned int> on_new_frame;
     /** @} */
 
     /**

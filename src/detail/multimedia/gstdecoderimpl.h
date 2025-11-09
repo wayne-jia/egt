@@ -54,6 +54,8 @@ public:
 
     /// Invoked when a video device is disconnected.
     Signal<const std::string&> on_disconnect;
+
+    Signal<const unsigned char*, const unsigned int> on_new_frame;
     /** @} */
 
     // special functions deleted because they are never used

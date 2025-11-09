@@ -235,10 +235,10 @@ public:
 
     EGT_NODISCARD bool enabled() const
     {
-        return m_src_signal->enable();
+        return m_src_signal->enabled();
     }
 
-    void set_src_signal(Signal<>* src)
+    void set_src_signal(Signal<Args...>* src)
     {
         m_src_signal = src;
     }

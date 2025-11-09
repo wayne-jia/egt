@@ -393,6 +393,13 @@ std::string GstDecoderImpl::create_pipeline_desc()
     else if (!m_output.empty())
         m_sink = std::make_unique<GstFileSink>(*this, m_size, m_output_format, m_output);
 
+    if (m_sink->has_new_frame_signal()) {
+        m_sink->get_new_frame_signal()([this](const unsigned char* buf, const unsigned int size)
+        {
+            on_new_frame.invoke(buf, size);
+        });
+    }
+
     if (!m_custom_pipeline_desc.empty())
         return m_custom_pipeline_desc;
 

@@ -26,6 +26,7 @@ class GstDecoderImpl;
 class GstAppSink : public GstSink
 {
 public:
+    Signal<const unsigned char*, const unsigned int> on_new_frames;
 
     GstAppSink(GstDecoderImpl& gst_decoder, const Size& size, Window& window);
 
@@ -34,6 +35,12 @@ public:
     void draw(Painter& painter, const Rect& rect) override;
 
     bool post_initialize() override;
+
+    bool has_new_frame_signal() const override { return true; }
+
+    Signal<const unsigned char*, const unsigned int>& get_new_frame_signal() override {
+        return on_new_frames;
+    }
 
 private:
 

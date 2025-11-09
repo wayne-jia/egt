@@ -101,6 +101,7 @@ void GstAppSink::draw(Painter& painter, const Rect& rect)
             GstMapInfo map;
             if (gst_buffer_map(buffer, &map, GST_MAP_READ))
             {
+                on_new_frames.invoke(map.data, map.size);
                 auto box = m_window.box();
                 auto surface = unique_cairo_surface_t(
                                    cairo_image_surface_create_for_data(map.data,

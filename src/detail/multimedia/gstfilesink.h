@@ -26,6 +26,7 @@ namespace detail
 class GstFileSink : public GstSink
 {
 public:
+    Signal<const unsigned char*, const unsigned int> empty_signal;
 
     GstFileSink(GstDecoderImpl& gst_decoder, const Size& size,
                 PixelFormat format, const std::string& file);
@@ -35,6 +36,10 @@ public:
     void draw(Painter& painter, const Rect& rect) override;
 
     bool post_initialize() override;
+
+    Signal<const unsigned char*, const unsigned int>& get_new_frame_signal() override {
+        return empty_signal;
+    }
 
 private:
 

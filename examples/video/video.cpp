@@ -271,6 +271,17 @@ int main(int argc, char** argv)
         }
     });
 
+    player.on_new_frame([](const unsigned char* buf, const unsigned int size)
+    {
+        std::cout << "new frame come, size: " << size << std::endl;
+        for (auto i=0; i<128; i++) {
+            printf("%x ", buf[i]);
+            if ((i+1) % 16 == 0)
+                printf("\n");
+        }
+        printf("\n");
+    });
+
     player.on_error([&errlabel](const std::string & err)
     {
         errlabel.text(line_break(err));

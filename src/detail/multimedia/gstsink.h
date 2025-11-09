@@ -39,6 +39,10 @@ public:
 
     void size(const egt::Size& size);
 
+    virtual bool has_new_frame_signal() const { return false; }
+
+    virtual Signal<const unsigned char*, const unsigned int>& get_new_frame_signal() = 0;
+
 protected:
 
     GstDecoderImpl& m_gst_decoder;

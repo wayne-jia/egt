@@ -64,7 +64,8 @@ VideoWindow::VideoWindow(const Rect& rect, PixelFormat format, WindowHint hint)
       on_position_changed(&m_video_impl->on_position_changed),
       on_error(&m_video_impl->on_error),
       on_eos(&m_video_impl->on_eos),
-      on_state_changed(&m_video_impl->on_state_changed)
+      on_state_changed(&m_video_impl->on_state_changed),
+      on_new_frame(&m_video_impl->on_new_frame)
 {
     fill_flags().clear();
 }
@@ -85,7 +86,8 @@ VideoWindow::VideoWindow(Serializer::Properties& props, bool is_derived)
       on_position_changed(&m_video_impl->on_position_changed),
       on_error(&m_video_impl->on_error),
       on_eos(&m_video_impl->on_eos),
-      on_state_changed(&m_video_impl->on_state_changed)
+      on_state_changed(&m_video_impl->on_state_changed),
+      on_new_frame(&m_video_impl->on_new_frame)
 {
     fill_flags().clear();
 
