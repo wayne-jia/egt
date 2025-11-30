@@ -16,7 +16,7 @@
 #include <fstream>
 #include <string>
 #include <thread>
-
+#include <iostream>
 namespace egt
 {
 inline namespace v1
@@ -61,6 +61,18 @@ WindowHint check_windowhint(WindowHint& hint)
 VideoWindow::VideoWindow(const Rect& rect, PixelFormat format, WindowHint hint)
     : Window(rect, format, detail::check_windowhint(hint)),
       m_video_impl(std::make_unique<detail::GstDecoderImpl>(this, rect.size())),
+      on_position_changed(&m_video_impl->on_position_changed),
+      on_error(&m_video_impl->on_error),
+      on_eos(&m_video_impl->on_eos),
+      on_state_changed(&m_video_impl->on_state_changed),
+      on_new_frame(&m_video_impl->on_new_frame)
+{
+    fill_flags().clear();
+}
+
+VideoWindow::VideoWindow(const Rect& rect, PixelFormat input_format, PixelFormat format, WindowHint hint)
+    : Window(rect, format, detail::check_windowhint(hint)),
+      m_video_impl(std::make_unique<detail::GstDecoderImpl>(this, rect.size(), input_format)),
       on_position_changed(&m_video_impl->on_position_changed),
       on_error(&m_video_impl->on_error),
       on_eos(&m_video_impl->on_eos),

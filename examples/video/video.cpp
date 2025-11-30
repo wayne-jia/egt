@@ -10,6 +10,175 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <cstdint>
+#include <cstdio>
+#include <cstddef>
+#include <cstring>
+
+
+#pragma pack(push, 1)  // 1 byte alignment
+
+// BITMAPFILEHEADER - 14Bytes
+struct BMPFileHeader {
+    uint16_t signature;      // "BM" - 0x4D42
+    uint32_t file_size;      // Size
+    uint16_t reserved1;      // 0
+    uint16_t reserved2;      // 0
+    uint32_t data_offset;    // pixcel offset
+};
+
+// BITMAPV5HEADER - 124Bytes
+struct BMPV5InfoHeader {
+    uint32_t header_size;        //  (124)
+    int32_t  width;
+    int32_t  height;
+    uint16_t planes;            //  (1)
+    uint16_t bit_count;         //  (24 for RGB888)
+    uint32_t compression;       //  (0 = BI_RGB)
+    uint32_t image_size;
+    int32_t  x_pels_per_meter;
+    int32_t  y_pels_per_meter;
+    uint32_t colors_used;       // color used (0 = all)
+    uint32_t colors_important;  // (0 = all important)
+
+    // V5 special
+    uint32_t red_mask;
+    uint32_t green_mask;
+    uint32_t blue_mask;
+    uint32_t alpha_mask;
+    uint32_t cs_type;           // color space type
+    int32_t  endpoints[9];      // CIEXYZTRIPLE
+    uint32_t gamma_red;
+    uint32_t gamma_green;
+    uint32_t gamma_blue;
+    uint32_t intent;            // for render
+    uint32_t profile_data;      // configure data offset
+    uint32_t profile_size;      // configure data size
+    uint32_t reserved;
+};
+
+#pragma pack(pop)
+
+bool save_bmp_v5(const std::vector<uint8_t>& rgb_data, int width, int height, const char* filename);
+bool ConvertBGRxToRGB888(const uint8_t* bgrx_data, int width, int height, uint8_t* rgb_data);
+
+bool save_bmp_v5(const std::vector<uint8_t>& rgb_data, int width, int height, const char* filename) {
+    // Calculate bytes（BMP must 4Bytes alignment）
+    int stride = ((width * 3 + 3) & ~3);  // Bytes each line，4Bytes alignment
+    int image_size = stride * height;
+    int file_size = 138 + image_size;  // 14 + 124 + image_size
+
+    // Header
+    BMPFileHeader file_header;
+    file_header.signature = 0x4D42;  // "BM"
+    file_header.file_size = file_size;
+    file_header.reserved1 = 0;
+    file_header.reserved2 = 0;
+    file_header.data_offset = 138;   // 14 + 124 = 138Bytes
+
+    // V5 header
+    BMPV5InfoHeader info_header;
+    info_header.header_size = 124;    // BITMAPV5HEADER
+    info_header.width = width;
+    info_header.height = height;      // Positve means saving from bottome to top
+    info_header.planes = 1;
+    info_header.bit_count = 24;       // 24bit RGB
+    info_header.compression = 0;      // BI_RGB - non compression
+    info_header.image_size = image_size;
+    info_header.x_pels_per_meter = 0; // default resolution
+    info_header.y_pels_per_meter = 0;
+    info_header.colors_used = 0;      // 0 all colors
+    info_header.colors_important = 0;
+
+    // V5 special
+    info_header.red_mask   = 0x00FF0000;  // RGB
+    info_header.green_mask = 0x0000FF00;
+    info_header.blue_mask  = 0x000000FF;
+    info_header.alpha_mask = 0x00000000;  // No Alpha
+
+    // Color space - sRGB
+    info_header.cs_type = 0x73524742;     // 'sRGB' in little-endian
+
+    // Init color space (CIEXYZTRIPLE)
+    memset(info_header.endpoints, 0, sizeof(info_header.endpoints));
+
+    // Gamma (2.2 non-float)
+    info_header.gamma_red   = 0x00000000;  // Default Gamma
+    info_header.gamma_green = 0x00000000;
+    info_header.gamma_blue  = 0x00000000;
+
+    info_header.intent = 4;                // LCS_GM_IMAGES
+    info_header.profile_data = 0;          // ICC
+    info_header.profile_size = 0;
+    info_header.reserved = 0;
+
+    std::ofstream file(filename, std::ios::binary);
+    if (!file) {
+        std::cerr << "Couldn't create: " << filename << std::endl;
+        return false;
+    }
+
+    // Header (14Bytes)
+    file.write(reinterpret_cast<const char*>(&file_header), sizeof(file_header));
+
+    // V5 Header (124Bytes)
+    file.write(reinterpret_cast<const char*>(&info_header), sizeof(info_header));
+
+    // Write pixels（BMP saved from bottom to top）
+    for (int y = height - 1; y >= 0; --y) {
+        const uint8_t* row_data = rgb_data.data() + y * width * 3;
+
+        for (int x = 0; x < width; ++x) {
+            const uint8_t* pixel = row_data + x * 3;
+            // RGB888 -> BGR888
+            file.put(pixel[2]);  // B
+            file.put(pixel[1]);  // G
+            file.put(pixel[0]);  // R
+        }
+
+        int padding = stride - width * 3;
+        if (padding > 0) {
+            for (int i = 0; i < padding; ++i) {
+                file.put(0);
+            }
+        }
+    }
+
+    file.close();
+    std::cout << "Saved V5 BMP: " << filename
+              << " (" << width << "x" << height << ")" << std::endl;
+    return true;
+}
+
+bool ConvertBGRxToRGB888(const uint8_t* bgrx_data,
+                         int width,
+                         int height,
+                         uint8_t* rgb_data)
+{
+    if (!bgrx_data || !rgb_data || width <= 0 || height <= 0)
+        return false;
+
+    const size_t total_pixels = static_cast<size_t>(width) * height;
+    const uint8_t* src = bgrx_data;
+    uint8_t* dst = rgb_data;
+
+    for (size_t i = 0; i < total_pixels; ++i) {
+        // BGRx: [B, G, R, X]
+        uint8_t b = src[0];
+        uint8_t g = src[1];
+        uint8_t r = src[2];
+        // X = src[3]
+
+        dst[0] = r;
+        dst[1] = g;
+        dst[2] = b;
+
+        src += 4;
+        dst += 3;
+    }
+
+    return true;
+}
 
 // warning: not UTF-8 safe
 static std::string line_break(const std::string& in, size_t width = 50)
@@ -103,10 +272,12 @@ int main(int argc, char** argv)
     win.add(errlabel);
 
     // player after label to handle drag
-    egt::VideoWindow player(size, format, egt::WindowHint::overlay);
+    egt::PixelFormat gst_format = egt::PixelFormat::xrgb8888;
+    egt::VideoWindow player(size, gst_format, format, egt::WindowHint::software);
     player.move_to_center(win.center());
     player.volume(5);
     win.add(player);
+    std::cout << "gst_format: " << gst_format << std::endl;
 
     egt::Window ctrlwindow(egt::Size(win.width(), 72), egt::PixelFormat::argb8888);
     ctrlwindow.align(egt::AlignFlag::bottom | egt::AlignFlag::center_horizontal);
@@ -248,7 +419,9 @@ int main(int argc, char** argv)
         if (is_pipeline)
             player.gst_custom_pipeline(input);
         else
+        {
             player.media(input);
+        }
 
         if (!player.has_audio())
         {
@@ -271,15 +444,19 @@ int main(int argc, char** argv)
         }
     });
 
-    player.on_new_frame([](const unsigned char* buf, const unsigned int size)
+    bool frame_got = false;
+    player.on_new_frame([&frame_got, size](const unsigned char* buf, const unsigned int buf_size)
     {
-        std::cout << "new frame come, size: " << size << std::endl;
-        for (auto i=0; i<128; i++) {
-            printf("%x ", buf[i]);
-            if ((i+1) % 16 == 0)
-                printf("\n");
+        if (!frame_got) {
+            frame_got = true;
+            int width = static_cast<int>(size.width());
+            int height = static_cast<int>(size.height());
+            std::vector<uint8_t> rgb_data(width * height * 3, 0);
+
+            std::cout << "Snapshot one frame, size: " << buf_size << std::endl;
+            ConvertBGRxToRGB888(buf, width, height, rgb_data.data());
+            save_bmp_v5(rgb_data, width, height, "genv5.bmp");
         }
-        printf("\n");
     });
 
     player.on_error([&errlabel](const std::string & err)

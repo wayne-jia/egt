@@ -31,7 +31,7 @@ namespace egt
 inline namespace v1
 {
 
-const PixelFormat Window::DEFAULT_FORMAT = PixelFormat::argb8888;
+const PixelFormat Window::DEFAULT_FORMAT = PixelFormat::xrgb8888;
 
 Window::Window(const Rect& rect,
                PixelFormat format_hint,

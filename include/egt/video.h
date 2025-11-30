@@ -90,6 +90,22 @@ public:
     * Create a video window to decode video and render it to a screen.
     *
     * @param[in] rect Initial rectangle of the widget.
+    * @param[in] format Pixel format of window or a overlay plane.
+    * @param[in] hint Used for configuring window backends.
+    * @param[in] input_format Used for Gst decoding format.
+    *
+    * @note Only WindowHint::heo_overlay can use yuyv, nv21 and yuv420 pixel
+    * formats.
+    */
+    VideoWindow(const Rect& rect,
+                PixelFormat input_format,
+                PixelFormat format = PixelFormat::xrgb8888,
+                WindowHint hint = WindowHint::overlay);
+
+    /**
+    * Create a video window to decode video and render it to a screen.
+    *
+    * @param[in] rect Initial rectangle of the widget.
     * @param[in] uri Media file
     * @param[in] format Pixel format of window or a overlay plane.
     * @param[in] hint Used for configuring window backends.
@@ -101,6 +117,7 @@ public:
                 const std::string& uri,
                 PixelFormat format = PixelFormat::xrgb8888,
                 WindowHint hint = WindowHint::overlay);
+
 
     /**
      * Construct a video window.

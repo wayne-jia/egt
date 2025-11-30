@@ -18,12 +18,13 @@ inline namespace v1
 namespace detail
 {
 
-GstAppSink::GstAppSink(GstDecoderImpl& gst_decoder, const Size& size, Window& window)
-    : GstSink(gst_decoder, size, window.format()),
-      m_window(window)
+GstAppSink::GstAppSink(GstDecoderImpl& gst_decoder, const Size& size, Window& window, PixelFormat format)
+    : GstSink(gst_decoder, size, format),
+      m_window(window),
+      m_gst_format(format == PixelFormat::rgb565 ? CAIRO_FORMAT_RGB16_565 : CAIRO_FORMAT_RGB24)
 {
-    EGTLOG_DEBUG("GstAppSink::GstAppSink: size={}, format={}",
-                 size, detail::gstreamer_format(m_format));
+    EGTLOG_DEBUG("GstAppSink::GstAppSink: size={}, format={} m_format={}",
+                 size, detail::gstreamer_format(m_format), m_format);
 }
 
 std::string GstAppSink::description()
@@ -105,10 +106,10 @@ void GstAppSink::draw(Painter& painter, const Rect& rect)
                 auto box = m_window.box();
                 auto surface = unique_cairo_surface_t(
                                    cairo_image_surface_create_for_data(map.data,
-                                           CAIRO_FORMAT_RGB16_565,
+                                           m_gst_format,
                                            width,
                                            height,
-                                           cairo_format_stride_for_width(CAIRO_FORMAT_RGB16_565, width)));
+                                           cairo_format_stride_for_width(m_gst_format, width)));
 
                 if (cairo_surface_status(surface.get()) == CAIRO_STATUS_SUCCESS)
                 {

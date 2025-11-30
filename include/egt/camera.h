@@ -105,6 +105,28 @@ public:
                           WindowHint hint = WindowHint::overlay);
 
     /**
+     * Create a camera window.
+     *
+     * @param[in] rect Initial rectangle of the widget.
+     * @param[in] device Camera device node.
+     * @param[in] format_hint Requested format of the Window. This only applies
+     *            if this Window will be responsible for creating a backing
+     *            screen. Otherwise, the Window will use whatever format the
+     *            existing screen has. This is only a hint.
+     * @param[in] hint Requested Window type. This only applies if this Window
+     *            will be responsible for creating a backing screen.  This is
+     *            only a hint.
+     *
+     * @note Only WindowHint::heo_overlay can use yuyv, nv21 and yuv420 pixel
+     * formats.
+     */
+    explicit CameraWindow(const Rect& rect,
+                          PixelFormat input_format,
+                          const std::string& device = "/dev/video0",
+                          PixelFormat format_hint = PixelFormat::yuyv,
+                          WindowHint hint = WindowHint::overlay);
+
+    /**
      * Construct a camera window.
      *
      * @param[in] props list of widget argument and its properties.

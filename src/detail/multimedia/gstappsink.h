@@ -28,7 +28,7 @@ class GstAppSink : public GstSink
 public:
     Signal<const unsigned char*, const unsigned int> on_new_frames;
 
-    GstAppSink(GstDecoderImpl& gst_decoder, const Size& size, Window& window);
+    GstAppSink(GstDecoderImpl& gst_decoder, const Size& size, Window& window, PixelFormat format);
 
     EGT_NODISCARD std::string description() override;
 
@@ -49,6 +49,8 @@ private:
     GstSample* m_videosample{nullptr};
 
     Window& m_window;
+
+    cairo_format_t m_gst_format;
 };
 
 } // end of namespace detail

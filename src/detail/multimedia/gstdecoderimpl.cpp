@@ -25,9 +25,10 @@ inline namespace v1
 namespace detail
 {
 
-GstDecoderImpl::GstDecoderImpl(Window* window, const Size& size)
+GstDecoderImpl::GstDecoderImpl(Window* window, const Size& size, PixelFormat format)
     : m_window(window),
       m_size(size),
+      m_input_format(format),
       m_audiodevice(detail::audio_device())
 {
     detail::gstreamer_init();
@@ -59,6 +60,12 @@ GstDecoderImpl::GstDecoderImpl(Window* window, const Size& size)
     gst_bus_add_watch(bus, &device_monitor_bus_callback, this);
 
     gst_device_monitor_start(m_device_monitor);
+}
+
+GstDecoderImpl::GstDecoderImpl(Window* window, const Size& size)
+    : GstDecoderImpl(window, size, PixelFormat::rgb565)
+{
+
 }
 
 bool GstDecoderImpl::playing() const
@@ -389,7 +396,7 @@ void GstDecoderImpl::draw(Painter& painter, const Rect& rect)
 std::string GstDecoderImpl::create_pipeline_desc()
 {
     if (m_window)
-        m_sink = std::make_unique<GstAppSink>(*this, m_size, *m_window);
+        m_sink = std::make_unique<GstAppSink>(*this, m_size, *m_window, m_input_format);
     else if (!m_output.empty())
         m_sink = std::make_unique<GstFileSink>(*this, m_size, m_output_format, m_output);
 

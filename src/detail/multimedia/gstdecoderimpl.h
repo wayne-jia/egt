@@ -67,6 +67,8 @@ public:
 
     explicit GstDecoderImpl(Window* window, const Size& size);
 
+    GstDecoderImpl(Window* window, const Size& size, PixelFormat format);
+
     bool media(const std::string& uri);
 
     void draw(Painter& painter, const Rect& rect);
@@ -146,6 +148,7 @@ protected:
     std::string m_output{};
     PixelFormat m_output_format{};
     Size m_size;
+    PixelFormat m_input_format{PixelFormat::rgb565};
 
     gboolean m_audiodevice{};
     GstElement* m_volume{nullptr};

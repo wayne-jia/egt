@@ -23,6 +23,7 @@ GstSink::GstSink(GstDecoderImpl& gst_decoder, const Size& size, PixelFormat form
       m_size(size),
       m_format(format)
 {
+
 }
 
 bool GstSink::post_initialize()
