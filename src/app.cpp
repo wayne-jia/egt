@@ -239,7 +239,7 @@ void Application::setup_backend(bool primary, const std::string& name)
         {"kms", [&primary]() { return std::make_unique<detail::KMSScreen>(primary); }},
 #endif
 #ifdef HAVE_X11
-        {"x11", [this, &size, &name]() { return std::make_unique<detail::X11Screen>(*this, size, name); }},
+        {"x11", [this, &size, &name]() { return std::make_unique<detail::X11Screen>(*this, size, name, true); }},
 #endif
 #ifdef HAVE_SDL2
         {"sdl2", [this, &size, &name]() { return std::make_unique<detail::SDLScreen>(*this, size, name); }},

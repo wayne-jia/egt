@@ -32,7 +32,7 @@ Dialog::Dialog(Serializer::Properties& props, bool is_derived) noexcept
     if (!is_derived)
         deserialize_leaf(props);
 }
-
+bool raw_p_up_came_dialog = false;
 void Dialog::initialize(bool init_inherited_properties)
 {
     m_grid->margin(5);
@@ -64,6 +64,18 @@ void Dialog::initialize(bool init_inherited_properties)
 
     m_button1.on_event([this](Event & event)
     {
+        static std::chrono::time_point<std::chrono::steady_clock> last_time = std::chrono::steady_clock::now();
+        if (raw_p_up_came_dialog &&
+            std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - last_time).count() < 500)
+        {
+            raw_p_up_came_dialog = false;
+            return;
+        }
+        else
+        {
+            raw_p_up_came_dialog = true;
+            last_time = std::chrono::steady_clock::now();
+        }
         event.stop();
         on_button1_click.invoke();
         hide();
@@ -71,6 +83,18 @@ void Dialog::initialize(bool init_inherited_properties)
 
     m_button2.on_event([this](Event & event)
     {
+        static std::chrono::time_point<std::chrono::steady_clock> last_time = std::chrono::steady_clock::now();
+        if (raw_p_up_came_dialog &&
+            std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - last_time).count() < 500)
+        {
+            raw_p_up_came_dialog = false;
+            return;
+        }
+        else
+        {
+            raw_p_up_came_dialog = true;
+            last_time = std::chrono::steady_clock::now();
+        }
         event.stop();
         on_button2_click.invoke();
         hide();

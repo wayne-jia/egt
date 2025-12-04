@@ -90,6 +90,7 @@ Widget::Widget(Frame& parent, const Rect& rect, const Widget::Flags& flags) noex
     parent.add(*this);
 }
 
+bool raw_p_up_came = false;
 void Widget::handle(Event& event)
 {
     if (event.quit())
@@ -107,6 +108,18 @@ void Widget::handle(Event& event)
         }
         break;
     case EventId::raw_pointer_up:
+        static std::chrono::time_point<std::chrono::steady_clock> last_time = std::chrono::steady_clock::now();
+        if (raw_p_up_came &&
+	        std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - last_time).count() < 500)
+        {
+            raw_p_up_came = false;
+            return;
+        }
+        else
+        {
+            raw_p_up_came = true;
+            last_time = std::chrono::steady_clock::now();
+        }
         active(false);
         break;
     default:

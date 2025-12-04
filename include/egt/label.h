@@ -112,6 +112,8 @@ public:
 
     EGT_NODISCARD Size min_size_hint() const override;
 
+    void handle(Event& event) override;
+
 protected:
 
     void set_parent(Widget* parent) override;

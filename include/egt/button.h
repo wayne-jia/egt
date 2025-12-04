@@ -142,7 +142,7 @@ public:
      */
     RegisterHandle on_click(const EventCallback& handler)
     {
-        return on_event(handler, {EventId::pointer_click});
+        return on_event(handler, {EventId::raw_pointer_up});
     }
 
     /// Default draw method for the widget.

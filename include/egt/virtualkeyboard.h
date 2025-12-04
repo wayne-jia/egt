@@ -379,7 +379,7 @@ protected:
 
     std::string m_pinyin_str;
     std::shared_ptr<Label> m_pinyin_input {nullptr};
-    std::vector<std::shared_ptr<Label>> m_candidates;
+    std::vector<std::shared_ptr<Button>> m_candidates;
     std::vector<std::string> m_candidates_list;
     uint32_t m_candidates_cur_idx;
 

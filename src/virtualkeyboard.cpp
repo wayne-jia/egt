@@ -274,7 +274,7 @@ void VirtualKeyboard::key_link(const std::shared_ptr<Key>& k)
     k->m_button->on_event([this, k](Event&)
     {
         m_main_panel.selected(k->m_link);
-    }, {EventId::pointer_click});
+    }, {EventId::raw_pointer_up});
 }
 
 void VirtualKeyboard::key_input_value(const std::shared_ptr<Key>& k)
@@ -342,7 +342,7 @@ void VirtualKeyboard::key_input_value(const std::shared_ptr<Key>& k)
         }
 
         return 0;
-    }, {EventId::pointer_click});
+    }, {EventId::raw_pointer_up});
 }
 
 void VirtualKeyboard::key_multichoice(const std::shared_ptr<Key>& k)
@@ -486,14 +486,16 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
 #ifdef HAVE_LIBPINYIN
     for (auto i=0; i<5; i++)
     {
-        auto candidate = std::make_shared<egt::Label>("你好");
+        auto candidate = std::make_shared<egt::Button>("");
         candidate->font(egt::Font("Noto Sans CJK SC", 18, egt::Font::Weight::normal));
         candidate->color(egt::Palette::ColorId::label_text, egt::Palette::white);
         candidate->color(Palette::ColorId::label_bg, Color(0x4d4d4dee), Palette::GroupId::normal);
         candidate->color(Palette::ColorId::bg, Color(0x4d4d4dee), Palette::GroupId::normal);
         candidate->color(Palette::ColorId::border, Color(0x4d4d4dee), Palette::GroupId::normal);
-        candidate->border(2);
+        candidate->border(0);
         candidate->border_radius(4);
+        candidate->autoresize(false);
+        candidate->resize(egt::Size(50,40));
         candidate->fill_flags(Theme::FillFlag::blend);
         candidate->margin(4);
         candidate->align(AlignFlag::left);
@@ -515,7 +517,7 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
                 keyboard->dispatch(event2);
             }
             reset_pinyin_input();
-        }, {egt::EventId::pointer_click});
+        }, {egt::EventId::raw_pointer_up});
     }
 
     m_prev_button.margin(5);
@@ -534,7 +536,7 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
             m_candidates[i]->show();
         }
         m_candidates_cur_idx -= (back_step == 10) ? 10 : margin;
-    }, {EventId::pointer_click});
+    }, {EventId::raw_pointer_up});
     m_icons_hsizer.add(expand(m_prev_button));
 
     m_next_button.margin(5);
@@ -558,7 +560,7 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
                     m_candidates[4-i]->hide();
             }
         }
-    }, {EventId::pointer_click});
+    }, {EventId::raw_pointer_up});
     m_icons_hsizer.add(expand(m_next_button));
 #endif
 
@@ -577,7 +579,7 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
         }
 
         m_bottom_positionned = !m_bottom_positionned;
-    }, {EventId::pointer_click});
+    }, {EventId::raw_pointer_up});
 #ifdef HAVE_LIBPINYIN
     m_icons_hsizer.add(expand(m_top_bottom_button));
 #else
@@ -595,7 +597,7 @@ PopupVirtualKeyboard::PopupVirtualKeyboard(const std::shared_ptr<VirtualKeyboard
 #ifdef HAVE_LIBPINYIN
         reset_pinyin_input();
 #endif
-    }, {EventId::pointer_click});
+    }, {EventId::raw_pointer_up});
 #ifdef HAVE_LIBPINYIN
     m_icons_hsizer.add(expand(m_close_button));
 #else
@@ -730,7 +732,7 @@ void PopupVirtualKeyboard::handle_pinyin_input(Event& event)
     guint number;
     pinyin_guess_candidates(m_pinyin_instance, 0, {});
     pinyin_get_n_candidate (m_pinyin_instance, &number);
-    detail::info("Pinyin {} has {} candidates\n", m_pinyin_str.c_str(), number);
+    //detail::info("Pinyin {} has {} candidates\n", m_pinyin_str.c_str(), number);
 
     if (!number)
         return;
@@ -749,7 +751,10 @@ void PopupVirtualKeyboard::handle_pinyin_input(Event& event)
 
     for (i = 0; i < std::min(5, static_cast<int>(m_candidates_list.size())); i++)
     {
+        egt::Label txt(m_candidates_list[i]);
         m_candidates[i]->text(m_candidates_list[i]);
+        txt.font(egt::Font("Noto Sans CJK SC", 26, egt::Font::Weight::normal));
+        m_candidates[i]->resize(egt::Size(txt.width()+10, txt.height()));
         m_candidates[i]->show();
     }
     m_candidates_cur_idx = i;
