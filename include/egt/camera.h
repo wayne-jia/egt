@@ -202,6 +202,8 @@ public:
      */
     void stop();
 
+    void enable_audio(bool enable);
+
     using Window::scale;
 
     void scale(float hscale, float vscale) override;

@@ -119,6 +119,11 @@ void CameraWindow::stop()
     m_camera_impl->stop();
 }
 
+void CameraWindow::enable_audio(bool enable)
+{
+    m_camera_impl->enable_audio(enable);
+}
+
 void CameraWindow::serialize(Serializer& serializer) const
 {
     serializer.add_property("device", device());
