@@ -142,7 +142,7 @@ protected:
     std::unique_ptr<GstSrc> m_src{};
     std::string m_uri;
     bool m_video_enabled{true};
-    bool m_audio_enabled{true};
+    bool m_audio_enabled{false};
 
     std::unique_ptr<GstSink> m_sink{};
     std::string m_output{};

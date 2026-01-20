@@ -98,5 +98,26 @@ Size Label::min_size_hint() const
     return Widget::min_size_hint();
 }
 
+void Label::handle(Event& event)
+{
+    TextWidget::handle(event);
+
+    switch (event.id())
+    {
+    case EventId::raw_pointer_down:
+    {
+        //active(true);
+        break;
+    }
+    case EventId::raw_pointer_up:
+    {
+        //active(false);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
 }
 }

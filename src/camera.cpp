@@ -26,7 +26,8 @@ CameraWindow::CameraWindow(const Rect& rect,
       m_camera_impl(std::make_unique<detail::GstDecoderImpl>(this, rect.size())),
       on_error(&m_camera_impl->on_error),
       on_connect(&m_camera_impl->on_connect),
-      on_disconnect(&m_camera_impl->on_disconnect)
+      on_disconnect(&m_camera_impl->on_disconnect),
+      on_new_frame(&m_camera_impl->on_new_frame)
 {
     m_camera_impl->device(device);
 }
@@ -40,7 +41,8 @@ CameraWindow::CameraWindow(const Rect& rect,
       m_camera_impl(std::make_unique<detail::GstDecoderImpl>(this, rect.size(), input_format)),
       on_error(&m_camera_impl->on_error),
       on_connect(&m_camera_impl->on_connect),
-      on_disconnect(&m_camera_impl->on_disconnect)
+      on_disconnect(&m_camera_impl->on_disconnect),
+      on_new_frame(&m_camera_impl->on_new_frame)
 {
     m_camera_impl->device(device);
 }
@@ -50,7 +52,8 @@ CameraWindow::CameraWindow(Serializer::Properties& props, bool is_derived)
       m_camera_impl(std::make_unique<detail::GstDecoderImpl>(this, box().size())),
       on_error(&m_camera_impl->on_error),
       on_connect(&m_camera_impl->on_connect),
-      on_disconnect(&m_camera_impl->on_disconnect)
+      on_disconnect(&m_camera_impl->on_disconnect),
+      on_new_frame(&m_camera_impl->on_new_frame)
 {
     deserialize(props);
 
@@ -114,6 +117,11 @@ void CameraWindow::scale(float hscale, float vscale)
 void CameraWindow::stop()
 {
     m_camera_impl->stop();
+}
+
+void CameraWindow::enable_audio(bool enable)
+{
+    m_camera_impl->enable_audio(enable);
 }
 
 void CameraWindow::serialize(Serializer& serializer) const

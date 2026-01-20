@@ -62,6 +62,11 @@ public:
      * Generated when an USB camera disconnected.
      */
     SignalW<const std::string&> on_disconnect;
+
+    /**
+     * Generated when gst decoding one frame.
+     */
+    SignalW<const unsigned char*, const unsigned int> on_new_frame;
     /** @} */
 
     /**
@@ -196,6 +201,8 @@ public:
      * Stop camera.
      */
     void stop();
+
+    void enable_audio(bool enable);
 
     using Window::scale;
 
